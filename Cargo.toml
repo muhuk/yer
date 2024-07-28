@@ -14,6 +14,7 @@ fast-compile = ["bevy/dynamic_linking"]
 
 [dependencies]
 bevy = "0.14.0"
+bevy_egui = "0.28.0"
 
 
 # Enable a small amount of optimization in the dev profile.
