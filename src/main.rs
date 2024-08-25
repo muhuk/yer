@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 mod ui;
+mod viewport;
 
 const WINDOW_TITLE: &str = "yer - Terrain Generation Toolkit";
 
@@ -13,6 +14,6 @@ fn main() {
             }),
             ..Default::default()
         }))
-        .add_plugins(ui::UiPlugin)
+        .add_plugins((ui::UiPlugin, viewport::ViewportPlugin))
         .run();
 }
