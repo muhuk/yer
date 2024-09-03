@@ -1,13 +1,32 @@
+use bevy::input::common_conditions::input_pressed;
+use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 
 pub struct ViewportPlugin;
 
 impl Plugin for ViewportPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup)
-            .add_systems(Update, draw_grid);
+        app.register_type::<TargetTransform>()
+            .add_systems(Startup, setup)
+            .add_systems(
+                Update,
+                (
+                    draw_grid,
+                    middle_mouse_actions.run_if(input_pressed(MouseButton::Middle)),
+                    update_camera,
+                ),
+            );
     }
 }
+
+// COMPONENTS
+
+#[derive(Component, Reflect)]
+struct TargetTransform {
+    translation: Vec3,
+}
+
+// SYSTEMS
 
 /// Placeholder code to set up a basic 3D viewport.
 fn setup(
@@ -15,11 +34,20 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(1.0, 5.0, 4.0);
+
     // Create camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(1.0, 5.0, 4.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
+                .looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        },
+        TargetTransform {
+            translation: CAMERA_INITIAL_TRANSLATION,
+        },
+        Name::new("Camera"),
+    ));
 
     // A pivot point so we can work in Z-up coords.
     commands
@@ -31,6 +59,7 @@ fn setup(
                 ..default()
             },
             VisibilityBundle::default(),
+            Name::new("Pivot Z-Up"),
         ))
         .with_children(|parent| {
             // Create ground quad
@@ -68,4 +97,57 @@ fn draw_grid(mut gizmos: Gizmos) {
             LinearRgba::GREEN.with_alpha(0.15),
         )
         .outer_edges();
+}
+
+fn middle_mouse_actions(
+    mut mouse_motion_reader: EventReader<MouseMotion>,
+    mouse_button: Res<ButtonInput<MouseButton>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+) {
+    // We are reading these events without fear becuase this system must be
+    // run only when MMB is pressed or it will panic.  Otherwise consuming
+    // these events would prevent another system to read them.
+    let mouse_motion: Vec2 = mouse_motion_reader
+        .read()
+        .fold(Vec2::ZERO, |acc, ev| acc + ev.delta);
+
+    match (
+        mouse_button.pressed(MouseButton::Middle),
+        mouse_motion.length() > f32::EPSILON,
+        keyboard_input.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
+        keyboard_input.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
+    ) {
+        (true, true, true, false) => {
+            println!("mouse pan -- {}", &mouse_motion);
+            // Offset the target for camera location based on mouse_motion
+            // Must take camera rotation into account, don't just use global axes.
+            // Another system to interp current location to target location.
+            if let Ok(mut target_transform) = target_transform_query.get_single_mut() {
+                const PAN_SPEED: f32 = 1.0 / 128.0;
+                let delta: Vec3 = Vec3::new(mouse_motion.x, 0.0, mouse_motion.y) * PAN_SPEED;
+                // TODO: Take orientation into account
+                target_transform.as_mut().translation += delta;
+            }
+        }
+        (true, true, false, true) => println!("mouse zoom"),
+        (true, true, false, false) => println!("mouse orbit"),
+        (true, _, true, true) => (), // Do nothing if both shift and control is pressed.
+        (true, false, _, _) => (),   // Do nothing if there is no mouse movement.
+        (false, _, _, _) => unreachable!(),
+    }
+}
+
+fn update_camera(
+    time: Res<Time>,
+    mut camera_query: Query<(&TargetTransform, &mut Transform), With<Camera>>,
+) {
+    if let Ok((target_transform, mut transform)) = camera_query.get_single_mut() {
+        // https://www.reddit.com/r/gamedev/comments/cayb4f/basic_smooth_spring_movement/
+        transform.translation = Vec3::interpolate(
+            &target_transform.translation,
+            &transform.translation,
+            0.667f32.powf(time.delta_seconds() * 60.0),
+        );
+    }
 }
