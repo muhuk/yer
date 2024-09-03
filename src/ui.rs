@@ -5,6 +5,8 @@ use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use bevy::window::PrimaryWindow;
 #[cfg(feature = "inspector")]
 use bevy_egui::EguiContext;
+#[cfg(feature = "inspector")]
+use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 
 pub struct UiPlugin;
 
@@ -14,7 +16,8 @@ impl Plugin for UiPlugin {
             .add_systems(Update, draw_ui_system);
 
         #[cfg(feature = "inspector")]
-        app.add_systems(Update, inspector_ui);
+        app.add_plugins(DefaultInspectorConfigPlugin)
+            .add_systems(Update, inspector_ui);
     }
 }
 
