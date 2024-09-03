@@ -103,7 +103,7 @@ fn middle_mouse_actions(
     mut mouse_motion_reader: EventReader<MouseMotion>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+    mut target_transform_query: Query<(&mut TargetTransform, &Transform), With<Camera>>,
 ) {
     // We are reading these events without fear becuase this system must be
     // run only when MMB is pressed or it will panic.  Otherwise consuming
@@ -120,13 +120,11 @@ fn middle_mouse_actions(
     ) {
         (true, true, true, false) => {
             println!("mouse pan -- {}", &mouse_motion);
-            // Offset the target for camera location based on mouse_motion
-            // Must take camera rotation into account, don't just use global axes.
-            // Another system to interp current location to target location.
-            if let Ok(mut target_transform) = target_transform_query.get_single_mut() {
+            if let Ok((mut target_transform, transform)) = target_transform_query.get_single_mut() {
                 const PAN_SPEED: f32 = 1.0 / 128.0;
-                let delta: Vec3 = Vec3::new(mouse_motion.x, 0.0, mouse_motion.y) * PAN_SPEED;
-                // TODO: Take orientation into account
+                let mut delta: Vec3 = Vec3::new(mouse_motion.x, 0.0, mouse_motion.y) * PAN_SPEED;
+                // Take orientation into account but only around Y, we're panning across XZ.
+                delta = Quat::from_rotation_y(transform.rotation.to_euler(EulerRot::YXZ).0) * delta;
                 target_transform.as_mut().translation += delta;
             }
         }
