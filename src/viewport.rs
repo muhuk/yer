@@ -30,6 +30,23 @@ struct TargetTransform {
 }
 
 impl TargetTransform {
+    fn dolly(&mut self, factor: f32) {
+        const MIN_DIST: f32 = 1.0;
+        const MAX_DIST: f32 = 500.0;
+        const DOLLY_SPEED: f32 = 1.0 / 300.0;
+        let look_at_target: Vec3 = self.looking_at();
+        // Translation from look_at_target to camera
+        let rev_relative_position = self.translation - look_at_target;
+        let new_distance = f32::max(
+            MIN_DIST,
+            f32::min(
+                MAX_DIST,
+                rev_relative_position.length() + factor * DOLLY_SPEED,
+            ),
+        );
+        self.translation = look_at_target + rev_relative_position.normalize() * new_distance;
+    }
+
     fn looking_at(&self) -> Vec3 {
         let ray = Ray3d::new(self.translation, self.rotation * Vec3::NEG_Z);
         //println!("{:?}", &ray);
@@ -41,7 +58,7 @@ impl TargetTransform {
 
     fn orbit_xy(&mut self, x: f32, y: f32) {
         const MIN_Y: f32 = 1.0;
-        const ORBIT_SPEED: f32 = 1.0 / 1000.0;
+        const ORBIT_SPEED: f32 = 1.0 / 500.0;
         let look_at_target: Vec3 = self.looking_at();
         // Translation from look_at_target to camera
         let rev_relative_position = self.translation - look_at_target;
@@ -182,7 +199,13 @@ fn middle_mouse_actions(
                 .expect("There must be one and only one camera.")
                 .pan_xy(-mouse_motion.x, -mouse_motion.y);
         }
-        (true, true, false, true) => println!("mouse zoom"),
+        (true, true, false, true) => {
+            // Dolly
+            target_transform_query
+                .get_single_mut()
+                .expect("There must be one and only one camera.")
+                .dolly(mouse_motion.y)
+        }
         (true, true, false, false) => {
             // Orbit
             target_transform_query
