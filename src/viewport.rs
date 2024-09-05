@@ -121,8 +121,8 @@ fn middle_mouse_actions(
         (true, true, true, false) => {
             println!("mouse pan -- {}", &mouse_motion);
             if let Ok((mut target_transform, transform)) = target_transform_query.get_single_mut() {
-                const PAN_SPEED: f32 = 1.0 / 128.0;
-                let mut delta: Vec3 = Vec3::new(mouse_motion.x, 0.0, mouse_motion.y) * PAN_SPEED;
+                const PAN_SPEED: f32 = 1.0 / 96.0;
+                let mut delta: Vec3 = Vec3::new(-mouse_motion.x, 0.0, -mouse_motion.y) * PAN_SPEED;
                 // Take orientation into account but only around Y, we're panning across XZ.
                 delta = Quat::from_rotation_y(transform.rotation.to_euler(EulerRot::YXZ).0) * delta;
                 target_transform.as_mut().translation += delta;
@@ -140,12 +140,17 @@ fn update_camera(
     time: Res<Time>,
     mut camera_query: Query<(&TargetTransform, &mut Transform), With<Camera>>,
 ) {
+    const INTERPOLATION_FACTOR: f32 = 1.0f32 / 3.0f32;
+
     if let Ok((target_transform, mut transform)) = camera_query.get_single_mut() {
         // https://www.reddit.com/r/gamedev/comments/cayb4f/basic_smooth_spring_movement/
+        //
+        // pow keeps the interpolation factor about the
+        // same, but adds frame-rate sensitivity.
         transform.translation = Vec3::interpolate(
             &target_transform.translation,
             &transform.translation,
-            0.667f32.powf(time.delta_seconds() * 60.0),
+            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_seconds() * 60.0),
         );
     }
 }
