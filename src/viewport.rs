@@ -97,58 +97,6 @@ impl TargetTransform {
 
 // SYSTEMS
 
-/// Placeholder code to set up a basic 3D viewport.
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(1.0, 5.0, 4.0);
-    const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
-
-    // Create camera
-    let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
-        .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
-    commands.spawn((
-        Camera3dBundle {
-            transform,
-            ..default()
-        },
-        TargetTransform {
-            translation: transform.translation,
-            rotation: transform.rotation,
-        },
-        Name::new("Camera"),
-    ));
-
-    // A pivot point so we can work in Z-up coords.
-    commands
-        .spawn((
-            TransformBundle {
-                local: Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                ..default()
-            },
-            VisibilityBundle::default(),
-            Name::new("Pivot Z-Up"),
-        ))
-        .with_children(|parent| {
-            // Create ground quad
-            parent.spawn(PbrBundle {
-                mesh: meshes.add(Rectangle::new(1.0, 1.0)),
-                material: materials.add(Color::WHITE),
-                ..default()
-            });
-        });
-
-    // Add light.
-    commands.spawn(DirectionalLightBundle {
-        transform: Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-}
-
 fn draw_focal_point(
     mut gizmos: Gizmos,
     target_transform_query: Query<&TargetTransform, With<Camera>>,
@@ -238,6 +186,58 @@ fn middle_mouse_actions(
         (true, false, _, _) => (),   // Do nothing if there is no mouse movement.
         (false, _, _, _) => unreachable!(),
     }
+}
+
+/// Placeholder code to set up a basic 3D viewport.
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(1.0, 5.0, 4.0);
+    const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
+
+    // Create camera
+    let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
+        .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
+    commands.spawn((
+        Camera3dBundle {
+            transform,
+            ..default()
+        },
+        TargetTransform {
+            translation: transform.translation,
+            rotation: transform.rotation,
+        },
+        Name::new("Camera"),
+    ));
+
+    // A pivot point so we can work in Z-up coords.
+    commands
+        .spawn((
+            TransformBundle {
+                local: Transform::from_rotation(Quat::from_rotation_x(
+                    -std::f32::consts::FRAC_PI_2,
+                )),
+                ..default()
+            },
+            VisibilityBundle::default(),
+            Name::new("Pivot Z-Up"),
+        ))
+        .with_children(|parent| {
+            // Create ground quad
+            parent.spawn(PbrBundle {
+                mesh: meshes.add(Rectangle::new(1.0, 1.0)),
+                material: materials.add(Color::WHITE),
+                ..default()
+            });
+        });
+
+    // Add light.
+    commands.spawn(DirectionalLightBundle {
+        transform: Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
 }
 
 fn update_camera(
