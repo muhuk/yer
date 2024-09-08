@@ -15,6 +15,7 @@ impl Plugin for ViewportPlugin {
                     draw_grid,
                     draw_focal_point,
                     middle_mouse_actions.run_if(input_pressed(MouseButton::Middle)),
+                    keyboard_actions,
                     update_camera,
                 ),
             );
@@ -30,6 +31,8 @@ struct TargetTransform {
 }
 
 impl TargetTransform {
+    const DEFAULT_ZOOM: f32 = 5.0;
+
     fn dolly(&mut self, factor: f32) {
         const MIN_DIST: f32 = 1.0;
         const MAX_DIST: f32 = 500.0;
@@ -80,6 +83,15 @@ impl TargetTransform {
         // Take orientation into account but only around Y, we're panning across XZ.
         delta = Quat::from_rotation_y(self.rotation.to_euler(EulerRot::YXZ).0) * delta;
         self.translation += delta;
+    }
+
+    /// Reset focal point and zoom, but keep the orbit.
+    fn reset(&mut self) {
+        // Reset focal point.
+        self.translation -= self.looking_at();
+
+        // Reset zoom.
+        self.translation = self.translation.normalize() * Self::DEFAULT_ZOOM;
     }
 }
 
@@ -171,6 +183,15 @@ fn draw_grid(mut gizmos: Gizmos) {
             LinearRgba::GREEN.with_alpha(0.15),
         )
         .outer_edges();
+}
+
+fn keyboard_actions(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+) {
+    if keyboard_input.just_pressed(KeyCode::Home) {
+        target_transform_query.single_mut().reset();
+    }
 }
 
 fn middle_mouse_actions(
