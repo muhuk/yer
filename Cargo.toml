@@ -14,7 +14,7 @@ inspector = ["dep:bevy-inspector-egui"]
 
 
 [dependencies]
-bevy = "0.14.1"
+bevy = "0.14.2"
 bevy_egui = "0.29.0"
 bevy-inspector-egui = {version = "0.25.0", optional = true}
 
