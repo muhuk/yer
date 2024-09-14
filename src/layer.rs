@@ -10,5 +10,7 @@ impl Plugin for LayerPlugin {
 
 // COMPONENTS
 
-#[derive(Component, Reflect)]
-struct Layer;
+#[derive(Component, Eq, Ord, PartialEq, PartialOrd, Reflect)]
+struct Layer {
+    order: u32,
+}
