@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+mod layer;
 mod ui;
 mod viewport;
 
