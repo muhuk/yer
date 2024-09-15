@@ -11,13 +11,6 @@ impl Plugin for LayerPlugin {
     }
 }
 
-// EVENTS
-
-// #[derive(Event, Reflect)]
-// enum CreateLayer {
-//     OnTop,
-// }
-
 // COMPONENTS
 
 #[derive(Component, Eq, Ord, PartialEq, PartialOrd, Reflect)]
