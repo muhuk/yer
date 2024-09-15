@@ -1,6 +1,6 @@
 use bevy::input::common_conditions::input_pressed;
 use bevy::input::mouse::MouseMotion;
-use bevy::math::{Affine3A, VectorSpace};
+use bevy::math::Affine3A;
 use bevy::prelude::*;
 
 pub struct ViewportPlugin;
