@@ -17,6 +17,7 @@ inspector = ["dep:bevy-inspector-egui"]
 bevy = "0.14.2"
 bevy_egui = "0.29.0"
 bevy-inspector-egui = {version = "0.25.0", optional = true}
+uuid = {version = "1.10", features = ["v7"]}
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
