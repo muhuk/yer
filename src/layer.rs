@@ -11,7 +11,9 @@ pub struct LayerPlugin;
 
 impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Uuid>().register_type::<Layer>();
+        app.register_type::<Uuid>()
+            .register_type::<Layer>()
+            .register_type::<LayerChange>();
         app.add_systems(
             Update,
             normalize_layer_ordering.run_if(on_timer(Duration::from_millis(
@@ -21,9 +23,16 @@ impl Plugin for LayerPlugin {
     }
 }
 
+// EVENTS
+
+#[derive(Event, Debug, Reflect)]
+enum LayerChange {
+    Added(Uuid),
+}
+
 // COMPONENTS
 
-#[derive(Component, Eq, Ord, PartialEq, PartialOrd, Reflect)]
+#[derive(Component, Debug, Eq, Ord, PartialEq, PartialOrd, Reflect)]
 struct Layer {
     id: Uuid,
     order: u32,
@@ -47,7 +56,7 @@ pub enum CreateLayer {
 
 impl Command for CreateLayer {
     fn apply(self, world: &mut World) {
-        match self {
+        let layer: Layer = match self {
             Self::OnTop => {
                 // Find the `order` of the top layer:
                 let max_order: u32 = world
@@ -56,8 +65,7 @@ impl Command for CreateLayer {
                     .sort::<&Layer>()
                     .last()
                     .map_or(0, |layer| layer.order);
-
-                world.spawn(Layer::new(max_order + LAYER_SPACING));
+                Layer::new(max_order + LAYER_SPACING)
             }
             Self::Above(id) => {
                 let bottom_layer_order = world
@@ -76,9 +84,11 @@ impl Command for CreateLayer {
                     .filter(|layer| layer.order > bottom_layer_order)
                     .next()
                     .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
-                world.spawn(Layer::new((bottom_layer_order + top_layer_order) / 2));
+                Layer::new((bottom_layer_order + top_layer_order) / 2)
             }
-        }
+        };
+        world.send_event(LayerChange::Added(layer.id));
+        world.spawn(layer);
     }
 }
 
