@@ -15,6 +15,6 @@ fn main() {
             }),
             ..Default::default()
         }))
-        .add_plugins((ui::UiPlugin, viewport::ViewportPlugin))
+        .add_plugins((layer::LayerPlugin, ui::UiPlugin, viewport::ViewportPlugin))
         .run();
 }
