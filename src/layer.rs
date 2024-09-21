@@ -13,7 +13,8 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Uuid>()
             .register_type::<Layer>()
-            .register_type::<LayerChange>();
+            .register_type::<LayerChange>()
+            .add_event::<LayerChange>();
         app.add_systems(
             Update,
             normalize_layer_ordering.run_if(on_timer(Duration::from_millis(
@@ -26,7 +27,7 @@ impl Plugin for LayerPlugin {
 // EVENTS
 
 #[derive(Event, Debug, Reflect)]
-enum LayerChange {
+pub enum LayerChange {
     Added(Uuid),
 }
 
