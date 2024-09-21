@@ -1,14 +1,23 @@
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
+use bevy::time::common_conditions::on_timer;
+use bevy::utils::Duration;
 use uuid::Uuid;
 
 const LAYER_SPACING: u32 = 100;
+const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
 
 pub struct LayerPlugin;
 
 impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Uuid>().register_type::<Layer>();
+        app.add_systems(
+            Update,
+            normalize_layer_ordering.run_if(on_timer(Duration::from_millis(
+                NORMALIZE_ORDERING_INTERVAL_MS,
+            ))),
+        );
     }
 }
 
@@ -71,6 +80,22 @@ impl Command for CreateLayer {
             }
         }
     }
+}
+
+// SYSTEMS
+
+fn normalize_layer_ordering(mut layers: Query<&mut Layer>) {
+    info!("Normalizing layer ordering.");
+    layers
+        .iter_mut()
+        .sort::<&Layer>()
+        .enumerate()
+        .for_each(|(idx, mut layer)| {
+            // Start from LAYER_SPACING (1-based) and increment for
+            // as much as LAYER_SPACING at each layer.
+            layer.order =
+                u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
+        });
 }
 
 #[cfg(test)]
