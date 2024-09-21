@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 mod layer;
+mod preview;
 mod ui;
 mod viewport;
 
@@ -15,6 +16,11 @@ fn main() {
             }),
             ..Default::default()
         }))
-        .add_plugins((layer::LayerPlugin, ui::UiPlugin, viewport::ViewportPlugin))
+        .add_plugins((
+            layer::LayerPlugin,
+            preview::PreviewPlugin,
+            ui::UiPlugin,
+            viewport::ViewportPlugin,
+        ))
         .run();
 }
