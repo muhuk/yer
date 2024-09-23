@@ -8,6 +8,8 @@ use bevy_egui::EguiContext;
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 
+use crate::viewport;
+
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
@@ -20,6 +22,8 @@ impl Plugin for UiPlugin {
             .add_systems(Update, inspector_ui);
     }
 }
+
+// SYSTEMS
 
 #[cfg(feature = "inspector")]
 fn inspector_ui(world: &mut World) {
@@ -41,30 +45,55 @@ fn inspector_ui(world: &mut World) {
         });
 }
 
-fn draw_ui_system(mut app_exit_events: EventWriter<AppExit>, mut contexts: EguiContexts) {
+fn draw_ui_system(
+    mut app_exit_events: EventWriter<AppExit>,
+    mut contexts: EguiContexts,
+    mut viewport_region: ResMut<viewport::ViewportRegion>,
+    primary_window: Query<&Window, With<PrimaryWindow>>,
+) {
     let ctx = contexts.ctx_mut();
 
-    egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
-        egui::menu::bar(ui, |ui| {
-            egui::menu::menu_button(ui, "File", |ui| {
-                if ui.button("Quit").clicked() {
-                    app_exit_events.send(AppExit::Success);
-                }
+    let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
+        .show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                egui::menu::menu_button(ui, "File", |ui| {
+                    if ui.button("Quit").clicked() {
+                        app_exit_events.send(AppExit::Success);
+                    }
+                });
             });
-        });
-    });
+        })
+        .response
+        .rect
+        .height();
 
-    egui::SidePanel::left("sidepanel_left")
+    let panel_left_width: f32 = egui::SidePanel::left("sidepanel_left")
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Left");
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        });
+        })
+        .response
+        .rect
+        .width();
 
-    egui::SidePanel::right("sidepanel_right")
+    let panel_right_width: f32 = egui::SidePanel::right("sidepanel_right")
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Right");
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        });
+        })
+        .response
+        .rect
+        .width();
+
+    if let Ok(window) = primary_window.get_single() {
+        let scale_factor: f32 = window.scale_factor();
+        viewport_region.set_rect(Rect::new(
+            panel_left_width * scale_factor,
+            menubar_height * scale_factor,
+            (window.physical_width() as f32) - panel_right_width * scale_factor,
+            window.physical_height() as f32,
+        ));
+    }
 }
