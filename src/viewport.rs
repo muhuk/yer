@@ -2,23 +2,49 @@ use bevy::input::common_conditions::input_pressed;
 use bevy::input::mouse::MouseMotion;
 use bevy::math::Affine3A;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 pub struct ViewportPlugin;
 
 impl Plugin for ViewportPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<TargetTransform>()
+            .register_type::<ViewportRegion>()
+            .init_resource::<ViewportRegion>()
             .add_systems(Startup, setup)
             .add_systems(
                 Update,
                 (
                     draw_grid,
                     draw_focal_point,
-                    middle_mouse_actions.run_if(input_pressed(MouseButton::Middle)),
+                    middle_mouse_actions
+                        .run_if(input_pressed(MouseButton::Middle))
+                        .after(mouse_over_viewport),
+                    mouse_over_viewport,
                     keyboard_actions,
                     update_camera,
                 ),
             );
+    }
+}
+
+// RESOURCES
+
+/// Unclaimed area of primary window is where the 3D viewport is visible.
+#[derive(Debug, Default, Reflect, Resource)]
+#[reflect(Resource)]
+pub struct ViewportRegion {
+    rect: Rect,
+    mouse_position: Vec2,
+}
+
+impl ViewportRegion {
+    pub fn set_rect(&mut self, rect: Rect) {
+        self.rect = rect;
+    }
+
+    fn is_mouse_over(&self) -> bool {
+        self.rect.contains(self.mouse_position)
     }
 }
 
@@ -142,12 +168,34 @@ fn keyboard_actions(
     }
 }
 
+fn mouse_over_viewport(
+    mut viewport: ResMut<ViewportRegion>,
+    window: Query<&Window, With<PrimaryWindow>>,
+) {
+    match window.get_single() {
+        Ok(window) => {
+            if let Some(mouse_position) = window.physical_cursor_position() {
+                viewport.mouse_position = mouse_position;
+            }
+        }
+        Err(err) => {
+            error!("{}", err.to_string());
+            return;
+        }
+    }
+}
+
 fn middle_mouse_actions(
     mut mouse_motion_reader: EventReader<MouseMotion>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+    viewport: Res<ViewportRegion>,
 ) {
+    if !viewport.is_mouse_over() {
+        return;
+    }
+
     // We are reading these events without fear becuase this system must be
     // run only when MMB is pressed or it will panic.  Otherwise consuming
     // these events would prevent another system to read them.
