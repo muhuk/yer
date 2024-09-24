@@ -80,6 +80,8 @@ impl Sample2D for HeightMap {
 #[derive(Component, Debug, Eq, Ord, PartialEq, PartialOrd, Reflect)]
 #[reflect(Component)]
 struct Layer {
+    enable_baking: bool,
+    enable_preview: bool,
     id: Uuid,
     order: u32,
 }
@@ -87,6 +89,8 @@ struct Layer {
 impl Layer {
     fn new(order: u32) -> Self {
         Self {
+            enable_baking: true,
+            enable_preview: true,
             id: Uuid::now_v7(),
             order,
         }
