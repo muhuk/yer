@@ -29,7 +29,6 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMap>()
             .register_type::<Layer>()
-            .register_type::<LayerChange>()
             .register_type::<Uuid>()
             .add_event::<LayerChange>();
         app.add_systems(
@@ -43,7 +42,7 @@ impl Plugin for LayerPlugin {
 
 // EVENTS
 
-#[derive(Event, Debug, Reflect)]
+#[derive(Event, Debug)]
 pub enum LayerChange {
     Added(Uuid),
 }
