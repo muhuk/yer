@@ -27,9 +27,10 @@ pub struct LayerPlugin;
 
 impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Uuid>()
+        app.register_type::<HeightMap>()
             .register_type::<Layer>()
             .register_type::<LayerChange>()
+            .register_type::<Uuid>()
             .add_event::<LayerChange>();
         app.add_systems(
             Update,
@@ -47,9 +48,38 @@ pub enum LayerChange {
     Added(Uuid),
 }
 
+// BUNDLES
+
+#[derive(Bundle)]
+struct LayerBundle {
+    layer: Layer,
+    height_map: HeightMap,
+}
+
 // COMPONENTS
 
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component, Default)]
+enum HeightMap {
+    Constant(f32),
+}
+
+impl Default for HeightMap {
+    fn default() -> Self {
+        Self::Constant(0.0)
+    }
+}
+
+impl Sample2D for HeightMap {
+    fn sample(&self, _position: Vec2, _height: f32) -> f32 {
+        match self {
+            Self::Constant(value) => *value,
+        }
+    }
+}
+
 #[derive(Component, Debug, Eq, Ord, PartialEq, PartialOrd, Reflect)]
+#[reflect(Component)]
 struct Layer {
     id: Uuid,
     order: u32,
@@ -105,7 +135,10 @@ impl Command for CreateLayer {
             }
         };
         world.send_event(LayerChange::Added(layer.id));
-        world.spawn(layer);
+        world.spawn(LayerBundle {
+            layer,
+            height_map: HeightMap::default(),
+        });
     }
 }
 
@@ -123,6 +156,12 @@ fn normalize_layer_ordering(mut layers: Query<&mut Layer>) {
             layer.order =
                 u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
         });
+}
+
+// LIB
+
+trait Sample2D {
+    fn sample(&self, position: Vec2, height: f32) -> f32;
 }
 
 #[cfg(test)]
