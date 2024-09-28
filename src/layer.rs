@@ -97,6 +97,10 @@ impl Layer {
             order,
         }
     }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
 }
 
 impl Display for Layer {
@@ -168,6 +172,26 @@ impl Command for CreateLayer {
             layer,
             height_map: HeightMap::default(),
         });
+    }
+}
+
+pub struct DeleteLayer(pub Uuid);
+
+impl Command for DeleteLayer {
+    fn apply(self, world: &mut World) {
+        match world
+            .query::<(Entity, &Layer)>()
+            .iter(world)
+            .find(|(_, layer)| layer.id == self.0)
+        {
+            Some((entity, _)) => {
+                world.despawn(entity);
+            }
+            None => warn!(
+                "Trying to delete non-existent layer with id '{}'",
+                self.0.simple()
+            ),
+        }
     }
 }
 
