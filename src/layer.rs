@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::fmt::{self, Display};
+
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
@@ -77,11 +79,11 @@ impl Sample2D for HeightMap {
     }
 }
 
-#[derive(Component, Debug, Eq, Ord, PartialEq, PartialOrd, Reflect)]
+#[derive(Component, Debug, Eq, Ord, Reflect)]
 #[reflect(Component)]
-struct Layer {
-    enable_baking: bool,
-    enable_preview: bool,
+pub struct Layer {
+    pub enable_baking: bool,
+    pub enable_preview: bool,
     id: Uuid,
     order: u32,
 }
@@ -94,6 +96,30 @@ impl Layer {
             id: Uuid::now_v7(),
             order,
         }
+    }
+}
+
+impl Display for Layer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}-{}",
+            self.order,
+            // Last 7 digits of uuid.
+            &self.id.simple().to_string()[25..32]
+        )
+    }
+}
+
+impl PartialEq for Layer {
+    fn eq(&self, other: &Self) -> bool {
+        self.order == other.order
+    }
+}
+
+impl PartialOrd for Layer {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.order.partial_cmp(&other.order)
     }
 }
 
