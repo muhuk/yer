@@ -157,6 +157,9 @@ fn draw_ui_layers(
                 ui.label(format!("{}", layer.as_ref()));
                 ui.toggle_value(&mut layer.enable_preview, "preview");
                 ui.toggle_value(&mut layer.enable_baking, "bake");
+                if ui.button("Delete").clicked() {
+                    commands.add(layer::DeleteLayer(layer.id()))
+                }
             });
         }
     });
