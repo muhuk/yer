@@ -70,7 +70,7 @@ fn draw_ui_system(
     mut app_exit_events: EventWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
-    layers_query: Query<&mut layer::Layer>,
+    layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
@@ -105,7 +105,7 @@ fn draw_ui_system(
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 ui.heading("Side Panel Right");
-                draw_ui_layers(&mut commands, ui, layers_query);
+                draw_ui_for_layers(&mut commands, ui, layers_query);
                 // Notmally this should be placed in between the top and
                 // bottom parts.  However `available_rect_before_wrap` takes
                 // up all the available space before layers are considered,
@@ -140,10 +140,10 @@ fn draw_ui_system(
 // LIB
 
 /// Draw the UI for the stack of layers in the project.
-fn draw_ui_layers(
+fn draw_ui_for_layers(
     commands: &mut Commands,
     ui: &mut egui::Ui,
-    mut layers_query: Query<&mut layer::Layer>,
+    mut layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
@@ -152,15 +152,22 @@ fn draw_ui_layers(
         }
         // We need to iterate layers in reverse order to place the topmost
         // (last applied) layer on top.
-        for mut layer in layers_query.iter_mut().sort::<&layer::Layer>().rev() {
+        for (mut layer, mut height_map) in layers_query.iter_mut().sort::<&layer::Layer>().rev() {
+            let mut height_value: f32 = match *height_map {
+                layer::HeightMap::Constant(v) => v,
+            };
             ui.group(|ui| {
                 ui.label(format!("{}", layer.as_ref()));
+                ui.add(egui::widgets::DragValue::new(&mut height_value));
                 ui.toggle_value(&mut layer.enable_preview, "preview");
                 ui.toggle_value(&mut layer.enable_baking, "bake");
                 if ui.button("Delete").clicked() {
                     commands.add(layer::DeleteLayer(layer.id()))
                 }
             });
+            match *height_map {
+                layer::HeightMap::Constant(ref mut v) => *v = height_value,
+            }
         }
     });
 }

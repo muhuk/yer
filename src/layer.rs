@@ -61,7 +61,7 @@ struct LayerBundle {
 
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component, Default)]
-enum HeightMap {
+pub enum HeightMap {
     Constant(f32),
 }
 
