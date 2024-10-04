@@ -14,10 +14,19 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use bevy::prelude::*;
 use rmp_serde;
 use serde::{Deserialize, Serialize};
 
+use crate::layer;
+
 // LIB
+
+#[derive(Deserialize, Serialize)]
+struct LayerComponents {
+    layer: layer::Layer,
+    height_map: layer::HeightMap,
+}
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 struct SaveContainer {
@@ -34,6 +43,14 @@ impl SaveContainer {
     fn from_bytes(bytes: &[u8]) -> Result<Self, SaveError> {
         rmp_serde::decode::from_slice(bytes).map_err(|e| SaveError::DecodeError(e))
     }
+}
+
+#[derive(Deserialize, Serialize)]
+struct SaveV1 {
+    layers: Vec<LayerComponents>,
+    // TODO: Store preview config
+    // TODO: Store bake config
+    // TODO: Store cached preview mesh
 }
 
 #[derive(Debug)]
