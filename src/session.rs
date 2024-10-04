@@ -16,6 +16,8 @@
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
+use rmp_serde;
+use serde::{Deserialize, Serialize};
 
 use crate::layer;
 
@@ -46,9 +48,27 @@ fn initialize_empty_session(mut commands: Commands) {
 
 // LIB
 
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 struct SaveContainer {
     version: u16,
+    #[serde(with = "serde_bytes")]
     data: Vec<u8>,
+}
+
+impl SaveContainer {
+    fn to_bytes(&self) -> Result<Vec<u8>, SaveError> {
+        rmp_serde::encode::to_vec_named(self).map_err(|e| SaveError::EncodeError(e))
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SaveError> {
+        rmp_serde::decode::from_slice(bytes).map_err(|e| SaveError::DecodeError(e))
+    }
+}
+
+#[derive(Debug)]
+enum SaveError {
+    DecodeError(rmp_serde::decode::Error),
+    EncodeError(rmp_serde::encode::Error),
 }
 
 fn clear_session(world: &mut World) {
@@ -63,5 +83,32 @@ fn clear_session(world: &mut World) {
         layers.iter().for_each(|entity| {
             world.entity_mut(*entity).despawn_recursive();
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decoding_and_encoding_arbitrary_data() {
+        let save_data = SaveContainer {
+            version: 0,
+            data: {
+                let mut data: Vec<u8> = vec![];
+                for i in 0..1000 {
+                    data.insert(i, (i % 256) as u8);
+                }
+                data
+            },
+        };
+        let save_result = save_data.to_bytes();
+        assert!(save_result.is_ok());
+        // if let Ok(ref save_result) = save_result {
+        //     println!("Size = {}", save_result.len());
+        // }
+        let load_result = SaveContainer::from_bytes(&save_result.unwrap());
+        assert!(load_result.is_ok());
+        assert_eq!(save_data, load_result.unwrap());
     }
 }
