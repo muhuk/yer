@@ -106,7 +106,7 @@ fn draw_ui_system(
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 ui.heading("Side Panel Right");
                 draw_ui_for_layers(&mut commands, ui, layers_query);
-                // Notmally this should be placed in between the top and
+                // Normally this should be placed in between the top and
                 // bottom parts.  However `available_rect_before_wrap` takes
                 // up all the available space before layers are considered,
                 // and the layers will be pushed down and they become
