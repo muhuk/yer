@@ -20,6 +20,7 @@ use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy::utils::Duration;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 const LAYER_SPACING: u32 = 100;
@@ -59,7 +60,7 @@ struct LayerBundle {
 
 // COMPONENTS
 
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Debug, Deserialize, Reflect, Serialize)]
 #[reflect(Component, Default)]
 pub enum HeightMap {
     Constant(f32),
@@ -79,7 +80,7 @@ impl Sample2D for HeightMap {
     }
 }
 
-#[derive(Component, Debug, Eq, Ord, Reflect)]
+#[derive(Component, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
 #[reflect(Component)]
 pub struct Layer {
     pub enable_baking: bool,
