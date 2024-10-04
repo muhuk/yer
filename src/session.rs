@@ -46,6 +46,11 @@ fn initialize_empty_session(mut commands: Commands) {
 
 // LIB
 
+struct SaveContainer {
+    version: u16,
+    data: Vec<u8>,
+}
+
 fn clear_session(world: &mut World) {
     // TODO: Clear Undo stack.
 
