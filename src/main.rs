@@ -18,6 +18,7 @@ use bevy::prelude::*;
 
 mod layer;
 mod preview;
+mod session;
 mod ui;
 mod viewport;
 
@@ -35,6 +36,7 @@ fn main() {
         .add_plugins((
             layer::LayerPlugin,
             preview::PreviewPlugin,
+            session::SessionPlugin,
             ui::UiPlugin,
             viewport::ViewportPlugin,
         ))
