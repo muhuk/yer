@@ -78,13 +78,7 @@ fn draw_ui_system(
 
     let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
         .show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                egui::menu::menu_button(ui, "File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        app_exit_events.send(AppExit::Success);
-                    }
-                });
-            });
+            draw_ui_menu(ui, &mut app_exit_events);
         })
         .response
         .rect
@@ -169,6 +163,16 @@ fn draw_ui_for_layers(
                 layer::HeightMap::Constant(ref mut v) => *v = height_value,
             }
         }
+    });
+}
+
+fn draw_ui_menu(ui: &mut egui::Ui, app_exit_events: &mut EventWriter<AppExit>) {
+    egui::menu::bar(ui, |ui| {
+        egui::menu::menu_button(ui, "File", |ui| {
+            if ui.button("Quit").clicked() {
+                app_exit_events.send(AppExit::Success);
+            }
+        });
     });
 }
 
