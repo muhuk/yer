@@ -25,6 +25,7 @@ use bevy_egui::EguiContext;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 
 use crate::layer;
+use crate::session;
 use crate::viewport;
 
 pub struct UiPlugin;
@@ -78,7 +79,7 @@ fn draw_ui_system(
 
     let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
         .show(ctx, |ui| {
-            draw_ui_menu(ui, &mut app_exit_events);
+            draw_ui_menu(ui, &mut app_exit_events, &mut commands);
         })
         .response
         .rect
@@ -166,10 +167,16 @@ fn draw_ui_for_layers(
     });
 }
 
-fn draw_ui_menu(ui: &mut egui::Ui, app_exit_events: &mut EventWriter<AppExit>) {
+fn draw_ui_menu(
+    ui: &mut egui::Ui,
+    app_exit_events: &mut EventWriter<AppExit>,
+    commands: &mut Commands,
+) {
     egui::menu::bar(ui, |ui| {
         egui::menu::menu_button(ui, "File", |ui| {
-            let _ = ui.button("New");
+            if ui.button("New").clicked() {
+                commands.add(session::InitializeNewSession);
+            }
             let _ = ui.button("Open...");
             ui.add_enabled_ui(false, |ui| {
                 let _ = ui.button("Save");
