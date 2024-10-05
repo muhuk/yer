@@ -169,6 +169,13 @@ fn draw_ui_for_layers(
 fn draw_ui_menu(ui: &mut egui::Ui, app_exit_events: &mut EventWriter<AppExit>) {
     egui::menu::bar(ui, |ui| {
         egui::menu::menu_button(ui, "File", |ui| {
+            let _ = ui.button("New");
+            let _ = ui.button("Open...");
+            ui.add_enabled_ui(false, |ui| {
+                let _ = ui.button("Save");
+                let _ = ui.button("Save As...");
+            });
+            ui.separator();
             if ui.button("Quit").clicked() {
                 app_exit_events.send(AppExit::Success);
             }
