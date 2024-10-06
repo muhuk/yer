@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
@@ -25,20 +27,33 @@ use bevy_egui::EguiContext;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 
 use crate::layer;
-use crate::session;
 use crate::viewport;
 
-pub struct UiPlugin;
+pub struct UiPlugin {
+    config: Arc<UiPluginConfig>,
+}
+
+impl UiPlugin {
+    pub fn with_config(config: UiPluginConfig) -> Self {
+        Self {
+            config: Arc::new(config),
+        }
+    }
+}
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(EguiPlugin)
-            .add_systems(Update, draw_ui_system);
+            .add_systems(Update, draw_ui_system(self.config.clone()));
 
         #[cfg(feature = "inspector")]
         app.add_plugins(DefaultInspectorConfigPlugin)
             .add_systems(Update, inspector_ui);
     }
+}
+
+pub struct UiPluginConfig {
+    pub file_new_command: Box<dyn Fn(&mut Commands) + Send + Sync>,
 }
 
 // SYSTEMS
@@ -68,68 +83,82 @@ fn inspector_ui(world: &mut World) {
 }
 
 fn draw_ui_system(
-    mut app_exit_events: EventWriter<AppExit>,
-    mut commands: Commands,
-    mut contexts: EguiContexts,
-    layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
-    viewport_region: ResMut<viewport::ViewportRegion>,
-) {
-    let ctx = contexts.ctx_mut();
+    plugin_config: Arc<UiPluginConfig>,
+) -> impl Fn(
+    EventWriter<AppExit>,
+    Commands,
+    EguiContexts,
+    Query<(&mut layer::Layer, &mut layer::HeightMap)>,
+    Query<&Window, With<PrimaryWindow>>,
+    ResMut<viewport::ViewportRegion>,
+) -> () {
+    move |mut app_exit_events: EventWriter<AppExit>,
+          mut commands: Commands,
+          mut contexts: EguiContexts,
+          layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
+          primary_window: Query<&Window, With<PrimaryWindow>>,
+          viewport_region: ResMut<viewport::ViewportRegion>| {
+        let ctx = contexts.ctx_mut();
 
-    let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
-        .show(ctx, |ui| {
-            draw_ui_menu(ui, &mut app_exit_events, &mut commands);
-        })
-        .response
-        .rect
-        .height();
+        let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
+            .show(ctx, |ui| {
+                draw_ui_menu(
+                    plugin_config.as_ref(),
+                    ui,
+                    &mut app_exit_events,
+                    &mut commands,
+                );
+            })
+            .response
+            .rect
+            .height();
 
-    let panel_left_width: f32 = egui::SidePanel::left("sidepanel_left")
-        .resizable(true)
-        .show(ctx, |ui| {
-            ui.heading("Side Panel Left");
-            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        })
-        .response
-        .rect
-        .width();
-
-    let panel_right_width: f32 = egui::SidePanel::right("sidepanel_right")
-        .resizable(true)
-        .show(ctx, |ui| {
-            ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                ui.heading("Side Panel Right");
-                draw_ui_for_layers(&mut commands, ui, layers_query);
-                // Normally this should be placed in between the top and
-                // bottom parts.  However `available_rect_before_wrap` takes
-                // up all the available space before layers are considered,
-                // and the layers will be pushed down and they become
-                // invisible.
-                //
-                // Similarly using a combo of `top_down` and `bottom_up`
-                // layouts don't work.  `with_layout` allocates all available
-                // space, so we can't nest a `top_down` inside the `bottom_up`
-                // and expect `available_rect_before_wrap` to work.
-                //
-                // We can save the space layers section take up in the
-                // previous frame and use that to allocate empty space in
-                // between but this solution makes the ui (slightly) more
-                // complex and I am not sure it's entirely reliable.
+        let panel_left_width: f32 = egui::SidePanel::left("sidepanel_left")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.heading("Side Panel Left");
                 ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-            });
-        })
-        .response
-        .rect
-        .width();
+            })
+            .response
+            .rect
+            .width();
 
-    set_viewport_region(
-        menubar_height,
-        panel_left_width,
-        panel_right_width,
-        primary_window,
-        viewport_region,
-    );
+        let panel_right_width: f32 = egui::SidePanel::right("sidepanel_right")
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                    ui.heading("Side Panel Right");
+                    draw_ui_for_layers(&mut commands, ui, layers_query);
+                    // Normally this should be placed in between the top and
+                    // bottom parts.  However `available_rect_before_wrap` takes
+                    // up all the available space before layers are considered,
+                    // and the layers will be pushed down and they become
+                    // invisible.
+                    //
+                    // Similarly using a combo of `top_down` and `bottom_up`
+                    // layouts don't work.  `with_layout` allocates all available
+                    // space, so we can't nest a `top_down` inside the `bottom_up`
+                    // and expect `available_rect_before_wrap` to work.
+                    //
+                    // We can save the space layers section take up in the
+                    // previous frame and use that to allocate empty space in
+                    // between but this solution makes the ui (slightly) more
+                    // complex and I am not sure it's entirely reliable.
+                    ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+                });
+            })
+            .response
+            .rect
+            .width();
+
+        set_viewport_region(
+            menubar_height,
+            panel_left_width,
+            panel_right_width,
+            primary_window,
+            viewport_region,
+        );
+    }
 }
 
 // LIB
@@ -168,6 +197,7 @@ fn draw_ui_for_layers(
 }
 
 fn draw_ui_menu(
+    plugin_config: &UiPluginConfig,
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
     commands: &mut Commands,
@@ -175,7 +205,7 @@ fn draw_ui_menu(
     egui::menu::bar(ui, |ui| {
         egui::menu::menu_button(ui, "File", |ui| {
             if ui.button("New").clicked() {
-                commands.add(session::InitializeNewSession);
+                plugin_config.file_new_command.as_ref()(commands);
             }
             let _ = ui.button("Open...");
             ui.add_enabled_ui(false, |ui| {
