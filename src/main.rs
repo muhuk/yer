@@ -37,9 +37,7 @@ fn main() {
             layer::LayerPlugin,
             preview::PreviewPlugin,
             session::SessionPlugin,
-            ui::UiPlugin::with_config(ui::UiPluginConfig {
-                file_new_command: Box::new(|commands| commands.add(session::InitializeNewSession)),
-            }),
+            ui::UiPlugin,
             viewport::ViewportPlugin,
         ))
         .run();
