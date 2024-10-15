@@ -48,7 +48,7 @@ impl Plugin for UiPlugin {
 
         #[cfg(feature = "inspector")]
         app.add_plugins(DefaultInspectorConfigPlugin)
-            .add_systems(Update, inspector_ui);
+            .add_systems(Update, inspector_ui_system);
     }
 }
 
@@ -70,7 +70,7 @@ impl UiState {
 // SYSTEMS
 
 #[cfg(feature = "inspector")]
-fn inspector_ui(world: &mut World) {
+fn inspector_ui_system(world: &mut World) {
     let Ok((window, egui_context)) = world
         .query_filtered::<(&Window, &mut EguiContext), With<PrimaryWindow>>()
         .get_single(world)

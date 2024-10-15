@@ -36,7 +36,7 @@ impl Plugin for LayerPlugin {
             .add_event::<LayerChange>();
         app.add_systems(
             Update,
-            normalize_layer_ordering.run_if(on_timer(Duration::from_millis(
+            normalize_layer_ordering_system.run_if(on_timer(Duration::from_millis(
                 NORMALIZE_ORDERING_INTERVAL_MS,
             ))),
         );
@@ -198,7 +198,7 @@ impl Command for DeleteLayer {
 
 // SYSTEMS
 
-fn normalize_layer_ordering(mut layers: Query<&mut Layer>) {
+fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
     info!("Normalizing layer ordering.");
     layers
         .iter_mut()
