@@ -37,15 +37,34 @@ impl Plugin for SessionPlugin {
 
 #[derive(Debug, Default, Resource, Reflect)]
 #[reflect(Resource)]
-struct Session {
+pub struct Session {
     loaded_from: Option<PathBuf>,
     // undo_stack: Vec<usize>,
     // unsaved_action_idx: usize,
 }
 
 impl Session {
-    fn has_unsaved_changes(&self) -> bool {
+    pub fn has_save_file(&self) -> bool {
+        self.loaded_from.is_some()
+    }
+
+    pub fn has_unsaved_changes(&self) -> bool {
         unimplemented!()
+    }
+
+    pub fn save(&self) -> Result<(), SessionError> {
+        match &self.loaded_from {
+            Some(path) => {
+                info!("Saving to '{}'", path.to_str().unwrap());
+                // FIXME: Actually save here.
+                Ok(())
+            }
+            None => Err(SessionError::NoFilePath),
+        }
+    }
+
+    pub fn set_file_path<T: Into<PathBuf>>(&mut self, path: T) {
+        self.loaded_from = Some(path.into())
     }
 }
 
@@ -68,6 +87,7 @@ impl Command for InitializeNewSession {
 
 /// Starts a new multi-step workflow that may eventually save the currently
 /// edited project to disk, or not.
+// FIXME: Either use this or remove.
 pub struct StartSaveSessionFlow;
 
 impl Command for StartSaveSessionFlow {
@@ -87,6 +107,10 @@ fn startup_system(mut commands: Commands) {
 }
 
 // LIB
+
+pub enum SessionError {
+    NoFilePath,
+}
 
 fn clear_session(world: &mut World) {
     // TODO: Clear Undo stack.
