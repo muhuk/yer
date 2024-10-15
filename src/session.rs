@@ -29,7 +29,7 @@ impl Plugin for SessionPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Session>()
             .init_resource::<Session>()
-            .add_systems(Startup, initialize_empty_session);
+            .add_systems(Startup, startup_system);
     }
 }
 
@@ -82,7 +82,7 @@ impl Command for StartSaveSessionFlow {
 
 // SYSTEMS
 
-fn initialize_empty_session(mut commands: Commands) {
+fn startup_system(mut commands: Commands) {
     commands.add(InitializeNewSession);
 }
 

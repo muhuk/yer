@@ -28,7 +28,7 @@ impl Plugin for PreviewPlugin {
         app.register_type::<Preview>()
             .register_type::<PreviewMesh>();
         app.init_resource::<Preview>();
-        app.add_systems(Update, trigger_preview);
+        app.add_systems(Update, trigger_preview_system);
     }
 }
 
@@ -50,7 +50,7 @@ struct PreviewMesh;
 
 // SYSTEMS
 
-fn trigger_preview(
+fn trigger_preview_system(
     layer_change_events: EventReader<LayerChange>,
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
