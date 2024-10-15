@@ -27,18 +27,18 @@ impl Plugin for ViewportPlugin {
         app.register_type::<TargetTransform>()
             .register_type::<ViewportRegion>()
             .init_resource::<ViewportRegion>()
-            .add_systems(Startup, setup)
+            .add_systems(Startup, startup_system)
             .add_systems(
                 Update,
                 (
-                    draw_grid,
-                    draw_focal_point,
-                    middle_mouse_actions
+                    draw_grid_system,
+                    draw_focal_point_system,
+                    middle_mouse_actions_system
                         .run_if(input_pressed(MouseButton::Middle))
-                        .after(mouse_over_viewport),
-                    mouse_over_viewport,
-                    keyboard_actions,
-                    update_camera,
+                        .after(mouse_over_viewport_system),
+                    mouse_over_viewport_system,
+                    keyboard_actions_system,
+                    update_camera_system,
                 ),
             );
     }
@@ -139,7 +139,7 @@ impl TargetTransform {
 
 // SYSTEMS
 
-fn draw_focal_point(
+fn draw_focal_point_system(
     mut gizmos: Gizmos,
     target_transform_query: Query<&TargetTransform, With<Camera>>,
 ) {
@@ -153,7 +153,7 @@ fn draw_focal_point(
     }
 }
 
-fn draw_grid(mut gizmos: Gizmos) {
+fn draw_grid_system(mut gizmos: Gizmos) {
     gizmos
         .grid_3d(
             Vec3::ZERO,            // position
@@ -175,7 +175,7 @@ fn draw_grid(mut gizmos: Gizmos) {
         .outer_edges();
 }
 
-fn keyboard_actions(
+fn keyboard_actions_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
 ) {
@@ -184,7 +184,7 @@ fn keyboard_actions(
     }
 }
 
-fn mouse_over_viewport(
+fn mouse_over_viewport_system(
     mut viewport: ResMut<ViewportRegion>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -201,7 +201,7 @@ fn mouse_over_viewport(
     }
 }
 
-fn middle_mouse_actions(
+fn middle_mouse_actions_system(
     mut mouse_motion_reader: EventReader<MouseMotion>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -253,7 +253,7 @@ fn middle_mouse_actions(
 }
 
 /// Placeholder code to set up a basic 3D viewport.
-fn setup(
+fn startup_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -304,7 +304,7 @@ fn setup(
     });
 }
 
-fn update_camera(
+fn update_camera_system(
     time: Res<Time>,
     mut camera_query: Query<(&TargetTransform, &mut Transform), With<Camera>>,
 ) {
