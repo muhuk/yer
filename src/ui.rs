@@ -106,16 +106,22 @@ fn draw_ui_system(
     layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
+    mut session: ResMut<session::Session>,
     ui_state: Res<State<UiState>>,
+    mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
     let ctx = contexts.ctx_mut();
 
     let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
         .show(ctx, |ui| {
-            ui.add_enabled_ui(ui_state.is_interactive(), |ui| {
-                draw_ui_menu(ui, &mut app_exit_events, &mut commands);
-            });
+            draw_ui_menu(
+                ui,
+                &mut app_exit_events,
+                &mut commands,
+                session.as_ref(),
+                &mut ui_state_next,
+            );
         })
         .response
         .rect
@@ -124,10 +130,8 @@ fn draw_ui_system(
     let panel_left_width: f32 = egui::SidePanel::left("sidepanel_left")
         .resizable(true)
         .show(ctx, |ui| {
-            ui.add_enabled_ui(ui_state.is_interactive(), |ui| {
-                ui.heading("Side Panel Left");
-                ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-            });
+            ui.heading("Side Panel Left");
+            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
         .rect
@@ -136,27 +140,25 @@ fn draw_ui_system(
     let panel_right_width: f32 = egui::SidePanel::right("sidepanel_right")
         .resizable(true)
         .show(ctx, |ui| {
-            ui.add_enabled_ui(ui_state.is_interactive(), |ui| {
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                    ui.heading("Side Panel Right");
-                    draw_ui_for_layers(&mut commands, ui, layers_query);
-                    // Normally this should be placed in between the top and
-                    // bottom parts.  However `available_rect_before_wrap` takes
-                    // up all the available space before layers are considered,
-                    // and the layers will be pushed down and they become
-                    // invisible.
-                    //
-                    // Similarly using a combo of `top_down` and `bottom_up`
-                    // layouts don't work.  `with_layout` allocates all available
-                    // space, so we can't nest a `top_down` inside the `bottom_up`
-                    // and expect `available_rect_before_wrap` to work.
-                    //
-                    // We can save the space layers section take up in the
-                    // previous frame and use that to allocate empty space in
-                    // between but this solution makes the ui (slightly) more
-                    // complex and I am not sure it's entirely reliable.
-                    ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-                });
+            ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                ui.heading("Side Panel Right");
+                draw_ui_for_layers(&mut commands, ui, layers_query);
+                // Normally this should be placed in between the top and
+                // bottom parts.  However `available_rect_before_wrap` takes
+                // up all the available space before layers are considered,
+                // and the layers will be pushed down and they become
+                // invisible.
+                //
+                // Similarly using a combo of `top_down` and `bottom_up`
+                // layouts don't work.  `with_layout` allocates all available
+                // space, so we can't nest a `top_down` inside the `bottom_up`
+                // and expect `available_rect_before_wrap` to work.
+                //
+                // We can save the space layers section take up in the
+                // previous frame and use that to allocate empty space in
+                // between but this solution makes the ui (slightly) more
+                // complex and I am not sure it's entirely reliable.
+                ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             });
         })
         .response
@@ -165,7 +167,22 @@ fn draw_ui_system(
 
     if !ui_state.is_interactive() {
         if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
-            dialog.show(ctx);
+            match dialog.show(ctx) {
+                file_dialog::DialogState::Open => (),
+                file_dialog::DialogState::Selected(path) => {
+                    ui_state_next.set(UiState::Interactive);
+                    session.set_file_path(path);
+                    // Unwrapping here should be okay because we've just set
+                    // the file path.
+                    session.save().ok().unwrap();
+                }
+                file_dialog::DialogState::Cancelled => {
+                    // Currently there is no cleanup necessary.  If there is
+                    // need for cleanup in the future it should ideally be
+                    // handled by a OnExit(state) system.
+                    ui_state_next.set(UiState::Interactive);
+                }
+            }
         }
     }
 
@@ -225,22 +242,40 @@ fn draw_ui_menu(
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
     commands: &mut Commands,
+    session: &session::Session,
+    ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
     egui::menu::bar(ui, |ui| {
         egui::menu::menu_button(ui, "File", |ui| {
+            let mut button_clicked = false;
             if ui.button("New").clicked() {
                 commands.add(session::InitializeNewSession);
+                button_clicked = true;
             }
             let _ = ui.button("Open...");
             // TODO: `Save` and `Save As` should be disabled only when there
             // are no changes to be saved.
-            ui.add_enabled_ui(false, |ui| {
-                let _ = ui.button("Save");
+            ui.add_enabled_ui(true, |ui| {
+                if ui.button("Save").clicked() {
+                    if session.has_save_file() {
+                        // Unwrapping here is okay because we've just
+                        // confirmed that there is a file path.
+                        session.save().ok().unwrap();
+                    } else {
+                        ui_state_next.set(UiState::ShowingSaveFileDialog);
+                    }
+                    button_clicked = true;
+                }
                 let _ = ui.button("Save As...");
             });
             ui.separator();
             if ui.button("Quit").clicked() {
                 app_exit_events.send(AppExit::Success);
+                button_clicked = true;
+            }
+
+            if button_clicked {
+                ui.close_menu();
             }
         });
     });

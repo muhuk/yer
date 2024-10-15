@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use bevy::prelude::*;
@@ -33,6 +33,12 @@ impl Plugin for UiFileDialogPlugin {
 
 // LIB
 
+pub enum DialogState {
+    Open,
+    Selected(PathBuf),
+    Cancelled,
+}
+
 #[derive(Component, Reflect)]
 #[reflect(Component)]
 pub(super) struct SaveFileDialog {
@@ -41,17 +47,24 @@ pub(super) struct SaveFileDialog {
 }
 
 impl SaveFileDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> Option<&Path> {
-        self.file_dialog.update(ctx).selected()
+    pub(super) fn show(&mut self, ctx: &Context) -> DialogState {
+        match self.file_dialog.update(ctx).state() {
+            egui_file_dialog::DialogState::Open => DialogState::Open,
+            egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
+            egui_file_dialog::DialogState::Selected(path) => DialogState::Selected(path),
+            _ => unreachable!(),
+        }
     }
 }
 
 impl Default for SaveFileDialog {
     fn default() -> Self {
-        let mut file_dialog = egui_file_dialog::FileDialog::new().add_file_filter(
-            "Project files",
-            Arc::new(|path| path.extension().unwrap_or_default() == "yer"),
-        );
+        let mut file_dialog = egui_file_dialog::FileDialog::new()
+            .add_file_filter(
+                "Project files",
+                Arc::new(|path| path.extension().unwrap_or_default() == "yer"),
+            )
+            .as_modal(true);
         file_dialog.save_file();
 
         Self { file_dialog }
