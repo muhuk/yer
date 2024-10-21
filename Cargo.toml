@@ -4,6 +4,7 @@
 name = "yer"
 version = "0.1.0"
 edition = "2021"
+description = "Terrain Generation Toolkit"
 
 
 # Disable dynamic linking before release
