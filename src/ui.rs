@@ -173,7 +173,11 @@ fn draw_ui_system(
                     ui_state_next.set(UiState::Interactive);
                     session.set_file_path(path);
                     // Unwrapping here should be okay because we've just set
-                    // the file path.
+                    // the file path.  But there may be other errors,
+                    // specifically IO errors.
+                    //
+                    // TODO: Handle errors here, DO NOT just ok().unwrap() or
+                    // expect().
                     session.save().ok().unwrap();
                 }
                 file_dialog::DialogState::Cancelled => {
@@ -258,15 +262,18 @@ fn draw_ui_menu(
             ui.add_enabled_ui(true, |ui| {
                 if ui.button("Save").clicked() {
                     if session.has_save_file() {
-                        // Unwrapping here is okay because we've just
-                        // confirmed that there is a file path.
+                        // TODO: Handle errors that may be returned from
+                        // `save`.  We have confirmed there is a file name but
+                        // there may still be IO errors.
                         session.save().ok().unwrap();
                     } else {
                         ui_state_next.set(UiState::ShowingSaveFileDialog);
                     }
                     button_clicked = true;
                 }
-                let _ = ui.button("Save As...");
+                if ui.button("Save As...").clicked() {
+                    unimplemented!();
+                }
             });
             ui.separator();
             if ui.button("Quit").clicked() {
