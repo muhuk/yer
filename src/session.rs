@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::path::PathBuf;
+use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
@@ -45,6 +46,10 @@ pub struct Session {
 }
 
 impl Session {
+    pub fn get_file_path(&self) -> Option<Cow<Path>> {
+        self.loaded_from.as_ref().map(|p| Cow::from(p.as_path()))
+    }
+
     pub fn has_save_file(&self) -> bool {
         self.loaded_from.is_some()
     }

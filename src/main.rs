@@ -16,19 +16,18 @@
 
 use bevy::prelude::*;
 
+mod constants;
 mod layer;
 mod preview;
 mod session;
 mod ui;
 mod viewport;
 
-const WINDOW_TITLE: &str = "yer - Terrain Generation Toolkit";
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: WINDOW_TITLE.to_owned(),
+                title: constants::APPLICATION_TITLE.to_owned(),
                 ..Default::default()
             }),
             ..Default::default()
