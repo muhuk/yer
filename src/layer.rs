@@ -52,8 +52,8 @@ pub enum LayerChange {
 
 // BUNDLES
 
-#[derive(Bundle)]
-struct LayerBundle {
+#[derive(Bundle, Deserialize, Serialize)]
+pub struct LayerBundle {
     layer: Layer,
     height_map: HeightMap,
 }

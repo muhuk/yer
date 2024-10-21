@@ -14,17 +14,31 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::fs;
+use std::path::Path;
+
 use rmp_serde;
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
 
+const CURRENT_SAVE_VERSION: u16 = 1;
+
 // LIB
 
-#[derive(Deserialize, Serialize)]
-struct LayerComponents {
-    layer: layer::Layer,
-    height_map: layer::HeightMap,
+#[derive(Debug)]
+pub enum SaveError {
+    DecodeError(rmp_serde::decode::Error),
+    EncodeError(rmp_serde::encode::Error),
+    IoError(std::io::Error),
+}
+
+pub fn save(path: &Path, layers: Vec<layer::LayerBundle>) -> Result<(), SaveError> {
+    let container = SaveContainer {
+        version: CURRENT_SAVE_VERSION,
+        data: (SaveV1 { layers }).to_bytes()?,
+    };
+    fs::write(path, container.to_bytes()?.as_slice()).map_err(|e| SaveError::IoError(e))
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -35,10 +49,12 @@ struct SaveContainer {
 }
 
 impl SaveContainer {
+    #[inline]
     fn to_bytes(&self) -> Result<Vec<u8>, SaveError> {
         rmp_serde::encode::to_vec_named(self).map_err(|e| SaveError::EncodeError(e))
     }
 
+    #[inline]
     fn from_bytes(bytes: &[u8]) -> Result<Self, SaveError> {
         rmp_serde::decode::from_slice(bytes).map_err(|e| SaveError::DecodeError(e))
     }
@@ -46,16 +62,22 @@ impl SaveContainer {
 
 #[derive(Deserialize, Serialize)]
 struct SaveV1 {
-    layers: Vec<LayerComponents>,
+    layers: Vec<layer::LayerBundle>,
     // TODO: Store preview config
     // TODO: Store bake config
     // TODO: Store cached preview mesh
 }
 
-#[derive(Debug)]
-enum SaveError {
-    DecodeError(rmp_serde::decode::Error),
-    EncodeError(rmp_serde::encode::Error),
+impl SaveV1 {
+    #[inline]
+    fn to_bytes(&self) -> Result<Vec<u8>, SaveError> {
+        rmp_serde::encode::to_vec_named(self).map_err(|e| SaveError::EncodeError(e))
+    }
+
+    #[inline]
+    fn from_bytes(bytes: &[u8]) -> Result<Self, SaveError> {
+        rmp_serde::decode::from_slice(bytes).map_err(|e| SaveError::DecodeError(e))
+    }
 }
 
 #[cfg(test)]

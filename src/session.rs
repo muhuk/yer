@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
+use save::SaveError;
 
 use crate::layer;
 
@@ -56,8 +57,7 @@ impl Session {
         match &self.loaded_from {
             Some(path) => {
                 info!("Saving to '{}'", path.to_str().unwrap());
-                // FIXME: Actually save here.
-                Ok(())
+                save::save(path.as_path(), vec![]).map_err(|e| SessionError::SaveError(e))
             }
             None => Err(SessionError::NoFilePath),
         }
@@ -110,6 +110,7 @@ fn startup_system(mut commands: Commands) {
 
 pub enum SessionError {
     NoFilePath,
+    SaveError(SaveError),
 }
 
 fn clear_session(world: &mut World) {
