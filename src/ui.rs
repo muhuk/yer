@@ -27,6 +27,7 @@ use bevy_inspector_egui::{
     DefaultInspectorConfigPlugin,
 };
 
+use crate::constants;
 use crate::layer;
 use crate::session;
 use crate::viewport;
@@ -40,7 +41,14 @@ impl Plugin for UiPlugin {
         app.register_type::<UiState>()
             .add_plugins((EguiPlugin, file_dialog::UiFileDialogPlugin))
             .init_state::<UiState>()
-            .add_systems(Update, draw_ui_system)
+            .add_systems(
+                Update,
+                (
+                    draw_ui_system,
+                    update_window_title_system
+                        .run_if(resource_exists_and_changed::<session::Session>),
+                ),
+            )
             .add_systems(
                 OnEnter(UiState::ShowingSaveFileDialog),
                 show_save_file_dialog_system,
@@ -205,6 +213,26 @@ fn show_save_file_dialog_system(mut commands: Commands) {
         file_dialog::SaveFileDialog::default(),
         StateScoped(UiState::ShowingSaveFileDialog),
     ));
+}
+
+fn update_window_title_system(
+    session: Res<session::Session>,
+    mut primary_window: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    info!("Updating window title.");
+    if let Ok(mut window) = primary_window.get_single_mut() {
+        window.title = session
+            .get_file_path()
+            .map(|p| {
+                format!(
+                    "{} — {}",
+                    // We unwrap here assuming the path is valid UTF-8
+                    p.to_str().unwrap(),
+                    constants::APPLICATION_TITLE
+                )
+            })
+            .unwrap_or_else(|| format!("Unsaved — {}", constants::APPLICATION_TITLE));
+    }
 }
 
 // LIB
