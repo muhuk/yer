@@ -58,9 +58,22 @@ pub struct LayerBundle {
     height_map: HeightMap,
 }
 
+impl LayerBundle {
+    pub fn extract_all(world: &mut World) -> Vec<Self> {
+        let mut layer_bundles = vec![];
+        for (layer, height_map) in world.query::<(&Layer, &HeightMap)>().iter(world) {
+            layer_bundles.push(Self {
+                layer: layer.clone(),
+                height_map: height_map.clone(),
+            });
+        }
+        layer_bundles
+    }
+}
+
 // COMPONENTS
 
-#[derive(Component, Debug, Deserialize, Reflect, Serialize)]
+#[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
 #[reflect(Component, Default)]
 pub enum HeightMap {
     Constant(f32),
@@ -80,7 +93,7 @@ impl Sample2D for HeightMap {
     }
 }
 
-#[derive(Component, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
+#[derive(Component, Clone, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
 #[reflect(Component)]
 pub struct Layer {
     pub enable_baking: bool,

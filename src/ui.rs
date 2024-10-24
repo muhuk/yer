@@ -186,7 +186,7 @@ fn draw_ui_system(
                     //
                     // TODO: Handle errors here, DO NOT just ok().unwrap() or
                     // expect().
-                    session.save().ok().unwrap();
+                    session.save(&mut commands).ok().unwrap();
                 }
                 file_dialog::DialogState::Cancelled => {
                     // Currently there is no cleanup necessary.  If there is
@@ -273,7 +273,7 @@ fn draw_ui_for_layers(
 fn draw_ui_menu(
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
-    commands: &mut Commands,
+    mut commands: &mut Commands,
     session: &session::Session,
     ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
@@ -293,7 +293,7 @@ fn draw_ui_menu(
                         // TODO: Handle errors that may be returned from
                         // `save`.  We have confirmed there is a file name but
                         // there may still be IO errors.
-                        session.save().ok().unwrap();
+                        session.save(&mut commands).ok().unwrap();
                     } else {
                         ui_state_next.set(UiState::ShowingSaveFileDialog);
                     }
