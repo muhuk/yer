@@ -19,6 +19,7 @@ use std::path::Path;
 
 use rmp_serde;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::layer;
 
@@ -26,10 +27,13 @@ const CURRENT_SAVE_VERSION: u16 = 1;
 
 // LIB
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum SaveError {
+    #[error("decode error: {0}")]
     DecodeError(rmp_serde::decode::Error),
+    #[error("encode error: {0}")]
     EncodeError(rmp_serde::encode::Error),
+    #[error("io error: {0}")]
     IoError(std::io::Error),
 }
 

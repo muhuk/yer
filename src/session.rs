@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
-use save::SaveError;
+use thiserror::Error;
 
 use crate::layer;
 
@@ -58,11 +58,11 @@ impl Session {
         unimplemented!()
     }
 
-    pub fn save(&self) -> Result<(), SessionError> {
+    pub fn save(&self, commands: &mut Commands) -> Result<(), SessionError> {
         match &self.loaded_from {
-            Some(path) => {
-                info!("Saving to '{}'", path.to_str().unwrap());
-                save::save(path.as_path(), vec![]).map_err(|e| SessionError::SaveError(e))
+            Some(_) => {
+                commands.add(SaveSession);
+                Ok(())
             }
             None => Err(SessionError::NoFilePath),
         }
@@ -90,17 +90,25 @@ impl Command for InitializeNewSession {
     }
 }
 
-/// Starts a new multi-step workflow that may eventually save the currently
-/// edited project to disk, or not.
-// FIXME: Either use this or remove.
-pub struct StartSaveSessionFlow;
+struct SaveSession;
 
-impl Command for StartSaveSessionFlow {
-    fn apply(self, world: &mut World) {
-        let session_res = world.resource::<Session>();
-        match session_res.loaded_from {
-            Some(_) => unimplemented!(), // We're good, just save
-            None => unimplemented!(),    // Enter flow, show field dialog
+impl Command for SaveSession {
+    fn apply(self, mut world: &mut World) {
+        let path: Option<PathBuf> = world.resource::<Session>().loaded_from.clone();
+
+        match path {
+            Some(path) => {
+                info!("Saving to '{}'", path.to_str().unwrap());
+                match save::save(path.as_path(), layer::LayerBundle::extract_all(world))
+                    .map_err(|e| SessionError::SaveError(e))
+                {
+                    Ok(_) => (),
+                    Err(e) => {
+                        error!(error = &e as &dyn core::error::Error)
+                    }
+                }
+            }
+            None => error!(error = &SessionError::NoFilePath as &dyn core::error::Error),
         }
     }
 }
@@ -113,9 +121,12 @@ fn startup_system(mut commands: Commands) {
 
 // LIB
 
+#[derive(Debug, Error)]
 pub enum SessionError {
+    #[error("no file path")]
     NoFilePath,
-    SaveError(SaveError),
+    #[error("save error: {0}")]
+    SaveError(save::SaveError),
 }
 
 fn clear_session(world: &mut World) {
