@@ -23,6 +23,8 @@ use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::undo::{self, Action, ReflectAction};
+
 const LAYER_SPACING: u32 = 100;
 const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
 
@@ -47,7 +49,8 @@ impl Plugin for LayerPlugin {
 
 #[derive(Event, Debug)]
 pub enum LayerChange {
-    Added(Uuid),
+    Created(Uuid),
+    Deleted(Uuid),
 }
 
 // BUNDLES
@@ -103,13 +106,17 @@ pub struct Layer {
 }
 
 impl Layer {
-    fn new(order: u32) -> Self {
+    fn new(id: Uuid, order: u32) -> Self {
         Self {
             enable_baking: true,
             enable_preview: true,
-            id: Uuid::now_v7(),
+            id,
             order,
         }
+    }
+
+    fn new_id() -> Uuid {
+        Uuid::now_v7()
     }
 
     pub fn id(&self) -> Uuid {
@@ -150,42 +157,24 @@ pub enum CreateLayer {
 
 impl Command for CreateLayer {
     fn apply(self, world: &mut World) {
-        let layer: Layer = match self {
-            Self::OnTop => {
-                // Find the `order` of the top layer:
-                let max_order: u32 = world
-                    .query::<&Layer>()
-                    .iter(world)
-                    .sort::<&Layer>()
-                    .last()
-                    .map_or(0, |layer| layer.order);
-                Layer::new(max_order + LAYER_SPACING)
-            }
-            Self::Above(id) => {
-                let bottom_layer_order = world
-                    .query::<&Layer>()
-                    .iter(world)
-                    .find(|layer| layer.id == id)
-                    .map(|layer| layer.order)
-                    .unwrap();
-                // In case bottom layer is the topmost layer (no other layer
-                // above it), we end up with the order of bottom_layer_order +
-                // LAYER_SPACING for the new layer, just like Self::OnTop.
-                let top_layer_order = world
-                    .query::<&Layer>()
-                    .iter(world)
-                    .sort::<&Layer>()
-                    .filter(|layer| layer.order > bottom_layer_order)
-                    .next()
-                    .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
-                Layer::new((bottom_layer_order + top_layer_order) / 2)
-            }
+        let above: Option<Uuid> = match self {
+            Self::OnTop => world
+                .query::<&Layer>()
+                .iter(world)
+                .sort::<&Layer>()
+                .last()
+                .map(|layer| layer.id),
+            Self::Above(id) => Some(id),
         };
-        world.send_event(LayerChange::Added(layer.id));
-        world.spawn(LayerBundle {
-            layer,
-            height_map: HeightMap::default(),
-        });
+
+        let action = CreateLayerAction {
+            id: Layer::new_id(),
+            parent_id: above,
+        };
+        action.apply(world);
+        world
+            .resource_mut::<undo::UndoStack>()
+            .push(Box::new(action));
     }
 }
 
@@ -193,15 +182,31 @@ pub struct DeleteLayer(pub Uuid);
 
 impl Command for DeleteLayer {
     fn apply(self, world: &mut World) {
-        match world
-            .query::<(Entity, &Layer)>()
+        let layer_order: Option<u32> = world
+            .query::<&Layer>()
             .iter(world)
-            .find(|(_, layer)| layer.id == self.0)
-        {
-            Some((entity, _)) => {
-                world.despawn(entity);
+            .find(|layer| layer.id == self.0)
+            .map(|layer| layer.order);
+
+        match layer_order {
+            Some(layer_order) => {
+                let parent_id: Option<Uuid> = world
+                    .query::<&Layer>()
+                    .iter(world)
+                    .sort::<&Layer>()
+                    .filter(|layer| layer.order < layer_order)
+                    .last()
+                    .map(|layer| layer.id);
+                let action = DeleteLayerAction {
+                    id: self.0,
+                    parent_id,
+                };
+                action.apply(world);
+                world
+                    .resource_mut::<undo::UndoStack>()
+                    .push(Box::new(action));
             }
-            None => warn!(
+            None => error!(
                 "Trying to delete non-existent layer with id '{}'",
                 self.0.simple()
             ),
@@ -227,6 +232,89 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
 
 // LIB
 
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+struct CreateLayerAction {
+    id: Uuid,
+    parent_id: Option<Uuid>,
+}
+
+impl Action for CreateLayerAction {
+    fn apply(&self, world: &mut World) {
+        let layer: Layer = {
+            let bottom_layer_order = self
+                .parent_id
+                .map(|parent_id| {
+                    world
+                        .query::<&Layer>()
+                        .iter(world)
+                        .find(|layer| layer.id == parent_id)
+                        .map(|layer| layer.order)
+                        .unwrap()
+                })
+                .unwrap_or(0);
+            // In case bottom layer is the topmost layer (no other layer
+            // above it), we end up with the order of bottom_layer_order +
+            // LAYER_SPACING for the new layer, just like Self::OnTop.
+            let top_layer_order = world
+                .query::<&Layer>()
+                .iter(world)
+                .sort::<&Layer>()
+                .filter(|layer| layer.order > bottom_layer_order)
+                .next()
+                .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
+            Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
+        };
+        world.send_event(LayerChange::Created(self.id));
+        world.spawn(LayerBundle {
+            layer,
+            height_map: HeightMap::default(),
+        });
+    }
+
+    fn revert(&self, world: &mut World) {
+        DeleteLayerAction {
+            id: self.id,
+            parent_id: None,
+        }
+        .apply(world)
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+struct DeleteLayerAction {
+    id: Uuid,
+    parent_id: Option<Uuid>,
+}
+
+impl Action for DeleteLayerAction {
+    fn apply(&self, world: &mut World) {
+        match world
+            .query::<(Entity, &Layer)>()
+            .iter(world)
+            .find(|(_, layer)| layer.id == self.id)
+        {
+            Some((entity, _)) => {
+                world.despawn(entity);
+                world.send_event(LayerChange::Deleted(self.id));
+            }
+            None => warn!(
+                "Trying to delete non-existent layer with id '{}'",
+                self.id.simple()
+            ),
+        }
+    }
+
+    fn revert(&self, world: &mut World) {
+        CreateLayerAction {
+            id: self.id,
+            parent_id: self.parent_id,
+        }
+        .apply(world)
+    }
+}
+
 trait Sample2D {
     fn sample(&self, position: Vec2, height: f32) -> f32;
 }
@@ -234,6 +322,11 @@ trait Sample2D {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use uuid::uuid;
+
+    const A: Uuid = uuid!("0192bf46-8e52-7dc5-b6f5-05bc9ae3aaa3");
+    const B: Uuid = uuid!("0192bf47-0c63-79a3-983c-92445e2b56a9");
 
     macro_rules! assert_layer_count {
         ($app:expr, $expected:expr) => {
@@ -272,8 +365,8 @@ mod tests {
         app.update();
 
         app.world_mut().commands().spawn_batch([
-            Layer::new(FIRST_LAYER_ORDER),
-            Layer::new(FIRST_LAYER_ORDER + LAYER_SPACING),
+            Layer::new(A, FIRST_LAYER_ORDER),
+            Layer::new(B, FIRST_LAYER_ORDER + LAYER_SPACING),
         ]);
         app.update();
         assert_layer_count!(app, 2);
