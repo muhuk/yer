@@ -21,6 +21,7 @@ mod layer;
 mod preview;
 mod session;
 mod ui;
+mod undo;
 mod viewport;
 
 fn main() {
@@ -37,6 +38,7 @@ fn main() {
             preview::PreviewPlugin,
             session::SessionPlugin,
             ui::UiPlugin,
+            undo::UndoPlugin,
             viewport::ViewportPlugin,
         ))
         .run();
