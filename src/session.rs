@@ -93,7 +93,7 @@ impl Command for InitializeNewSession {
 struct SaveSession;
 
 impl Command for SaveSession {
-    fn apply(self, mut world: &mut World) {
+    fn apply(self, world: &mut World) {
         let path: Option<PathBuf> = world.resource::<Session>().loaded_from.clone();
 
         match path {
