@@ -43,6 +43,12 @@ impl Plugin for LayerPlugin {
             ))),
         );
     }
+
+    fn finish(&self, app: &mut App) {
+        if !app.is_plugin_added::<undo::UndoPlugin>() {
+            app.add_plugins(undo::UndoPlugin);
+        }
+    }
 }
 
 // EVENTS
@@ -171,10 +177,7 @@ impl Command for CreateLayer {
             id: Layer::new_id(),
             parent_id: above,
         };
-        action.apply(world);
-        world
-            .resource_mut::<undo::UndoStack>()
-            .push(Box::new(action));
+        undo::PushAction(Box::new(action)).apply(world);
     }
 }
 
@@ -201,10 +204,7 @@ impl Command for DeleteLayer {
                     id: self.0,
                     parent_id,
                 };
-                action.apply(world);
-                world
-                    .resource_mut::<undo::UndoStack>()
-                    .push(Box::new(action));
+                undo::PushAction(Box::new(action)).apply(world);
             }
             None => error!(
                 "Trying to delete non-existent layer with id '{}'",

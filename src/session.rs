@@ -22,6 +22,7 @@ use bevy::prelude::*;
 use thiserror::Error;
 
 use crate::layer;
+use crate::undo;
 
 mod save;
 
@@ -31,7 +32,8 @@ impl Plugin for SessionPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Session>()
             .init_resource::<Session>()
-            .add_systems(Startup, startup_system);
+            .add_systems(Startup, startup_system)
+            .add_systems(Update, process_undo_events_system);
     }
 }
 
@@ -41,8 +43,9 @@ impl Plugin for SessionPlugin {
 #[reflect(Resource)]
 pub struct Session {
     loaded_from: Option<PathBuf>,
-    // undo_stack: Vec<usize>,
-    // unsaved_action_idx: usize,
+    /// The index in undo stack for the last saved action relative to the last
+    /// applied action.  `None` if the session has not been saved yet.
+    saved_action_idx: Option<i32>,
 }
 
 impl Session {
@@ -55,7 +58,7 @@ impl Session {
     }
 
     pub fn has_unsaved_changes(&self) -> bool {
-        unimplemented!()
+        self.saved_action_idx != Some(0)
     }
 
     pub fn save(&self, commands: &mut Commands) -> Result<(), SessionError> {
@@ -85,6 +88,8 @@ pub struct InitializeNewSession;
 
 impl Command for InitializeNewSession {
     fn apply(self, world: &mut World) {
+        // The new session is not saved yet.
+        world.resource_mut::<Session>().loaded_from = None;
         clear_session(world);
         world.commands().add(layer::CreateLayer::OnTop);
     }
@@ -102,7 +107,9 @@ impl Command for SaveSession {
                 match save::save(path.as_path(), layer::LayerBundle::extract_all(world))
                     .map_err(|e| SessionError::SaveError(e))
                 {
-                    Ok(_) => (),
+                    Ok(_) => {
+                        world.resource_mut::<Session>().saved_action_idx = Some(0);
+                    }
                     Err(e) => {
                         error!(error = &e as &dyn core::error::Error)
                     }
@@ -114,6 +121,29 @@ impl Command for SaveSession {
 }
 
 // SYSTEMS
+
+fn process_undo_events_system(
+    mut session: ResMut<Session>,
+    mut undo_events: EventReader<undo::UndoEvent>,
+) {
+    for event in undo_events.read() {
+        match (event, session.saved_action_idx) {
+            (undo::UndoEvent::ActionPushed, None) => (),
+            (undo::UndoEvent::ActionPushed, Some(idx)) => session.saved_action_idx = Some(idx - 1),
+            // TODO: Increment if Undo
+            // TODO: Decrement if Redo
+            (undo::UndoEvent::StackCleared, _) => {
+                if session.has_save_file() {
+                    // We have just loaded a save file.
+                    session.saved_action_idx = Some(0)
+                } else {
+                    // We have created a new project.
+                    session.saved_action_idx = None
+                }
+            }
+        }
+    }
+}
 
 fn startup_system(mut commands: Commands) {
     commands.add(InitializeNewSession);
@@ -130,7 +160,8 @@ pub enum SessionError {
 }
 
 fn clear_session(world: &mut World) {
-    // TODO: Clear Undo stack.
+    // Clear undo stack.
+    undo::ClearStack.apply(world);
 
     // Despawn all layers.
     {
