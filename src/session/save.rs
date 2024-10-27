@@ -17,6 +17,7 @@
 use std::fs;
 use std::path::Path;
 
+use bevy::prelude::*;
 use rmp_serde;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -37,10 +38,23 @@ pub enum SaveError {
     IoError(std::io::Error),
 }
 
-pub fn save(path: &Path, layers: Vec<layer::LayerBundle>) -> Result<(), SaveError> {
+pub fn load(path: &Path, world: &mut World) -> Result<(), SaveError> {
+    let save_container: SaveContainer = fs::read(path)
+        .map_err(|e| SaveError::IoError(e))
+        .map(|bytes| SaveContainer::from_bytes(&bytes))??;
+    assert!(save_container.version == CURRENT_SAVE_VERSION);
+    let save_data = SaveV1::from_bytes(&save_container.data)?;
+    world.spawn_batch(save_data.layers);
+    Ok(())
+}
+
+pub fn save(path: &Path, world: &mut World) -> Result<(), SaveError> {
     let container = SaveContainer {
         version: CURRENT_SAVE_VERSION,
-        data: (SaveV1 { layers }).to_bytes()?,
+        data: (SaveV1 {
+            layers: layer::LayerBundle::extract_all(world),
+        })
+        .to_bytes()?,
     };
     fs::write(path, container.to_bytes()?.as_slice()).map_err(|e| SaveError::IoError(e))
 }

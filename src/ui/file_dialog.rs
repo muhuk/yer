@@ -23,7 +23,7 @@ use bevy_egui::egui::Context;
 use egui_file_dialog;
 
 static DEFAULT_FILE_NAME: &str = "untitled.yer";
-static PROJECT_FILES_FILTER_NAME: &str = "Project Files";
+static FILE_FILTER_PROJECT_FILES_NAME: &str = "Project Files";
 static SUFFIX: &str = "yer";
 
 // PLUGIN
@@ -32,7 +32,8 @@ pub struct UiFileDialogPlugin;
 
 impl Plugin for UiFileDialogPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<SaveFileDialog>();
+        app.register_type::<LoadFileDialog>()
+            .register_type::<SaveFileDialog>();
     }
 }
 
@@ -42,6 +43,39 @@ pub enum DialogState {
     Open,
     Selected(PathBuf),
     Cancelled,
+}
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub(super) struct LoadFileDialog {
+    #[reflect(ignore)]
+    file_dialog: egui_file_dialog::FileDialog,
+}
+
+impl LoadFileDialog {
+    pub(super) fn show(&mut self, ctx: &Context) -> DialogState {
+        match self.file_dialog.update(ctx).state() {
+            egui_file_dialog::DialogState::Open => DialogState::Open,
+            egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
+            egui_file_dialog::DialogState::Selected(path) => DialogState::Selected(path),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Default for LoadFileDialog {
+    fn default() -> Self {
+        let mut file_dialog = egui_file_dialog::FileDialog::new()
+            .add_file_filter(
+                FILE_FILTER_PROJECT_FILES_NAME,
+                Arc::new(|path| path.extension().unwrap_or_default() == SUFFIX),
+            )
+            .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
+            .as_modal(true);
+        file_dialog.select_file();
+
+        Self { file_dialog }
+    }
 }
 
 #[derive(Component, Reflect)]
@@ -70,10 +104,10 @@ impl Default for SaveFileDialog {
         // See: https://github.com/fluxxcode/egui-file-dialog/issues/167
         let mut file_dialog = egui_file_dialog::FileDialog::new()
             .add_file_filter(
-                PROJECT_FILES_FILTER_NAME,
+                FILE_FILTER_PROJECT_FILES_NAME,
                 Arc::new(|path| path.extension().unwrap_or_default() == SUFFIX),
             )
-            .default_file_filter(PROJECT_FILES_FILTER_NAME)
+            .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
             .default_file_name(DEFAULT_FILE_NAME)
             .as_modal(true);
         file_dialog.save_file();
