@@ -319,6 +319,16 @@ trait Sample2D {
     fn sample(&self, position: Vec2, height: f32) -> f32;
 }
 
+/// This is intended to be called to create the initial layer only.  It does
+/// not emit LayerChange::Added event.
+pub fn create_initial_layer(world: &mut World) {
+    const ORDER: u32 = 0;
+    world.spawn(LayerBundle {
+        layer: Layer::new(Layer::new_id(), ORDER),
+        height_map: HeightMap::default(),
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

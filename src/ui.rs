@@ -41,6 +41,7 @@ impl Plugin for UiPlugin {
         app.register_type::<UiState>()
             .add_plugins((EguiPlugin, file_dialog::UiFileDialogPlugin))
             .init_state::<UiState>()
+            .enable_state_scoped_entities::<UiState>()
             .add_systems(
                 Update,
                 (
@@ -48,6 +49,10 @@ impl Plugin for UiPlugin {
                     update_window_title_system
                         .run_if(resource_exists_and_changed::<session::Session>),
                 ),
+            )
+            .add_systems(
+                OnEnter(UiState::ShowingLoadFileDialog),
+                show_load_file_dialog_system,
             )
             .add_systems(
                 OnEnter(UiState::ShowingSaveFileDialog),
@@ -66,6 +71,7 @@ impl Plugin for UiPlugin {
 enum UiState {
     #[default]
     Interactive,
+    ShowingLoadFileDialog,
     ShowingSaveFileDialog,
 }
 
@@ -107,13 +113,15 @@ fn inspector_ui_system(world: &mut World) {
         });
 }
 
+// TODO: Organize the inputs for this system.
 fn draw_ui_system(
     mut app_exit_events: EventWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
-    mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
+    load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
+    save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
     mut session: ResMut<session::Session>,
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
@@ -174,28 +182,15 @@ fn draw_ui_system(
         .width();
 
     if !ui_state.is_interactive() {
-        if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
-            match dialog.show(ctx) {
-                file_dialog::DialogState::Open => (),
-                file_dialog::DialogState::Selected(path) => {
-                    ui_state_next.set(UiState::Interactive);
-                    session.set_file_path(path);
-                    // Unwrapping here should be okay because we've just set
-                    // the file path.  But there may be other errors,
-                    // specifically IO errors.
-                    //
-                    // TODO: Handle errors here, DO NOT just ok().unwrap() or
-                    // expect().
-                    session.save(&mut commands).ok().unwrap();
-                }
-                file_dialog::DialogState::Cancelled => {
-                    // Currently there is no cleanup necessary.  If there is
-                    // need for cleanup in the future it should ideally be
-                    // handled by a OnExit(state) system.
-                    ui_state_next.set(UiState::Interactive);
-                }
-            }
-        }
+        draw_ui_file_dialogs(
+            ctx,
+            &mut commands,
+            load_file_dialogs,
+            save_file_dialogs,
+            &mut session,
+            &ui_state,
+            &mut ui_state_next,
+        )
     }
 
     set_viewport_region(
@@ -205,6 +200,15 @@ fn draw_ui_system(
         primary_window,
         viewport_region,
     );
+}
+
+fn show_load_file_dialog_system(mut commands: Commands) {
+    // Set dir & file name.
+    commands.spawn((
+        Name::new("Load File Dialog"),
+        file_dialog::LoadFileDialog::default(),
+        StateScoped(UiState::ShowingLoadFileDialog),
+    ));
 }
 
 fn show_save_file_dialog_system(mut commands: Commands) {
@@ -221,21 +225,77 @@ fn update_window_title_system(
 ) {
     info!("Updating window title.");
     if let Ok(mut window) = primary_window.get_single_mut() {
-        window.title = session
+        let file_path_part: String = session
             .get_file_path()
-            .map(|p| {
-                format!(
-                    "{} — {}",
-                    // We unwrap here assuming the path is valid UTF-8
-                    p.to_str().unwrap(),
-                    constants::APPLICATION_TITLE
-                )
-            })
-            .unwrap_or_else(|| format!("Unsaved — {}", constants::APPLICATION_TITLE));
+            .map(|p| p.to_string_lossy().into())
+            .unwrap_or("(Unsaved)".to_string());
+        let save_status_part: &str = if session.has_unsaved_changes() {
+            "*"
+        } else {
+            ""
+        };
+        window.title = format!(
+            "{} {} — {}",
+            save_status_part,
+            file_path_part,
+            constants::APPLICATION_TITLE
+        );
     }
 }
 
 // LIB
+
+fn draw_ui_file_dialogs(
+    ctx: &mut egui::Context,
+    mut commands: &mut Commands,
+    mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
+    mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
+    session: &mut ResMut<session::Session>,
+    ui_state: &Res<State<UiState>>,
+    ui_state_next: &mut ResMut<NextState<UiState>>,
+) {
+    match ui_state.as_ref().get() {
+        UiState::Interactive => unreachable!(),
+        UiState::ShowingLoadFileDialog => {
+            if let Ok(mut dialog) = load_file_dialogs.get_single_mut() {
+                match dialog.show(ctx) {
+                    file_dialog::DialogState::Open => (),
+                    file_dialog::DialogState::Selected(path) => {
+                        ui_state_next.set(UiState::Interactive);
+                        // TODO: Pass the file path as argument to the command.
+                        session.set_file_path(path);
+                        commands.add(session::LoadSession);
+                    }
+                    file_dialog::DialogState::Cancelled => {
+                        // Currently there is no cleanup necessary.  If there is
+                        // need for cleanup in the future it should ideally be
+                        // handled by a OnExit(state) system.
+                        ui_state_next.set(UiState::Interactive);
+                    }
+                }
+            }
+        }
+        UiState::ShowingSaveFileDialog => {
+            if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
+                match dialog.show(ctx) {
+                    file_dialog::DialogState::Open => (),
+                    file_dialog::DialogState::Selected(path) => {
+                        ui_state_next.set(UiState::Interactive);
+                        session.set_file_path(path);
+                        // TODO: Revert file path if save fails.
+                        commands.add(session::SaveSession);
+                    }
+                    file_dialog::DialogState::Cancelled => {
+                        // Currently there is no cleanup necessary.  If there is
+                        // need for cleanup in the future it should ideally be
+                        // handled by a OnExit(state) system.
+                        ui_state_next.set(UiState::Interactive);
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// Draw the UI for the stack of layers in the project.
 fn draw_ui_for_layers(
@@ -273,7 +333,7 @@ fn draw_ui_for_layers(
 fn draw_ui_menu(
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
-    mut commands: &mut Commands,
+    commands: &mut Commands,
     session: &session::Session,
     ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
@@ -284,25 +344,22 @@ fn draw_ui_menu(
                 commands.add(session::InitializeNewSession);
                 button_clicked = true;
             }
-            let _ = ui.button("Open...");
-            // TODO: `Save` and `Save As` should be disabled only when there
-            // are no changes to be saved.
-            ui.add_enabled_ui(true, |ui| {
-                if ui.button("Save").clicked() {
-                    if session.has_save_file() {
-                        // TODO: Handle errors that may be returned from
-                        // `save`.  We have confirmed there is a file name but
-                        // there may still be IO errors.
-                        session.save(&mut commands).ok().unwrap();
-                    } else {
-                        ui_state_next.set(UiState::ShowingSaveFileDialog);
-                    }
-                    button_clicked = true;
+            if ui.button("Open...").clicked() {
+                ui_state_next.set(UiState::ShowingLoadFileDialog);
+                button_clicked = true;
+            }
+            if ui.button("Save").clicked() {
+                if session.has_save_file() {
+                    commands.add(session::SaveSession);
+                } else {
+                    ui_state_next.set(UiState::ShowingSaveFileDialog);
                 }
-                if ui.button("Save As...").clicked() {
-                    unimplemented!();
-                }
-            });
+                button_clicked = true;
+            }
+            if ui.button("Save As...").clicked() {
+                ui_state_next.set(UiState::ShowingSaveFileDialog);
+                button_clicked = true;
+            }
             ui.separator();
             if ui.button("Quit").clicked() {
                 app_exit_events.send(AppExit::Success);

@@ -43,8 +43,14 @@ impl Plugin for SessionPlugin {
 #[reflect(Resource)]
 pub struct Session {
     loaded_from: Option<PathBuf>,
+    /// This is used to track status of unsaved changes when
+    /// `saved_action_idx` is set to `None`.  When a new project is created or
+    /// a file is loaded this is set to `true`, as soon as an action is pushed
+    /// to the undo stack this is set to `false`.
+    new_project: bool,
     /// The index in undo stack for the last saved action relative to the last
-    /// applied action.  `None` if the session has not been saved yet.
+    /// applied action.  `None` if we don't have an action to refer to as the
+    /// last saved action.
     saved_action_idx: Option<i32>,
 }
 
@@ -58,17 +64,7 @@ impl Session {
     }
 
     pub fn has_unsaved_changes(&self) -> bool {
-        self.saved_action_idx != Some(0)
-    }
-
-    pub fn save(&self, commands: &mut Commands) -> Result<(), SessionError> {
-        match &self.loaded_from {
-            Some(_) => {
-                commands.add(SaveSession);
-                Ok(())
-            }
-            None => Err(SessionError::NoFilePath),
-        }
+        !self.new_project && self.saved_action_idx != Some(0)
     }
 
     pub fn set_file_path<T: Into<PathBuf>>(&mut self, path: T) {
@@ -89,13 +85,38 @@ pub struct InitializeNewSession;
 impl Command for InitializeNewSession {
     fn apply(self, world: &mut World) {
         // The new session is not saved yet.
-        world.resource_mut::<Session>().loaded_from = None;
+        {
+            let mut session = world.resource_mut::<Session>();
+            session.loaded_from = None;
+            session.saved_action_idx = None;
+            session.new_project = true;
+        }
         clear_session(world);
-        world.commands().add(layer::CreateLayer::OnTop);
+        layer::create_initial_layer(world);
     }
 }
 
-struct SaveSession;
+pub struct LoadSession;
+
+impl Command for LoadSession {
+    fn apply(self, world: &mut World) {
+        let path: Option<PathBuf> = world.resource::<Session>().loaded_from.clone();
+
+        match path {
+            Some(path) => {
+                info!("Loading file '{}'", path.to_str().unwrap());
+                clear_session(world);
+                match save::load(path.as_path(), world).map_err(|e| SessionError::SaveError(e)) {
+                    Ok(_) => (),
+                    Err(e) => error!(error = &e as &dyn core::error::Error),
+                }
+            }
+            None => error!(error = &SessionError::NoFilePath as &dyn core::error::Error),
+        }
+    }
+}
+
+pub struct SaveSession;
 
 impl Command for SaveSession {
     fn apply(self, world: &mut World) {
@@ -104,9 +125,7 @@ impl Command for SaveSession {
         match path {
             Some(path) => {
                 info!("Saving to '{}'", path.to_str().unwrap());
-                match save::save(path.as_path(), layer::LayerBundle::extract_all(world))
-                    .map_err(|e| SessionError::SaveError(e))
-                {
+                match save::save(path.as_path(), world).map_err(|e| SessionError::SaveError(e)) {
                     Ok(_) => {
                         world.resource_mut::<Session>().saved_action_idx = Some(0);
                     }
@@ -128,17 +147,20 @@ fn process_undo_events_system(
 ) {
     for event in undo_events.read() {
         match (event, session.saved_action_idx) {
-            (undo::UndoEvent::ActionPushed, None) => (),
-            (undo::UndoEvent::ActionPushed, Some(idx)) => session.saved_action_idx = Some(idx - 1),
+            (undo::UndoEvent::ActionPushed, None) => {
+                session.new_project = false;
+            }
+            (undo::UndoEvent::ActionPushed, Some(idx)) => {
+                session.saved_action_idx = Some(idx - 1);
+                session.new_project = false;
+            }
             // TODO: Increment if Undo
             // TODO: Decrement if Redo
             (undo::UndoEvent::StackCleared, _) => {
                 if session.has_save_file() {
                     // We have just loaded a save file.
-                    session.saved_action_idx = Some(0)
-                } else {
-                    // We have created a new project.
-                    session.saved_action_idx = None
+                    session.saved_action_idx = None;
+                    session.new_project = true;
                 }
             }
         }
