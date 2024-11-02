@@ -45,7 +45,8 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 (
-                    draw_ui_system,
+                    draw_ui_panels_system,
+                    draw_ui_dialogs_system.after(draw_ui_panels_system),
                     update_window_title_system
                         .run_if(resource_exists_and_changed::<session::Session>),
                 ),
@@ -113,17 +114,69 @@ fn inspector_ui_system(world: &mut World) {
         });
 }
 
-// TODO: Organize the inputs for this system.
-fn draw_ui_system(
+fn draw_ui_dialogs_system(
+    mut commands: Commands,
+    mut contexts: EguiContexts,
+    mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
+    mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
+    mut session: ResMut<session::Session>,
+    ui_state: Res<State<UiState>>,
+    mut ui_state_next: ResMut<NextState<UiState>>,
+) {
+    if let Some(ctx) = contexts.try_ctx_mut() {
+        if !ui_state.is_interactive() {
+            match ui_state.as_ref().get() {
+                UiState::Interactive => unreachable!(),
+                UiState::ShowingLoadFileDialog => {
+                    if let Ok(mut dialog) = load_file_dialogs.get_single_mut() {
+                        match dialog.show(ctx) {
+                            file_dialog::DialogState::Open => (),
+                            file_dialog::DialogState::Selected(path) => {
+                                ui_state_next.set(UiState::Interactive);
+                                // TODO: Pass the file path as argument to the command.
+                                session.set_file_path(path);
+                                commands.add(session::LoadSession);
+                            }
+                            file_dialog::DialogState::Cancelled => {
+                                // Currently there is no cleanup necessary.  If there is
+                                // need for cleanup in the future it should ideally be
+                                // handled by a OnExit(state) system.
+                                ui_state_next.set(UiState::Interactive);
+                            }
+                        }
+                    }
+                }
+                UiState::ShowingSaveFileDialog => {
+                    if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
+                        match dialog.show(ctx) {
+                            file_dialog::DialogState::Open => (),
+                            file_dialog::DialogState::Selected(path) => {
+                                ui_state_next.set(UiState::Interactive);
+                                session.set_file_path(path);
+                                // TODO: Revert file path if save fails.
+                                commands.add(session::SaveSession);
+                            }
+                            file_dialog::DialogState::Cancelled => {
+                                // Currently there is no cleanup necessary.  If there is
+                                // need for cleanup in the future it should ideally be
+                                // handled by a OnExit(state) system.
+                                ui_state_next.set(UiState::Interactive);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn draw_ui_panels_system(
     mut app_exit_events: EventWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
-    load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
-    save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
-    mut session: ResMut<session::Session>,
-    ui_state: Res<State<UiState>>,
+    session: ResMut<session::Session>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
@@ -181,18 +234,6 @@ fn draw_ui_system(
         .rect
         .width();
 
-    if !ui_state.is_interactive() {
-        draw_ui_file_dialogs(
-            ctx,
-            &mut commands,
-            load_file_dialogs,
-            save_file_dialogs,
-            &mut session,
-            &ui_state,
-            &mut ui_state_next,
-        )
-    }
-
     set_viewport_region(
         menubar_height,
         panel_left_width,
@@ -244,58 +285,6 @@ fn update_window_title_system(
 }
 
 // LIB
-
-fn draw_ui_file_dialogs(
-    ctx: &mut egui::Context,
-    mut commands: &mut Commands,
-    mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
-    mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
-    session: &mut ResMut<session::Session>,
-    ui_state: &Res<State<UiState>>,
-    ui_state_next: &mut ResMut<NextState<UiState>>,
-) {
-    match ui_state.as_ref().get() {
-        UiState::Interactive => unreachable!(),
-        UiState::ShowingLoadFileDialog => {
-            if let Ok(mut dialog) = load_file_dialogs.get_single_mut() {
-                match dialog.show(ctx) {
-                    file_dialog::DialogState::Open => (),
-                    file_dialog::DialogState::Selected(path) => {
-                        ui_state_next.set(UiState::Interactive);
-                        // TODO: Pass the file path as argument to the command.
-                        session.set_file_path(path);
-                        commands.add(session::LoadSession);
-                    }
-                    file_dialog::DialogState::Cancelled => {
-                        // Currently there is no cleanup necessary.  If there is
-                        // need for cleanup in the future it should ideally be
-                        // handled by a OnExit(state) system.
-                        ui_state_next.set(UiState::Interactive);
-                    }
-                }
-            }
-        }
-        UiState::ShowingSaveFileDialog => {
-            if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
-                match dialog.show(ctx) {
-                    file_dialog::DialogState::Open => (),
-                    file_dialog::DialogState::Selected(path) => {
-                        ui_state_next.set(UiState::Interactive);
-                        session.set_file_path(path);
-                        // TODO: Revert file path if save fails.
-                        commands.add(session::SaveSession);
-                    }
-                    file_dialog::DialogState::Cancelled => {
-                        // Currently there is no cleanup necessary.  If there is
-                        // need for cleanup in the future it should ideally be
-                        // handled by a OnExit(state) system.
-                        ui_state_next.set(UiState::Interactive);
-                    }
-                }
-            }
-        }
-    }
-}
 
 /// Draw the UI for the stack of layers in the project.
 fn draw_ui_for_layers(
