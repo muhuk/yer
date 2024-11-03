@@ -15,10 +15,9 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
-#[cfg(feature = "inspector")]
-use bevy::window::PrimaryWindow;
 #[cfg(feature = "inspector")]
 use bevy_egui::EguiContext;
 #[cfg(feature = "inspector")]
