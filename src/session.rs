@@ -96,22 +96,16 @@ impl Command for InitializeNewSession {
     }
 }
 
-pub struct LoadSession;
+pub struct LoadSession(pub PathBuf);
 
 impl Command for LoadSession {
     fn apply(self, world: &mut World) {
-        let path: Option<PathBuf> = world.resource::<Session>().loaded_from.clone();
-
-        match path {
-            Some(path) => {
-                info!("Loading file '{}'", path.to_str().unwrap());
-                clear_session(world);
-                match save::load(path.as_path(), world).map_err(|e| SessionError::SaveError(e)) {
-                    Ok(_) => (),
-                    Err(e) => error!(error = &e as &dyn core::error::Error),
-                }
-            }
-            None => error!(error = &SessionError::NoFilePath as &dyn core::error::Error),
+        let path = self.0;
+        info!("Loading file '{}'", path.to_str().unwrap());
+        clear_session(world);
+        match save::load(path.as_path(), world).map_err(|e| SessionError::SaveError(e)) {
+            Ok(_) => world.resource_mut::<Session>().set_file_path(path),
+            Err(e) => error!(error = &e as &dyn core::error::Error),
         }
     }
 }
