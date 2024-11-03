@@ -16,8 +16,22 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04, windows-2022]
+        include:
+          - os: ubuntu-22.04
+            executable: yer
+          - os: windows-2022
+            executable: yer.exe
     steps:
     - uses: actions/checkout@v4
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: yer-build-${{ matrix.os }}-${{ hashFiles('**/Cargo.toml') }}
     - name: Install Linux dependencies
       if: ${{ matrix.os == 'ubuntu-22.04' }}
       run: |
@@ -27,3 +41,8 @@ jobs:
       run: cargo test --verbose
     - name: Build
       run: cargo build --release --verbose
+    - name: Upload executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: Executable for ${{ matrix.os }}
+        path: target/release/${{ matrix.executable }}
