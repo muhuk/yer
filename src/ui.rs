@@ -133,9 +133,7 @@ fn draw_ui_dialogs_system(
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
                                 ui_state_next.set(UiState::Interactive);
-                                // TODO: Pass the file path as argument to the command.
-                                session.set_file_path(path);
-                                commands.add(session::LoadSession);
+                                commands.add(session::LoadSession(path));
                             }
                             file_dialog::DialogState::Cancelled => {
                                 // Currently there is no cleanup necessary.  If there is
