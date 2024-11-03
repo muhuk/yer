@@ -110,18 +110,22 @@ impl Command for LoadSession {
     }
 }
 
-pub struct SaveSession;
+pub struct SaveSession(pub Option<PathBuf>);
 
 impl Command for SaveSession {
     fn apply(self, world: &mut World) {
-        let path: Option<PathBuf> = world.resource::<Session>().loaded_from.clone();
+        let path = self
+            .0
+            .or_else(|| world.resource::<Session>().loaded_from.clone());
 
         match path {
             Some(path) => {
                 info!("Saving to '{}'", path.to_str().unwrap());
                 match save::save(path.as_path(), world).map_err(|e| SessionError::SaveError(e)) {
                     Ok(_) => {
-                        world.resource_mut::<Session>().saved_action_idx = Some(0);
+                        let mut session = world.resource_mut::<Session>();
+                        session.saved_action_idx = Some(0);
+                        session.set_file_path(path)
                     }
                     Err(e) => {
                         error!(error = &e as &dyn core::error::Error)
