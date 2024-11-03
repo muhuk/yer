@@ -150,9 +150,7 @@ fn draw_ui_dialogs_system(
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
                                 ui_state_next.set(UiState::Interactive);
-                                session.set_file_path(path);
-                                // TODO: Revert file path if save fails.
-                                commands.add(session::SaveSession);
+                                commands.add(session::SaveSession(Some(path)));
                             }
                             file_dialog::DialogState::Cancelled => {
                                 // Currently there is no cleanup necessary.  If there is
@@ -337,7 +335,7 @@ fn draw_ui_menu(
             }
             if ui.button("Save").clicked() {
                 if session.has_save_file() {
-                    commands.add(session::SaveSession);
+                    commands.add(session::SaveSession(None));
                 } else {
                     ui_state_next.set(UiState::ShowingSaveFileDialog);
                 }
