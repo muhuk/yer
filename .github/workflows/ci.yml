@@ -11,15 +11,17 @@ env:
 
 jobs:
   build:
-    name: Build-${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: build-${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022]
+        os: [linux, win]
         include:
-          - os: ubuntu-22.04
+          - os: linux
+            runner: ubuntu-22.04
             executable: yer
-          - os: windows-2022
+          - os: win
+            runner: windows-2022
             executable: yer.exe
     steps:
     - uses: actions/checkout@v4
@@ -33,16 +35,33 @@ jobs:
           target/
         key: yer-build-${{ matrix.os }}-${{ hashFiles('**/Cargo.toml') }}
     - name: Install Linux dependencies
-      if: ${{ matrix.os == 'ubuntu-22.04' }}
+      if: ${{ matrix.os == 'linux' }}
       run: |
         sudo apt-get update
-        sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0      
+        sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
     - name: Run tests
       run: cargo test --verbose
     - name: Build
       run: cargo build --release --no-default-features --verbose
+    - name: Rename executable
+      id: rename-executable
+      shell: bash
+      run: |
+        CRATE_VERSION=$(cargo pkgid | cut -d "#" -f2)
+        GIT_REVISION=$(git rev-parse --short=7 HEAD)
+        BRANCH=$GITHUB_HEAD_REF
+        NAME="yer-$CRATE_VERSION-dev-$BRANCH-$GIT_REVISION-${{ matrix.os }}"
+        if [ ${{ matrix.os }} = "linux" ]; then
+            FILENAME=$NAME
+        fi;
+        if [ ${{ matrix.os }} = "win" ]; then
+            FILENAME="$NAME.exe"
+        fi;
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
+        echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
+        cp target/release/${{ matrix.executable }} target/release/$FILENAME
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
-        name: Executable for ${{ matrix.os }}
-        path: target/release/${{ matrix.executable }}
+        name: ${{ steps.rename-executable.outputs.name }}
+        path: target/release/${{ steps.rename-executable.outputs.filename }}
