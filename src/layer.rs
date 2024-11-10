@@ -156,33 +156,6 @@ impl PartialOrd for Layer {
     }
 }
 
-// COMMANDS
-
-pub enum CreateLayer {
-    OnTop,
-    Above(LayerId),
-}
-
-impl Command for CreateLayer {
-    fn apply(self, world: &mut World) {
-        let above: Option<LayerId> = match self {
-            Self::OnTop => world
-                .query::<&Layer>()
-                .iter(world)
-                .sort::<&Layer>()
-                .last()
-                .map(|layer| layer.id),
-            Self::Above(id) => Some(id),
-        };
-
-        let action = CreateLayerAction {
-            id: Layer::new_id(),
-            parent_id: above,
-        };
-        undo::PushAction(Box::new(action)).apply(world);
-    }
-}
-
 // SYSTEMS
 
 fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
@@ -203,9 +176,18 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
-struct CreateLayerAction {
+pub struct CreateLayerAction {
     id: LayerId,
     parent_id: Option<LayerId>,
+}
+
+impl CreateLayerAction {
+    pub fn new(parent_id: Option<LayerId>) -> Self {
+        Self {
+            id: Layer::new_id(),
+            parent_id,
+        }
+    }
 }
 
 impl Action for CreateLayerAction {
@@ -378,7 +360,9 @@ mod tests {
         app.update();
 
         assert_layer_count!(app, 0);
-        app.world_mut().commands().push(CreateLayer::OnTop);
+        app.world_mut()
+            .commands()
+            .add::<undo::PushAction>(CreateLayerAction::new(None).into());
         app.update();
         assert_layer_count!(app, 1);
     }
@@ -408,7 +392,7 @@ mod tests {
             .collect();
         app.world_mut()
             .commands()
-            .push(CreateLayer::Above(initial_ids[0]));
+            .add::<undo::PushAction>(CreateLayerAction::new(Some(initial_ids[0])).into());
         app.update();
         assert_layer_count!(app, 3);
 
