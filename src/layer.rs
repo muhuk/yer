@@ -217,7 +217,7 @@ impl Command for DeleteLayer {
 // SYSTEMS
 
 fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
-    debug!("Normalizing layer ordering.");
+    trace!("Normalizing layer ordering.");
     layers
         .iter_mut()
         .sort::<&Layer>()

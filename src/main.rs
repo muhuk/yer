@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use bevy::log::LogPlugin;
 use bevy::prelude::*;
 
 mod constants;
@@ -24,15 +25,29 @@ mod ui;
 mod undo;
 mod viewport;
 
+const LOG_FILTER: &str = concat!(
+    "info,bevy_render=warn,wgpu_core=warn,wgpu_hal=warn,",
+    env!("CARGO_PKG_NAME"),
+    "=debug"
+);
+
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: constants::APPLICATION_TITLE.to_owned(),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: constants::APPLICATION_TITLE.to_owned(),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                })
+                .set(LogPlugin {
+                    filter: LOG_FILTER.into(),
+                    level: bevy::log::Level::DEBUG,
+                    ..default()
+                }),
+        )
         .add_plugins((
             layer::LayerPlugin,
             preview::PreviewPlugin,
