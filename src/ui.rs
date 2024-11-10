@@ -291,7 +291,12 @@ fn draw_ui_for_layers(
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
         if ui.button("New Layer").clicked() {
-            commands.add(layer::CreateLayer::OnTop)
+            let top_layer_id: Option<layer::LayerId> = layers_query
+                .iter()
+                .sort::<&layer::Layer>()
+                .last()
+                .map(|(layer, _)| layer.id());
+            commands.add::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
         }
         {
             let mut parent_layer_id: Option<layer::LayerId> = Option::default();
