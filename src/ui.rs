@@ -293,53 +293,62 @@ fn draw_ui_for_layers(
         if ui.button("New Layer").clicked() {
             commands.add(layer::CreateLayer::OnTop)
         }
-        // We need to iterate layers in reverse order to place the topmost
-        // (last applied) layer on top.
-        for (layer, height_map) in layers_query.iter().sort::<&layer::Layer>().rev() {
-            match *height_map {
-                layer::HeightMap::Constant(original_level) => ui.group(|ui| {
-                    ui.label(format!("{}", layer));
-                    {
-                        let mut height_level: f32 = original_level;
-                        if ui
-                            .add(egui::widgets::DragValue::new(&mut height_level))
-                            .changed()
-                            && height_level != original_level
+        {
+            let mut parent_layer_id: Option<layer::LayerId> = Option::default();
+
+            // We need to iterate layers in reverse order to place the topmost
+            // (last applied) layer on top.
+            for (layer, height_map) in layers_query.iter().sort::<&layer::Layer>().rev() {
+                match *height_map {
+                    layer::HeightMap::Constant(original_level) => ui.group(|ui| {
+                        ui.label(format!("{}", layer));
                         {
-                            // FIXME: Typing '50' results in 2 action, one
-                            //        from 0 to 5, and then a 2nd one from
-                            //        5 to 50.
+                            let mut height_level: f32 = original_level;
+                            if ui
+                                .add(egui::widgets::DragValue::new(&mut height_level))
+                                .changed()
+                                && height_level != original_level
+                            {
+                                // FIXME: Typing '50' results in 2 action, one
+                                //        from 0 to 5, and then a 2nd one from
+                                //        5 to 50.
+                                commands.add::<undo::PushAction>(
+                                    layer::HeightMapConstantUpdateHeightAction::new(
+                                        layer.id(),
+                                        original_level,
+                                        height_level,
+                                    )
+                                    .into(),
+                                );
+                            }
+                        }
+                        {
+                            let mut layer_preview: bool = layer.enable_preview;
+                            if ui.toggle_value(&mut layer_preview, "preview").changed()
+                                && layer_preview != layer.enable_preview
+                            {
+                                todo!("update preview");
+                            }
+                        }
+                        {
+                            let mut layer_baking: bool = layer.enable_baking;
+                            if ui.toggle_value(&mut layer_baking, "bake").changed()
+                                && layer_baking != layer.enable_baking
+                            {
+                                todo!("update bake");
+                            }
+                        }
+                        if ui.button("Delete").clicked() {
                             commands.add::<undo::PushAction>(
-                                layer::HeightMapConstantUpdateHeightAction::new(
-                                    layer.id(),
-                                    original_level,
-                                    height_level,
-                                )
-                                .into(),
-                            );
+                                layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
+                            )
                         }
-                    }
-                    {
-                        let mut layer_preview: bool = layer.enable_preview;
-                        if ui.toggle_value(&mut layer_preview, "preview").changed()
-                            && layer_preview != layer.enable_preview
-                        {
-                            todo!("update preview");
-                        }
-                    }
-                    {
-                        let mut layer_baking: bool = layer.enable_baking;
-                        if ui.toggle_value(&mut layer_baking, "bake").changed()
-                            && layer_baking != layer.enable_baking
-                        {
-                            todo!("update bake");
-                        }
-                    }
-                    if ui.button("Delete").clicked() {
-                        commands.add(layer::DeleteLayer(layer.id()))
-                    }
-                }),
-            };
+                    }),
+                };
+
+                // Set parent's layer_id for the next iteration.
+                parent_layer_id = Some(layer.id());
+            }
         }
     });
 }
