@@ -183,39 +183,6 @@ impl Command for CreateLayer {
     }
 }
 
-pub struct DeleteLayer(pub LayerId);
-
-impl Command for DeleteLayer {
-    fn apply(self, world: &mut World) {
-        let layer_order: Option<u32> = world
-            .query::<&Layer>()
-            .iter(world)
-            .find(|layer| layer.id == self.0)
-            .map(|layer| layer.order);
-
-        match layer_order {
-            Some(layer_order) => {
-                let parent_id: Option<LayerId> = world
-                    .query::<&Layer>()
-                    .iter(world)
-                    .sort::<&Layer>()
-                    .filter(|layer| layer.order < layer_order)
-                    .last()
-                    .map(|layer| layer.id);
-                let action = DeleteLayerAction {
-                    id: self.0,
-                    parent_id,
-                };
-                undo::PushAction(Box::new(action)).apply(world);
-            }
-            None => error!(
-                "Trying to delete non-existent layer with id '{}'",
-                self.0.simple()
-            ),
-        }
-    }
-}
-
 // SYSTEMS
 
 fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
@@ -285,9 +252,15 @@ impl Action for CreateLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
-struct DeleteLayerAction {
+pub struct DeleteLayerAction {
     id: LayerId,
     parent_id: Option<LayerId>,
+}
+
+impl DeleteLayerAction {
+    pub fn new(id: LayerId, parent_id: Option<LayerId>) -> Self {
+        Self { id, parent_id }
+    }
 }
 
 impl Action for DeleteLayerAction {
