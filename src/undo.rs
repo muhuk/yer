@@ -88,6 +88,7 @@ pub struct PushAction(pub Box<dyn Action>);
 impl Command for PushAction {
     fn apply(self, world: &mut World) {
         let action = self.0;
+        debug!("Pushing new action: {:?}", &action);
         action.apply(world);
         let mut undo_stack = world.resource_mut::<UndoStack>();
         // The new action is pushed as a result of user input.  Therefore any
@@ -101,7 +102,7 @@ impl Command for PushAction {
 // LIB
 
 #[reflect_trait]
-pub trait Action: Reflect + Send + Sync {
+pub trait Action: Reflect + Debug + Send + Sync {
     fn apply(&self, world: &mut World);
     fn revert(&self, world: &mut World);
 }
