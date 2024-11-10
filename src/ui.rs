@@ -169,7 +169,7 @@ fn draw_ui_panels_system(
     mut app_exit_events: EventWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
-    layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
+    layers_query: Query<(&layer::Layer, &layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: ResMut<session::Session>,
     mut ui_state_next: ResMut<NextState<UiState>>,
@@ -285,7 +285,7 @@ fn update_window_title_system(
 fn draw_ui_for_layers(
     commands: &mut Commands,
     ui: &mut egui::Ui,
-    mut layers_query: Query<(&mut layer::Layer, &mut layer::HeightMap)>,
+    layers_query: Query<(&layer::Layer, &layer::HeightMap)>,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
@@ -294,22 +294,48 @@ fn draw_ui_for_layers(
         }
         // We need to iterate layers in reverse order to place the topmost
         // (last applied) layer on top.
-        for (mut layer, mut height_map) in layers_query.iter_mut().sort::<&layer::Layer>().rev() {
-            let mut height_value: f32 = match *height_map {
-                layer::HeightMap::Constant(v) => v,
-            };
-            ui.group(|ui| {
-                ui.label(format!("{}", layer.as_ref()));
-                ui.add(egui::widgets::DragValue::new(&mut height_value));
-                ui.toggle_value(&mut layer.enable_preview, "preview");
-                ui.toggle_value(&mut layer.enable_baking, "bake");
-                if ui.button("Delete").clicked() {
-                    commands.add(layer::DeleteLayer(layer.id()))
-                }
-            });
+        for (layer, height_map) in layers_query.iter().sort::<&layer::Layer>().rev() {
             match *height_map {
-                layer::HeightMap::Constant(ref mut v) => *v = height_value,
-            }
+                layer::HeightMap::Constant(original_level) => ui.group(|ui| {
+                    ui.label(format!("{}", layer));
+                    {
+                        let mut height_level: f32 = original_level;
+                        if ui
+                            .add(egui::widgets::DragValue::new(&mut height_level))
+                            .changed()
+                            && height_level != original_level
+                        {
+                            // FIXME: Typing '50' results in 2 action, one
+                            //        from 0 to 5, and then a 2nd one from
+                            //        5 to 50.
+                            commands.add(layer::HeightMapConstantUpdateHeightAction::as_command(
+                                layer.id(),
+                                original_level,
+                                height_level,
+                            ));
+                        }
+                    }
+                    {
+                        let mut layer_preview: bool = layer.enable_preview;
+                        if ui.toggle_value(&mut layer_preview, "preview").changed()
+                            && layer_preview != layer.enable_preview
+                        {
+                            todo!("update preview");
+                        }
+                    }
+                    {
+                        let mut layer_baking: bool = layer.enable_baking;
+                        if ui.toggle_value(&mut layer_baking, "bake").changed()
+                            && layer_baking != layer.enable_baking
+                        {
+                            todo!("update bake");
+                        }
+                    }
+                    if ui.button("Delete").clicked() {
+                        commands.add(layer::DeleteLayer(layer.id()))
+                    }
+                }),
+            };
         }
     });
 }

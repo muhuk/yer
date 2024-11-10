@@ -25,6 +25,8 @@ use uuid::Uuid;
 
 use crate::undo::{self, Action, ReflectAction};
 
+pub type LayerId = uuid::Uuid;
+
 const LAYER_SPACING: u32 = 100;
 const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
 
@@ -34,7 +36,7 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMap>()
             .register_type::<Layer>()
-            .register_type::<Uuid>()
+            .register_type::<LayerId>()
             .add_event::<LayerChange>();
         app.add_systems(
             Update,
@@ -55,8 +57,8 @@ impl Plugin for LayerPlugin {
 
 #[derive(Event, Debug)]
 pub enum LayerChange {
-    Created(Uuid),
-    Deleted(Uuid),
+    Created(LayerId),
+    Deleted(LayerId),
 }
 
 // BUNDLES
@@ -107,12 +109,12 @@ impl Sample2D for HeightMap {
 pub struct Layer {
     pub enable_baking: bool,
     pub enable_preview: bool,
-    id: Uuid,
+    id: LayerId,
     order: u32,
 }
 
 impl Layer {
-    fn new(id: Uuid, order: u32) -> Self {
+    fn new(id: LayerId, order: u32) -> Self {
         Self {
             enable_baking: true,
             enable_preview: true,
@@ -121,11 +123,11 @@ impl Layer {
         }
     }
 
-    fn new_id() -> Uuid {
+    fn new_id() -> LayerId {
         Uuid::now_v7()
     }
 
-    pub fn id(&self) -> Uuid {
+    pub fn id(&self) -> LayerId {
         self.id
     }
 }
@@ -158,12 +160,12 @@ impl PartialOrd for Layer {
 
 pub enum CreateLayer {
     OnTop,
-    Above(Uuid),
+    Above(LayerId),
 }
 
 impl Command for CreateLayer {
     fn apply(self, world: &mut World) {
-        let above: Option<Uuid> = match self {
+        let above: Option<LayerId> = match self {
             Self::OnTop => world
                 .query::<&Layer>()
                 .iter(world)
@@ -181,7 +183,7 @@ impl Command for CreateLayer {
     }
 }
 
-pub struct DeleteLayer(pub Uuid);
+pub struct DeleteLayer(pub LayerId);
 
 impl Command for DeleteLayer {
     fn apply(self, world: &mut World) {
@@ -193,7 +195,7 @@ impl Command for DeleteLayer {
 
         match layer_order {
             Some(layer_order) => {
-                let parent_id: Option<Uuid> = world
+                let parent_id: Option<LayerId> = world
                     .query::<&Layer>()
                     .iter(world)
                     .sort::<&Layer>()
@@ -235,8 +237,8 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 struct CreateLayerAction {
-    id: Uuid,
-    parent_id: Option<Uuid>,
+    id: LayerId,
+    parent_id: Option<LayerId>,
 }
 
 impl Action for CreateLayerAction {
@@ -284,8 +286,8 @@ impl Action for CreateLayerAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 struct DeleteLayerAction {
-    id: Uuid,
-    parent_id: Option<Uuid>,
+    id: LayerId,
+    parent_id: Option<LayerId>,
 }
 
 impl Action for DeleteLayerAction {
@@ -312,6 +314,50 @@ impl Action for DeleteLayerAction {
             parent_id: self.parent_id,
         }
         .apply(world)
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub struct HeightMapConstantUpdateHeightAction {
+    layer_id: LayerId,
+    old_height: f32,
+    new_height: f32,
+}
+
+impl HeightMapConstantUpdateHeightAction {
+    pub fn as_command(layer_id: LayerId, old_height: f32, new_height: f32) -> impl Command {
+        undo::PushAction(Box::new(HeightMapConstantUpdateHeightAction {
+            layer_id,
+            old_height,
+            new_height,
+        }))
+    }
+}
+
+impl Action for HeightMapConstantUpdateHeightAction {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<(&Layer, &mut HeightMap)>()
+            .iter_mut(world)
+            .find(|(layer, _)| layer.id() == self.layer_id)
+            .map(|(_, mut height_map)| match *height_map {
+                HeightMap::Constant(ref mut height) => {
+                    assert!((*height - self.old_height) < f32::EPSILON);
+                    *height = self.new_height;
+                }
+            })
+            // TODO: Handle errors instead of unwrapping.
+            .unwrap();
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_height: self.new_height,
+            new_height: self.old_height,
+        };
+        reverse_action.apply(world);
     }
 }
 
