@@ -29,6 +29,7 @@ use bevy_inspector_egui::{
 use crate::constants;
 use crate::layer;
 use crate::session;
+use crate::undo;
 use crate::viewport;
 
 mod file_dialog;
@@ -308,11 +309,14 @@ fn draw_ui_for_layers(
                             // FIXME: Typing '50' results in 2 action, one
                             //        from 0 to 5, and then a 2nd one from
                             //        5 to 50.
-                            commands.add(layer::HeightMapConstantUpdateHeightAction::as_command(
-                                layer.id(),
-                                original_level,
-                                height_level,
-                            ));
+                            commands.add::<undo::PushAction>(
+                                layer::HeightMapConstantUpdateHeightAction::new(
+                                    layer.id(),
+                                    original_level,
+                                    height_level,
+                                )
+                                .into(),
+                            );
                         }
                     }
                     {

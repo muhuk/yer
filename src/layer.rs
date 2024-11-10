@@ -326,12 +326,12 @@ pub struct HeightMapConstantUpdateHeightAction {
 }
 
 impl HeightMapConstantUpdateHeightAction {
-    pub fn as_command(layer_id: LayerId, old_height: f32, new_height: f32) -> impl Command {
-        undo::PushAction(Box::new(HeightMapConstantUpdateHeightAction {
+    pub fn new(layer_id: LayerId, old_height: f32, new_height: f32) -> Self {
+        Self {
             layer_id,
             old_height,
             new_height,
-        }))
+        }
     }
 }
 

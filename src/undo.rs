@@ -99,6 +99,12 @@ impl Command for PushAction {
     }
 }
 
+impl<T: Action> From<T> for PushAction {
+    fn from(action: T) -> Self {
+        PushAction(Box::new(action))
+    }
+}
+
 // LIB
 
 #[reflect_trait]
