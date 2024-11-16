@@ -119,7 +119,6 @@ fn draw_ui_dialogs_system(
     mut contexts: EguiContexts,
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
-    mut session: ResMut<session::Session>,
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
@@ -172,7 +171,7 @@ fn draw_ui_panels_system(
     mut contexts: EguiContexts,
     layers_query: Query<(&layer::Layer, &layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
-    session: ResMut<session::Session>,
+    session: Res<session::Session>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
