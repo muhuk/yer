@@ -146,6 +146,7 @@ fn process_undo_events_system(
     for event in undo_events.read() {
         match (event, session.saved_action_idx) {
             (undo::UndoEvent::ActionPushed, None) => {
+                session.saved_action_idx = Some(-1);
                 session.new_project = false;
             }
             (undo::UndoEvent::ActionPushed, Some(idx)) => {
