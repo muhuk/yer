@@ -18,6 +18,8 @@ impl Plugin for UndoPlugin {
 #[derive(Debug, Event)]
 pub enum UndoEvent {
     ActionPushed,
+    ActionReapplied,
+    ActionReverted,
     StackCleared,
 }
 
@@ -41,18 +43,6 @@ impl UndoStack {
 
     pub fn can_undo(&self) -> bool {
         !self.undo_actions.is_empty()
-    }
-
-    pub fn redo(&mut self, world: &mut World) {
-        let action = self.redo_actions.pop().unwrap();
-        action.apply(world);
-        self.undo_actions.push(action);
-    }
-
-    pub fn undo(&mut self, world: &mut World) {
-        let action = self.undo_actions.pop().unwrap();
-        action.revert(world);
-        self.redo_actions.push(action);
     }
 }
 
@@ -102,6 +92,36 @@ impl Command for PushAction {
 impl<T: Action> From<T> for PushAction {
     fn from(action: T) -> Self {
         PushAction(Box::new(action))
+    }
+}
+
+pub struct RedoAction;
+
+impl Command for RedoAction {
+    fn apply(self, world: &mut World) {
+        let action = world
+            .resource_mut::<UndoStack>()
+            .redo_actions
+            .pop()
+            .unwrap();
+        action.apply(world);
+        world.resource_mut::<UndoStack>().undo_actions.push(action);
+        world.send_event(UndoEvent::ActionReapplied);
+    }
+}
+
+pub struct UndoAction;
+
+impl Command for UndoAction {
+    fn apply(self, world: &mut World) {
+        let action = world
+            .resource_mut::<UndoStack>()
+            .undo_actions
+            .pop()
+            .unwrap();
+        action.revert(world);
+        world.resource_mut::<UndoStack>().redo_actions.push(action);
+        world.send_event(UndoEvent::ActionReverted);
     }
 }
 

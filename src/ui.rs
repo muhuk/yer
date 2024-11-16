@@ -172,6 +172,7 @@ fn draw_ui_panels_system(
     layers_query: Query<(&layer::Layer, &layer::HeightMap)>,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
+    undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
@@ -195,6 +196,20 @@ fn draw_ui_panels_system(
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Left");
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(undo_stack.can_undo(), egui::widgets::Button::new("Undo"))
+                    .clicked()
+                {
+                    commands.add(undo::UndoAction);
+                };
+                if ui
+                    .add_enabled(undo_stack.can_redo(), egui::widgets::Button::new("Redo"))
+                    .clicked()
+                {
+                    commands.add(undo::RedoAction);
+                };
+            });
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response

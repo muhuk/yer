@@ -152,8 +152,16 @@ fn process_undo_events_system(
                 session.saved_action_idx = Some(idx - 1);
                 session.new_project = false;
             }
-            // TODO: Increment if Undo
-            // TODO: Decrement if Redo
+            // Decrement the index if redo
+            (undo::UndoEvent::ActionReapplied, None) => (),
+            (undo::UndoEvent::ActionReapplied, Some(idx)) => {
+                session.saved_action_idx = Some(idx - 1);
+            }
+            // Increment the index if undo
+            (undo::UndoEvent::ActionReverted, None) => (),
+            (undo::UndoEvent::ActionReverted, Some(idx)) => {
+                session.saved_action_idx = Some(idx + 1);
+            }
             (undo::UndoEvent::StackCleared, _) => {
                 if session.has_save_file() {
                     // We have just loaded a save file.
