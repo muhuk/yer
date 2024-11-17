@@ -14,7 +14,36 @@ lack of documentation and occasional bugs.
 
 ### Roadmap for Version 1.0
 
-**TBD**
+- [ ] Basic editor UI.
+
+  - [ ] 3D viewport with preview mesh.
+  - [ ] Layers list.
+  - [ ] Layer parameters.
+  - [ ] Undo/Redo.
+
+- [ ] Layer types:
+
+  - [ ] Constant.
+  - [ ] Noise.
+  - [ ] Bitmap.
+  - [ ] Summit. (hills & mountains)
+
+- [ ] Layer masking.
+
+  - [ ] Basic. (circle, rectangle)
+  - [ ] Bitmap.
+  - [ ] Height.
+  - [ ] Slope.
+  - [ ] Biome.
+
+- [ ] Terrain info.
+
+  - [ ] Height.
+  - [ ] Slope.
+  - [ ] Biome.
+
+- [ ] Export to textures.
+- [ ] Export to mesh.
 
 ## Features
 
@@ -49,13 +78,13 @@ first.
    ```sh
    cargo test
    ```
-   
+
 1. Run a development build:
 
    ```sh
    cargo run
    ```
-   
+
 1. Build an executable locally:
 
    ```sh
@@ -74,4 +103,3 @@ then maybe do some [code reviews](https://github.com/muhuk/yer/pulls).
 ## License
 
 Yer is released under [GPL version 3 or any later version](https://www.gnu.org/licenses/gpl-3.0.html).
- 
