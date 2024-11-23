@@ -15,8 +15,8 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::fmt::{self, Display};
+use std::ops::RangeInclusive;
 
-use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
 use bevy::utils::Duration;
@@ -26,6 +26,8 @@ use uuid::Uuid;
 use crate::undo::{self, Action, ReflectAction};
 
 pub type LayerId = uuid::Uuid;
+
+pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 
 const LAYER_SPACING: u32 = 100;
 const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
