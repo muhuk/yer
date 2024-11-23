@@ -39,7 +39,11 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UiState>()
-            .add_plugins((EguiPlugin, file_dialog::UiFileDialogPlugin))
+            .add_plugins((
+                EguiPlugin,
+                file_dialog::UiFileDialogPlugin,
+                layer::LayerUiPlugin,
+            ))
             .init_state::<UiState>()
             .enable_state_scoped_entities::<UiState>()
             .add_systems(
