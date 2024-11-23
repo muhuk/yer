@@ -127,8 +127,9 @@ fn draw_ui_for_constant_layer(
                 *height
             };
             let mut height_edited: f32 = original_height;
-            let widget =
-                egui::widgets::DragValue::new(&mut height_edited).range(layer::HEIGHT_RANGE);
+            let widget = egui::widgets::DragValue::new(&mut height_edited)
+                .range(layer::HEIGHT_RANGE)
+                .update_while_editing(false);
             let response = ui.add(widget);
             if response.changed() && height_edited != original_height {
                 if let HeightMapUi::Constant { height, timer } = height_map_ui {
