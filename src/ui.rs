@@ -189,6 +189,7 @@ fn draw_ui_panels_system(
                 &mut app_exit_events,
                 &mut commands,
                 session.as_ref(),
+                undo_stack.as_ref(),
                 &mut ui_state_next,
             );
         })
@@ -200,20 +201,6 @@ fn draw_ui_panels_system(
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Left");
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(undo_stack.can_undo(), egui::widgets::Button::new("Undo"))
-                    .clicked()
-                {
-                    commands.add(undo::UndoAction);
-                };
-                if ui
-                    .add_enabled(undo_stack.can_redo(), egui::widgets::Button::new("Redo"))
-                    .clicked()
-                {
-                    commands.add(undo::RedoAction);
-                };
-            });
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
@@ -305,18 +292,18 @@ fn draw_ui_menu(
     app_exit_events: &mut EventWriter<AppExit>,
     commands: &mut Commands,
     session: &session::Session,
+    undo_stack: &undo::UndoStack,
     ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
     egui::menu::bar(ui, |ui| {
-        egui::menu::menu_button(ui, "File", |ui| {
-            let mut button_clicked = false;
+        ui.menu_button("File", |ui| {
             if ui.button("New").clicked() {
                 commands.add(session::InitializeNewSession);
-                button_clicked = true;
+                ui.close_menu();
             }
             if ui.button("Open...").clicked() {
                 ui_state_next.set(UiState::ShowingLoadFileDialog);
-                button_clicked = true;
+                ui.close_menu();
             }
             if ui.button("Save").clicked() {
                 if session.has_save_file() {
@@ -324,19 +311,34 @@ fn draw_ui_menu(
                 } else {
                     ui_state_next.set(UiState::ShowingSaveFileDialog);
                 }
-                button_clicked = true;
+                ui.close_menu();
             }
             if ui.button("Save As...").clicked() {
                 ui_state_next.set(UiState::ShowingSaveFileDialog);
-                button_clicked = true;
+                ui.close_menu();
             }
             ui.separator();
             if ui.button("Quit").clicked() {
                 app_exit_events.send(AppExit::Success);
-                button_clicked = true;
+                ui.close_menu();
             }
+        });
 
-            if button_clicked {
+        ui.menu_button("Edit", |ui| {
+            if ui
+                .add_enabled_ui(undo_stack.can_undo(), |ui| ui.button("Undo"))
+                .inner
+                .clicked()
+            {
+                commands.add(undo::UndoAction);
+                ui.close_menu();
+            }
+            if ui
+                .add_enabled_ui(undo_stack.can_redo(), |ui| ui.button("Redo"))
+                .inner
+                .clicked()
+            {
+                commands.add(undo::RedoAction);
                 ui.close_menu();
             }
         });
