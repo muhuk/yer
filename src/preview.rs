@@ -19,7 +19,7 @@ use std::num::NonZeroU16;
 use bevy::prelude::*;
 use bevy::utils::Duration;
 
-use crate::layer::LayerChange;
+use crate::undo::UndoEvent;
 
 const PREVIEW_TIME_BETWEEN_MS: Duration = Duration::from_millis(100);
 
@@ -83,11 +83,12 @@ struct PreviewRegion {
 // SYSTEMS
 
 fn trigger_preview_system(
-    layer_change_events: EventReader<LayerChange>,
+    mut undo_events: EventReader<UndoEvent>,
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
 ) {
-    if !layer_change_events.is_empty() {
+    if !undo_events.is_empty() {
+        undo_events.clear();
         let now: Duration = time.elapsed();
         preview_resource.last_project_changed = now;
         // If the difference between changed and initiated is small: don't
