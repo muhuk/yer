@@ -38,8 +38,7 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMap>()
             .register_type::<Layer>()
-            .register_type::<LayerId>()
-            .add_event::<LayerChange>();
+            .register_type::<LayerId>();
         app.add_systems(
             Update,
             normalize_layer_ordering_system.run_if(on_timer(Duration::from_millis(
@@ -53,14 +52,6 @@ impl Plugin for LayerPlugin {
             app.add_plugins(undo::UndoPlugin);
         }
     }
-}
-
-// EVENTS
-
-#[derive(Event, Debug)]
-pub enum LayerChange {
-    Created(LayerId),
-    Deleted(LayerId),
 }
 
 // BUNDLES
@@ -218,7 +209,6 @@ impl Action for CreateLayerAction {
                 .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
             Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
         };
-        world.send_event(LayerChange::Created(self.id));
         world.spawn(LayerBundle {
             layer,
             height_map: HeightMap::default(),
@@ -256,7 +246,6 @@ impl Action for DeleteLayerAction {
         {
             Some((entity, _)) => {
                 world.despawn(entity);
-                world.send_event(LayerChange::Deleted(self.id));
             }
             None => warn!(
                 "Trying to delete non-existent layer with id '{}'",
