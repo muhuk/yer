@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::num::NonZeroU16;
+
 use bevy::prelude::*;
 use bevy::utils::Duration;
 
@@ -25,8 +27,10 @@ pub struct PreviewPlugin;
 
 impl Plugin for PreviewPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Preview>()
-            .register_type::<PreviewMesh>();
+        app.register_type::<ActivePreview>()
+            .register_type::<Preview>()
+            .register_type::<PreviewData>()
+            .register_type::<PreviewRegion>();
         app.init_resource::<Preview>();
         app.add_systems(Update, trigger_preview_system);
     }
@@ -42,11 +46,39 @@ struct Preview {
     last_preview_completed: Duration,
 }
 
+// BUNDLES
+
+#[derive(Bundle)]
+pub struct PreviewBundle {
+    name: Name,
+    // ActivePreview should only be on the active preview but
+    // since we're having only one preview region now, this
+    // should be okay.
+    active_preview: ActivePreview,
+    preview_region: PreviewRegion,
+    preview_data: PreviewData,
+}
+
 // COMPONENTS
 
-/// Marker trait for preview meshes.
+/// Marker trait for active preview.
 #[derive(Component, Debug, Reflect)]
-struct PreviewMesh;
+#[reflect(Component)]
+struct ActivePreview;
+
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component)]
+struct PreviewData {
+    samples: Vec<(Vec2, f32)>,
+}
+
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component)]
+struct PreviewRegion {
+    center: Vec2,
+    size: f32,
+    subdivisions: NonZeroU16,
+}
 
 // SYSTEMS
 
