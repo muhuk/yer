@@ -307,7 +307,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
     }
 }
 
-trait Sample2D {
+pub trait Sample2D {
     fn sample(&self, position: Vec2, height: f32) -> f32;
 }
 
