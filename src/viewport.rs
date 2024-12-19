@@ -67,6 +67,12 @@ impl ViewportRegion {
 // COMPONENTS
 
 #[derive(Component, Reflect)]
+#[reflect(Component)]
+/// Marker component for preview mesh.
+pub struct PreviewMesh;
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
 struct TargetTransform {
     translation: Vec3,
     rotation: Quat,
@@ -290,11 +296,16 @@ fn startup_system(
         ))
         .with_children(|parent| {
             // Create ground quad
-            parent.spawn(PbrBundle {
-                mesh: meshes.add(Rectangle::new(1.0, 1.0)),
-                material: materials.add(Color::WHITE),
-                ..default()
-            });
+            parent.spawn((
+                Name::new("Preview Mesh"),
+                PreviewMesh,
+                PbrBundle {
+                    mesh: meshes.add(Rectangle::new(2.0, 2.0)),
+                    material: materials
+                        .add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                    ..default()
+                },
+            ));
         });
 
     // Add light.

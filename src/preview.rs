@@ -18,11 +18,13 @@ use std::num::NonZeroU8;
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
+use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
 use bevy::tasks::{block_on, poll_once, AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
 
 use crate::layer::{self, Sample2D};
 use crate::undo;
+use crate::viewport;
 
 const MAX_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(12) };
 const MIN_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(3) };
@@ -60,7 +62,6 @@ impl Plugin for PreviewPlugin {
 
 // RESOURCES
 
-// when the calculation is finished; if changed > completed, trigger a new calculation.
 #[derive(Debug, Default, Reflect, Resource)]
 #[reflect(Resource)]
 struct Preview {
@@ -139,6 +140,7 @@ struct ActivePreview;
 #[derive(Clone, Component, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 struct PreviewGrid2D {
+    bounds: Rect,
     samples: Vec<(Vec2, f32)>,
     subdivisions: u8,
 }
@@ -160,10 +162,43 @@ impl PreviewGrid2D {
                     .as_str(),
                 )
         };
+        let bounds: Rect = {
+            let (mut x_min, mut y_min, mut x_max, mut y_max) = (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            );
+            for (x, y) in samples.iter().map(|(p, _)| (p.x, p.y)) {
+                x_min = x_min.min(x);
+                y_min = y_min.min(y);
+                x_max = x_max.max(x);
+                y_max = y_max.max(y);
+            }
+            Rect::new(x_min, y_min, x_max, y_max)
+        };
         Self {
+            bounds,
             samples,
             subdivisions,
         }
+    }
+
+    fn build_mesh(&self) -> Mesh {
+        let mut mesh = PlaneMeshBuilder::new(Dir3::Z, self.bounds.size())
+            .subdivisions(self.subdivisions.into())
+            .build();
+        if let Some(VertexAttributeValues::Float32x3(positions)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+        {
+            for (idx, p) in positions.iter_mut().enumerate() {
+                // Preview mesh is Z-up.
+                p[2] = self.samples[idx].1;
+            }
+        } else {
+            panic!("Cannot build preview mesh.");
+        }
+        mesh
     }
 }
 
@@ -227,6 +262,32 @@ impl Command for CalculatePreview {
     }
 }
 
+struct UpdatePreviewMesh(Entity);
+
+impl Command for UpdatePreviewMesh {
+    fn apply(self, world: &mut World) {
+        // We want to update the mesh only if the preview region is still the
+        // active region.
+        let mesh: Option<Mesh> = world
+            .query_filtered::<&PreviewGrid2D, With<ActivePreview>>()
+            .get(world, self.0)
+            .map(|preview_data| preview_data.build_mesh())
+            .ok();
+
+        if let Some(mesh) = mesh {
+            info!("Replacing mesh");
+            let preview_mesh_entity: Entity = world
+                .query_filtered::<Entity, With<viewport::PreviewMesh>>()
+                .single(world);
+            let mesh_handle: Handle<Mesh> = world.resource_mut::<Assets<Mesh>>().add(mesh);
+            world
+                .commands()
+                .entity(preview_mesh_entity)
+                .insert(mesh_handle);
+        }
+    }
+}
+
 // SYSTEMS
 
 /// Create a default preview region after an [`UndoEvent::StackCleared`](crate::undo::UndoEvent) event.
@@ -278,14 +339,13 @@ fn update_preview_system(
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
 ) {
-    // check if there's a task running
-    // if the task is finished, insert component for data
     if preview_resource.task.is_some() {
         if let Some((entity, preview_data)) = preview_resource.poll_task() {
             // FIXME: No, it's not _completed_.  We should be pulling intermediary
             //        preview representations and keep updating the preview mesh.
             info!("Preview completed");
             commands.entity(entity).insert(preview_data);
+            commands.add(UpdatePreviewMesh(entity));
             preview_resource.last_preview_completed = time.elapsed();
         }
     }
