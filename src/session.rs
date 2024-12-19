@@ -22,6 +22,7 @@ use bevy::prelude::*;
 use thiserror::Error;
 
 use crate::layer;
+use crate::preview;
 use crate::undo;
 
 mod save;
@@ -199,6 +200,17 @@ fn clear_session(world: &mut World) {
             .iter(world)
             .collect();
         layers.iter().for_each(|entity| {
+            world.entity_mut(*entity).despawn_recursive();
+        });
+    }
+
+    // Despawn all previews
+    {
+        let previews: Vec<Entity> = world
+            .query_filtered::<Entity, With<preview::PreviewRegion>>()
+            .iter(world)
+            .collect();
+        previews.iter().for_each(|entity| {
             world.entity_mut(*entity).despawn_recursive();
         });
     }
