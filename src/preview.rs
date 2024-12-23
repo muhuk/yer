@@ -346,14 +346,12 @@ fn manage_preview_system(
 
     // Update preview region if the task is finished.
     {
-        if preview_resource.task.is_some() {
-            if let Some((entity, preview_data)) = preview_resource.poll_task() {
-                preview_resource.last_preview_completed = now;
-                // FIXME: We should be pulling intermediary representations
-                //        and keep updating the preview mesh.
-                commands.entity(entity).insert(preview_data);
-                commands.add(UpdatePreviewMesh(entity));
-            }
+        if let Some((entity, preview_data)) = preview_resource.poll_task() {
+            preview_resource.last_preview_completed = now;
+            // FIXME: We should be pulling intermediary representations
+            //        and keep updating the preview mesh.
+            commands.entity(entity).insert(preview_data);
+            commands.add(UpdatePreviewMesh(entity));
         }
     }
 }
