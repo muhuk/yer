@@ -232,7 +232,7 @@ impl PreviewRegion {
 
 impl Default for PreviewRegion {
     fn default() -> Self {
-        Self::new(Vec2::ZERO, 1.0, MIN_SUBDIVISIONS)
+        Self::new(Vec2::ZERO, 100.0, MIN_SUBDIVISIONS)
     }
 }
 
