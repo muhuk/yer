@@ -84,7 +84,7 @@ impl TargetTransform {
     fn dolly(&mut self, factor: f32) {
         const MIN_DIST: f32 = 1.0;
         const MAX_DIST: f32 = 500.0;
-        const DOLLY_SPEED: f32 = 1.0 / 300.0;
+        const DOLLY_SPEED: f32 = 0.5;
         let look_at_target: Vec3 = self.looking_at();
         // Translation from look_at_target to camera
         let rev_relative_position = self.translation - look_at_target;
@@ -126,7 +126,7 @@ impl TargetTransform {
     }
 
     fn pan_xy(&mut self, x: f32, y: f32) {
-        const PAN_SPEED: f32 = 1.0 / 96.0;
+        const PAN_SPEED: f32 = 0.35;
         let mut delta: Vec3 = Vec3::new(x, 0.0, y) * PAN_SPEED;
         // Take orientation into account but only around Y, we're panning across XZ.
         delta = Quat::from_rotation_y(self.rotation.to_euler(EulerRot::YXZ).0) * delta;
@@ -153,7 +153,7 @@ fn draw_focal_point_system(
         gizmos.circle(
             target_transform.looking_at(),
             Dir3::Y,
-            0.025f32,
+            2.5f32,
             LinearRgba::RED,
         );
     }
@@ -165,7 +165,7 @@ fn draw_grid_system(mut gizmos: Gizmos) {
             Vec3::ZERO,            // position
             Quat::IDENTITY,        // rotation
             UVec3::new(10, 0, 10), // cells
-            Vec3::splat(1.0),      // spacing
+            Vec3::splat(100.0),    // spacing
             LinearRgba::GREEN.with_alpha(0.8),
         )
         .outer_edges();
@@ -175,7 +175,7 @@ fn draw_grid_system(mut gizmos: Gizmos) {
             Vec3::ZERO,              // position
             Quat::IDENTITY,          // rotation
             UVec3::new(100, 0, 100), // cells
-            Vec3::splat(0.1),        // spacing
+            Vec3::splat(10.0),       // spacing
             LinearRgba::GREEN.with_alpha(0.15),
         )
         .outer_edges();
@@ -264,7 +264,7 @@ fn startup_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(1.0, 5.0, 4.0);
+    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
     const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
 
     // Create camera
@@ -300,7 +300,7 @@ fn startup_system(
                 Name::new("Preview Mesh"),
                 PreviewMesh,
                 PbrBundle {
-                    mesh: meshes.add(Rectangle::new(2.0, 2.0)),
+                    mesh: meshes.add(Rectangle::new(100.0, 100.0)),
                     material: materials
                         .add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
                     ..default()
