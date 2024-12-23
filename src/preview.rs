@@ -56,7 +56,7 @@ impl Plugin for PreviewPlugin {
             Update,
             initialize_default_preview_region_system.run_if(on_event::<undo::UndoEvent>()),
         );
-        app.add_systems(Update, (trigger_preview_system, update_preview_system));
+        app.add_systems(Update, manage_preview_system);
     }
 }
 
@@ -309,44 +309,51 @@ fn initialize_default_preview_region_system(
     }
 }
 
-fn trigger_preview_system(
+fn manage_preview_system(
     mut commands: Commands,
     mut undo_events: EventReader<undo::UndoEvent>,
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
 ) {
     let now: Duration = time.elapsed();
-    if !undo_events.is_empty() {
-        undo_events.clear();
-        preview_resource.last_project_changed = now;
-    }
-    // If the difference between changed and initiated is small: don't
-    // trigger a new preview and don't cancel currently running
-    // calculation either.  This is okay because worst case we will
-    // trigger a new calculation when the currently running preview is
-    // finished.
-    if preview_resource.last_preview_completed < preview_resource.last_project_changed
-        && now - preview_resource.last_preview_initiated > PREVIEW_TIME_BETWEEN_MS
-        && preview_resource.task.is_none()
-    {
-        commands.add(CalculatePreview);
-        preview_resource.last_preview_initiated = now;
-    }
-}
 
-fn update_preview_system(
-    mut commands: Commands,
-    mut preview_resource: ResMut<Preview>,
-    time: Res<Time>,
-) {
-    if preview_resource.task.is_some() {
-        if let Some((entity, preview_data)) = preview_resource.poll_task() {
-            // FIXME: No, it's not _completed_.  We should be pulling intermediary
-            //        preview representations and keep updating the preview mesh.
-            info!("Preview completed");
-            commands.entity(entity).insert(preview_data);
-            commands.add(UpdatePreviewMesh(entity));
-            preview_resource.last_preview_completed = time.elapsed();
+    // Update project's last change time.
+    {
+        if !undo_events.is_empty() {
+            undo_events.clear();
+            preview_resource.last_project_changed = now;
+        }
+    }
+
+    // Trigger a new preview if necessary.
+    {
+        let project_has_changed: bool =
+            preview_resource.last_preview_completed < preview_resource.last_project_changed;
+
+        // If the difference between changed and initiated is small: don't
+        // trigger a new preview and don't cancel currently running
+        // calculation either.  This is okay because worst case we will
+        // trigger a new calculation when the currently running preview is
+        // finished.
+        let ready_to_trigger: bool = now - preview_resource.last_preview_initiated
+            > PREVIEW_TIME_BETWEEN_MS
+            && preview_resource.task.is_none();
+        if project_has_changed && ready_to_trigger {
+            preview_resource.last_preview_initiated = now;
+            commands.add(CalculatePreview);
+        }
+    }
+
+    // Update preview region if the task is finished.
+    {
+        if preview_resource.task.is_some() {
+            if let Some((entity, preview_data)) = preview_resource.poll_task() {
+                preview_resource.last_preview_completed = now;
+                // FIXME: We should be pulling intermediary representations
+                //        and keep updating the preview mesh.
+                commands.entity(entity).insert(preview_data);
+                commands.add(UpdatePreviewMesh(entity));
+            }
         }
     }
 }
