@@ -18,7 +18,7 @@ use std::num::NonZeroU8;
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
-use bevy::render::{mesh, render_asset};
+use bevy::render::mesh;
 use bevy::tasks::{block_on, poll_once, AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
 
@@ -104,24 +104,31 @@ impl Preview {
         layers: Vec<layer::HeightMap>,
     ) {
         let task: Task<(Entity, PreviewGrid2D)> = AsyncComputeTaskPool::get().spawn(async move {
-            // FIXME: We are ignoring subdivisions.
-            let mut height: f32 = 0.0;
-            for layer in layers.iter() {
-                // FIXME: Remove the thread.sleep
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                info!("{:?}", layer);
-                height = layer.sample(Vec2::ZERO, height);
+            // Number of vertices on one axis.
+            let k: i32 = 2i32.pow(preview_region.subdivisions.get().into()) + 1;
+            let start: Vec2 = {
+                let hs: f32 = preview_region.size / 2.0;
+                // Y is inverted.
+                preview_region.center + Vec2::new(-hs, hs)
+            };
+            let gap: Vec2 = {
+                let g: f32 = preview_region.size / (k - 1) as f32;
+                Vec2::new(g, -g)
+            };
+
+            let mut samples: Vec<(Vec2, f32)> = vec![];
+            for y in 0..k {
+                for x in 0..k {
+                    // Y is inverted.
+                    let p = start + Vec2::new(x as f32, y as f32) * gap;
+                    let mut h: f32 = 0.0;
+                    for layer in layers.iter() {
+                        h = layer.sample(p, h);
+                    }
+                    samples.push((p, h));
+                }
             }
-            let hs: f32 = preview_region.size / 2.0;
-            (
-                preview_entity,
-                PreviewGrid2D::new(vec![
-                    (preview_region.center + Vec2::new(-hs, hs), height),
-                    (preview_region.center + Vec2::new(hs, hs), height),
-                    (preview_region.center + Vec2::new(-hs, -hs), height),
-                    (preview_region.center + Vec2::new(hs, -hs), height),
-                ]),
-            )
+            (preview_entity, PreviewGrid2D::new(samples))
         });
         if let Some(previous_task) = self.task.replace(task) {
             // TODO: We might want to use the result of previous task while
@@ -198,32 +205,12 @@ impl PreviewGrid2D {
     }
 
     fn build_mesh(&self) -> Mesh {
-        // let mut mesh = Mesh::new(
-        //     mesh::PrimitiveTopology::TriangleList,
-        //     render_asset::RenderAssetUsages::default(),
-        // );
-        // let positions: Vec<Vec3> = self
-        //     .samples
-        //     .iter()
-        //     .map(|(pos, height)| {
-        //         // Preview mesh is Z-up.
-        //         pos.extend(*height)
-        //     })
-        //     .collect();
-        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        // let indices: Vec<u16> = vec![0, 2, 3, 0, 3, 1]; // CCW
-        // //let indices: Vec<u16> = vec![0, 3, 2, 0, 1, 3]; // CW
-        // mesh.insert_indices(mesh::Indices::U16(indices));
-        // mesh.duplicate_vertices();
-        // mesh.compute_flat_normals();
-
         let mut mesh = mesh::PlaneMeshBuilder::new(Dir3::Z, self.bounds.size())
             .subdivisions(2u32.pow(self.subdivisions.into()) - 1)
             .build();
         if let Some(mesh::VertexAttributeValues::Float32x3(positions)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
         {
-            info!("Count of vertices: {}", &positions.len());
             for (idx, p) in positions.iter_mut().enumerate() {
                 // Preview mesh is Z-up.
                 p[0] = self.samples[idx].0.x;
