@@ -148,10 +148,12 @@ fn draw_ui_for_constant_layer(
                 .update_while_editing(false);
             let response = ui.add(widget);
             if response.changed() && height_edited != original_height {
-                if let HeightMapUi::Constant { height, timer } = height_map_ui {
-                    *height = height_edited;
-                    timer.unpause();
-                    timer.reset();
+                match height_map_ui {
+                    HeightMapUi::Constant { height, timer } => {
+                        *height = height_edited;
+                        timer.unpause();
+                        timer.reset();
+                    }
                 }
             }
         }
