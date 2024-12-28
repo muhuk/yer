@@ -18,7 +18,7 @@ use std::num::NonZeroU8;
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
-use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
+use bevy::render::{mesh, render_asset};
 use bevy::tasks::{block_on, poll_once, AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
 
@@ -51,13 +51,26 @@ impl Plugin for PreviewPlugin {
             .register_type::<Preview>()
             .register_type::<PreviewGrid2D>()
             .register_type::<PreviewRegion>();
+        app.add_event::<UpdatePreviewRegion>();
         app.init_resource::<Preview>();
         app.add_systems(
             Update,
-            initialize_default_preview_region_system.run_if(on_event::<undo::UndoEvent>()),
+            (
+                initialize_default_preview_region_system.run_if(on_event::<undo::UndoEvent>()),
+                update_preview_region_system.run_if(on_event::<UpdatePreviewRegion>()),
+            ),
         );
         app.add_systems(Update, manage_preview_system);
     }
+}
+
+// EVENTS
+
+#[derive(Debug, Event)]
+pub enum UpdatePreviewRegion {
+    SetCenter(Entity, Vec2),
+    SetSize(Entity, f32),
+    SetSubdivisions(Entity, NonZeroU8),
 }
 
 // RESOURCES
@@ -105,8 +118,8 @@ impl Preview {
                 PreviewGrid2D::new(vec![
                     (preview_region.center + Vec2::new(-hs, hs), height),
                     (preview_region.center + Vec2::new(hs, hs), height),
-                    (preview_region.center + Vec2::new(hs, -hs), height),
                     (preview_region.center + Vec2::new(-hs, -hs), height),
+                    (preview_region.center + Vec2::new(hs, -hs), height),
                 ]),
             )
         });
@@ -185,14 +198,36 @@ impl PreviewGrid2D {
     }
 
     fn build_mesh(&self) -> Mesh {
-        let mut mesh = PlaneMeshBuilder::new(Dir3::Z, self.bounds.size())
-            .subdivisions(self.subdivisions.into())
+        // let mut mesh = Mesh::new(
+        //     mesh::PrimitiveTopology::TriangleList,
+        //     render_asset::RenderAssetUsages::default(),
+        // );
+        // let positions: Vec<Vec3> = self
+        //     .samples
+        //     .iter()
+        //     .map(|(pos, height)| {
+        //         // Preview mesh is Z-up.
+        //         pos.extend(*height)
+        //     })
+        //     .collect();
+        // mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        // let indices: Vec<u16> = vec![0, 2, 3, 0, 3, 1]; // CCW
+        // //let indices: Vec<u16> = vec![0, 3, 2, 0, 1, 3]; // CW
+        // mesh.insert_indices(mesh::Indices::U16(indices));
+        // mesh.duplicate_vertices();
+        // mesh.compute_flat_normals();
+
+        let mut mesh = mesh::PlaneMeshBuilder::new(Dir3::Z, self.bounds.size())
+            .subdivisions(2u32.pow(self.subdivisions.into()) - 1)
             .build();
-        if let Some(VertexAttributeValues::Float32x3(positions)) =
+        if let Some(mesh::VertexAttributeValues::Float32x3(positions)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
         {
+            info!("Count of vertices: {}", &positions.len());
             for (idx, p) in positions.iter_mut().enumerate() {
                 // Preview mesh is Z-up.
+                p[0] = self.samples[idx].0.x;
+                p[1] = self.samples[idx].0.y;
                 p[2] = self.samples[idx].1;
             }
         } else {
@@ -227,6 +262,18 @@ impl PreviewRegion {
             size,
             subdivisions,
         }
+    }
+
+    pub fn center(&self) -> Vec2 {
+        self.center
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size
+    }
+
+    pub fn subdivisions(&self) -> NonZeroU8 {
+        self.subdivisions
     }
 }
 
@@ -314,13 +361,18 @@ fn manage_preview_system(
     mut undo_events: EventReader<undo::UndoEvent>,
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
+    mut update_preview_region_events: EventReader<UpdatePreviewRegion>,
 ) {
     let now: Duration = time.elapsed();
 
     // Update project's last change time.
     {
-        if !undo_events.is_empty() {
+        // FIXME: Setting last_project_changed on all PreviewRegion
+        //        updates works for now, but it will trigger unnecessary
+        //        preview renders once we have multiple regions.
+        if !undo_events.is_empty() || !update_preview_region_events.is_empty() {
             undo_events.clear();
+            update_preview_region_events.clear();
             preview_resource.last_project_changed = now;
         }
     }
@@ -352,6 +404,31 @@ fn manage_preview_system(
             //        and keep updating the preview mesh.
             commands.entity(entity).insert(preview_data);
             commands.add(UpdatePreviewMesh(entity));
+        }
+    }
+}
+
+fn update_preview_region_system(
+    mut preview_regions: Query<&mut PreviewRegion>,
+    mut update_preview_region_events: EventReader<UpdatePreviewRegion>,
+) {
+    for event in update_preview_region_events.read() {
+        match event {
+            UpdatePreviewRegion::SetCenter(entity, new_center) => {
+                if let Ok(mut preview_region) = preview_regions.get_mut(*entity) {
+                    preview_region.center = *new_center;
+                }
+            }
+            UpdatePreviewRegion::SetSize(entity, new_size) => {
+                if let Ok(mut preview_region) = preview_regions.get_mut(*entity) {
+                    preview_region.size = *new_size;
+                }
+            }
+            UpdatePreviewRegion::SetSubdivisions(entity, new_subdivisions) => {
+                if let Ok(mut preview_region) = preview_regions.get_mut(*entity) {
+                    preview_region.subdivisions = *new_subdivisions;
+                }
+            }
         }
     }
 }
