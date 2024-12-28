@@ -26,8 +26,8 @@ use crate::layer::{self, Sample2D};
 use crate::undo;
 use crate::viewport;
 
-const MAX_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(12) };
-const MIN_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(3) };
+pub const MAX_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(12) };
+pub const MIN_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(3) };
 const PREVIEW_TIME_BETWEEN_MS: Duration = Duration::from_millis(100);
 // Value is the # of vertices, index is the subdivision level.
 const SUBDIVISIONS_SQRT_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {

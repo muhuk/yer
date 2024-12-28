@@ -59,8 +59,23 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
         ui.horizontal(|ui| {
             ui.label("Subdivisions");
             let mut subdivisions: u8 = preview_region.subdivisions().get();
-            ui.add(egui::widgets::DragValue::new(&mut subdivisions));
-            if NonZeroU8::new(subdivisions).unwrap() != preview_region.subdivisions() {
+            egui::ComboBox::from_id_source(format!("preview-subdivisions-{}", entity))
+                .selected_text(format!("{:?}", subdivisions))
+                .show_ui(ui, |ui| {
+                    for value in preview::MIN_SUBDIVISIONS.get()..=preview::MAX_SUBDIVISIONS.get() {
+                        ui.selectable_value(
+                            &mut subdivisions,
+                            value,
+                            format!(
+                                "{} ({} × {})",
+                                value,
+                                2u32.pow(value.into()) + 1,
+                                2u32.pow(value.into()) + 1
+                            ),
+                        );
+                    }
+                });
+            if subdivisions != preview_region.subdivisions().get() {
                 preview_query.update_preview_region_events.send(
                     preview::UpdatePreviewRegion::SetSubdivisions(
                         entity,
