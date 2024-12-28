@@ -28,14 +28,16 @@ pub struct PreviewQuery<'w, 's> {
     update_preview_region_events: EventWriter<'w, preview::UpdatePreviewRegion>,
 }
 
+// LIB
+
 pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
     ui.heading("Preview");
     if let Ok((entity, preview_region)) = preview_query.preview_regions.get_single() {
         ui.horizontal(|ui| {
             ui.label("Center");
             let mut center: Vec2 = preview_region.center();
-            ui.add(egui::widgets::DragValue::new(&mut center.x));
-            ui.add(egui::widgets::DragValue::new(&mut center.y));
+            ui.add(egui::widgets::DragValue::new(&mut center.x).update_while_editing(false));
+            ui.add(egui::widgets::DragValue::new(&mut center.y).update_while_editing(false));
             if center != preview_region.center() {
                 preview_query
                     .update_preview_region_events
@@ -46,7 +48,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
         ui.horizontal(|ui| {
             ui.label("Size");
             let mut size: f32 = preview_region.size();
-            ui.add(egui::widgets::DragValue::new(&mut size));
+            ui.add(egui::widgets::DragValue::new(&mut size).update_while_editing(false));
             if size != preview_region.size() {
                 preview_query
                     .update_preview_region_events
