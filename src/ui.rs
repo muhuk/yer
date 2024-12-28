@@ -34,6 +34,7 @@ use crate::viewport;
 
 mod file_dialog;
 mod layer;
+mod preview;
 
 pub struct UiPlugin;
 
@@ -203,6 +204,7 @@ fn draw_ui_panels_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
     layers_query: layer::LayersQuery,
+    preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
     toolbar_images: Res<ToolbarImages>,
@@ -262,6 +264,7 @@ fn draw_ui_panels_system(
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Left");
+            preview::draw_ui_for_preview(ui, preview_query);
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
