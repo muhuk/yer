@@ -94,6 +94,7 @@ impl Command for InitializeNewSession {
         }
         clear_session(world);
         layer::create_initial_layer(world);
+        preview::create_default_preview_region(world);
     }
 }
 
