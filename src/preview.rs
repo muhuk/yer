@@ -56,11 +56,10 @@ impl Plugin for PreviewPlugin {
         app.add_systems(
             Update,
             (
-                initialize_default_preview_region_system.run_if(on_event::<undo::UndoEvent>()),
+                manage_preview_system,
                 update_preview_region_system.run_if(on_event::<UpdatePreviewRegion>()),
             ),
         );
-        app.add_systems(Update, manage_preview_system);
     }
 }
 
@@ -324,25 +323,6 @@ impl Command for UpdatePreviewMesh {
 
 // SYSTEMS
 
-/// Create a default preview region after an [`UndoEvent::StackCleared`](crate::undo::UndoEvent) event.
-///
-/// See also `session::clear_session()`.
-fn initialize_default_preview_region_system(
-    mut commands: Commands,
-    mut undo_events: EventReader<undo::UndoEvent>,
-) {
-    if undo_events
-        .read()
-        .any(|e| matches!(e, undo::UndoEvent::StackCleared))
-    {
-        commands.spawn(PreviewBundle {
-            name: Name::new("Default Preview"),
-            active_preview: ActivePreview,
-            preview_region: PreviewRegion::default(),
-        });
-    }
-}
-
 fn manage_preview_system(
     mut commands: Commands,
     mut undo_events: EventReader<undo::UndoEvent>,
@@ -422,6 +402,16 @@ fn update_preview_region_system(
             }
         }
     }
+}
+
+// LIB
+
+pub fn create_default_preview_region(world: &mut World) {
+    world.spawn(PreviewBundle {
+        name: Name::new("Default Preview"),
+        active_preview: ActivePreview,
+        preview_region: PreviewRegion::default(),
+    });
 }
 
 #[cfg(test)]
