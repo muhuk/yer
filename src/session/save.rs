@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::layer;
+use crate::preview;
 
 const CURRENT_SAVE_VERSION: u16 = 1;
 
@@ -45,6 +46,7 @@ pub fn load(path: &Path, world: &mut World) -> Result<(), SaveError> {
     assert!(save_container.version == CURRENT_SAVE_VERSION);
     let save_data = SaveV1::from_bytes(&save_container.data)?;
     world.spawn_batch(save_data.layers);
+    world.spawn_batch(save_data.preview_regions);
     Ok(())
 }
 
@@ -53,6 +55,7 @@ pub fn save(path: &Path, world: &mut World) -> Result<(), SaveError> {
         version: CURRENT_SAVE_VERSION,
         data: (SaveV1 {
             layers: layer::LayerBundle::extract_all(world),
+            preview_regions: preview::PreviewBundle::extract_all(world),
         })
         .to_bytes()?,
     };
@@ -81,7 +84,7 @@ impl SaveContainer {
 #[derive(Deserialize, Serialize)]
 struct SaveV1 {
     layers: Vec<layer::LayerBundle>,
-    // TODO: Store preview config
+    preview_regions: Vec<preview::PreviewBundle>,
     // TODO: Store bake config
     // TODO: Store cached preview mesh
 }
