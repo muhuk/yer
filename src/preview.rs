@@ -21,6 +21,7 @@ use bevy::prelude::*;
 use bevy::render::mesh;
 use bevy::tasks::{block_on, poll_once, AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
+use serde::{Deserialize, Serialize};
 
 use crate::layer::{self, Sample2D};
 use crate::undo;
@@ -139,8 +140,9 @@ impl Preview {
 
 // BUNDLES
 
-#[derive(Bundle)]
+#[derive(Bundle, Deserialize, Serialize)]
 pub struct PreviewBundle {
+    #[serde(with = "name_serde")]
     name: Name,
     // ActivePreview should only be on the active preview but
     // since we're having only one preview region now, this
@@ -149,10 +151,24 @@ pub struct PreviewBundle {
     preview_region: PreviewRegion,
 }
 
+impl PreviewBundle {
+    pub fn extract_all(world: &mut World) -> Vec<Self> {
+        world
+            .query::<(&Name, &ActivePreview, &PreviewRegion)>()
+            .iter(world)
+            .map(|(name, active_preview, preview_region)| Self {
+                name: name.to_owned(),
+                active_preview: *active_preview,
+                preview_region: preview_region.clone(),
+            })
+            .collect()
+    }
+}
+
 // COMPONENTS
 
 /// Marker trait for active preview.
-#[derive(Component, Debug, Reflect)]
+#[derive(Clone, Component, Copy, Debug, Deserialize, Reflect, Serialize)]
 #[reflect(Component)]
 struct ActivePreview;
 
@@ -223,7 +239,7 @@ impl PreviewGrid2D {
     }
 }
 
-#[derive(Component, Clone, Debug, Reflect)]
+#[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
 #[reflect(Component)]
 pub struct PreviewRegion {
     center: Vec2,
@@ -412,6 +428,44 @@ pub fn create_default_preview_region(world: &mut World) {
         active_preview: ActivePreview,
         preview_region: PreviewRegion::default(),
     });
+}
+
+/// Serializer and deserializer for bevy::core::Name.
+mod name_serde {
+    use bevy::core::Name;
+    use serde::{de::Error, de::Visitor, Deserializer, Serializer};
+    use std::fmt;
+
+    struct NameVisitor;
+
+    impl<'de> Visitor<'de> for NameVisitor {
+        type Value = Name;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            write!(formatter, "a string")
+        }
+
+        fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+        where
+            E: Error,
+        {
+            Ok(Name::from(s))
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Name, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_string(NameVisitor)
+    }
+
+    pub fn serialize<S>(name: &Name, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(name.as_str())
+    }
 }
 
 #[cfg(test)]
