@@ -300,7 +300,7 @@ fn startup_system(
                 Name::new("Preview Mesh"),
                 PreviewMesh,
                 PbrBundle {
-                    mesh: meshes.add(Rectangle::new(100.0, 100.0)),
+                    mesh: meshes.add(Rectangle::new(1.0, 1.0)),
                     material: materials
                         .add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
                     ..default()
