@@ -80,7 +80,7 @@ pub enum UpdatePreviewRegion {
 struct Preview {
     last_project_changed: Duration,
     last_preview_initiated: Duration,
-    last_preview_completed: Duration,
+    last_preview_completed: Option<Duration>,
     #[reflect(ignore)]
     task: Option<Task<(Entity, PreviewGrid2D)>>,
 }
@@ -366,8 +366,12 @@ fn manage_preview_system(
 
     // Trigger a new preview if necessary.
     {
-        let project_has_changed: bool =
-            preview_resource.last_preview_completed < preview_resource.last_project_changed;
+        let project_has_changed: bool = match preview_resource.last_preview_completed {
+            Some(last_preview_completed) => {
+                last_preview_completed < preview_resource.last_project_changed
+            }
+            None => true,
+        };
 
         // If the difference between changed and initiated is small: don't
         // trigger a new preview and don't cancel currently running
@@ -386,7 +390,7 @@ fn manage_preview_system(
     // Update preview region if the task is finished.
     {
         if let Some((entity, preview_data)) = preview_resource.poll_task() {
-            preview_resource.last_preview_completed = now;
+            preview_resource.last_preview_completed = Some(now);
             // FIXME: We should be pulling intermediary representations
             //        and keep updating the preview mesh.
             commands.entity(entity).insert(preview_data);
