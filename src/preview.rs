@@ -255,7 +255,7 @@ struct CalculatePreview;
 
 impl Command for CalculatePreview {
     fn apply(self, world: &mut World) {
-        info!("Calculating preview");
+        debug!("Calculating preview...");
         let (entity, preview_region) = world
             .query_filtered::<(Entity, &PreviewRegion), With<ActivePreview>>()
             .iter(world)
@@ -279,25 +279,30 @@ struct UpdatePreviewMesh(Entity);
 
 impl Command for UpdatePreviewMesh {
     fn apply(self, world: &mut World) {
-        // We want to update the mesh only if the preview region is still the
-        // active region.
-        let mesh: Option<Mesh> = world
+        debug!(
+            "Replacing mesh. Subdivisions is {}",
+            world
+                .query_filtered::<&PreviewGrid2D, With<ActivePreview>>()
+                .get(world, self.0)
+                .map(|preview_data| preview_data.subdivisions)
+                .unwrap()
+        );
+        let mesh: Mesh = world
+            // We want to update the mesh only if the preview region is still
+            // the active region, hence With<ActivePreview>.
             .query_filtered::<&PreviewGrid2D, With<ActivePreview>>()
             .get(world, self.0)
             .map(|preview_data| preview_data.build_mesh())
-            .ok();
+            .unwrap();
 
-        if let Some(mesh) = mesh {
-            info!("Replacing mesh");
-            let preview_mesh_entity: Entity = world
-                .query_filtered::<Entity, With<viewport::PreviewMesh>>()
-                .single(world);
-            let mesh_handle: Handle<Mesh> = world.resource_mut::<Assets<Mesh>>().add(mesh);
-            world
-                .commands()
-                .entity(preview_mesh_entity)
-                .insert(mesh_handle);
-        }
+        let preview_mesh_entity: Entity = world
+            .query_filtered::<Entity, With<viewport::PreviewMesh>>()
+            .single(world);
+        let mesh_handle: Handle<Mesh> = world.resource_mut::<Assets<Mesh>>().add(mesh);
+        world
+            .commands()
+            .entity(preview_mesh_entity)
+            .insert(mesh_handle);
     }
 }
 
@@ -409,31 +414,13 @@ impl ComputePreview {
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<PreviewGrid2D>();
         let task: Task<()> = AsyncComputeTaskPool::get().spawn(async move {
-            // Number of vertices on one axis.
-            let k: i32 = 2i32.pow(preview_region.subdivisions.get().into()) + 1;
-            let start: Vec2 = {
-                let hs: f32 = preview_region.size / 2.0;
-                // Y is inverted.
-                preview_region.center + Vec2::new(-hs, hs)
-            };
-            let gap: Vec2 = {
-                let g: f32 = preview_region.size / (k - 1) as f32;
-                Vec2::new(g, -g)
-            };
-
-            let mut samples: Vec<(Vec2, f32)> = vec![];
-            for y in 0..k {
-                for x in 0..k {
-                    // Y is inverted.
-                    let p = start + Vec2::new(x as f32, y as f32) * gap;
-                    let mut h: f32 = 0.0;
-                    for layer in layers.iter() {
-                        h = layer.sample(p, h);
-                    }
-                    samples.push((p, h));
-                }
-            }
-            sender.send(PreviewGrid2D::new(samples)).unwrap();
+            (MIN_SUBDIVISIONS.get()..=preview_region.subdivisions.get())
+                .map(|s| unsafe { NonZeroU8::new_unchecked(s) })
+                .for_each(|subdivisions| {
+                    sender
+                        .send(sample_layers(subdivisions, &preview_region, &layers))
+                        .unwrap();
+                });
         });
         Self {
             target_entity,
@@ -462,6 +449,7 @@ impl ComputePreview {
     }
 }
 
+#[derive(Debug, PartialEq)]
 enum ComputePreviewResult {
     Finished,
     Computing,
@@ -474,6 +462,45 @@ pub fn create_default_preview_region(world: &mut World) {
         active_preview: ActivePreview,
         preview_region: PreviewRegion::default(),
     });
+}
+
+fn sample_layers<T>(
+    subdivisions: NonZeroU8,
+    preview_region: &PreviewRegion,
+    layers: &Vec<T>,
+) -> PreviewGrid2D
+where
+    T: Sample2D,
+{
+    // TODO: Reuse existing samples.
+    assert!(subdivisions <= preview_region.subdivisions);
+    assert!(subdivisions >= MIN_SUBDIVISIONS);
+
+    // Number of vertices on one axis.
+    let k: i32 = 2i32.pow(subdivisions.get().into()) + 1;
+    let start: Vec2 = {
+        let hs: f32 = preview_region.size / 2.0;
+        // Y is inverted.
+        preview_region.center + Vec2::new(-hs, hs)
+    };
+    let gap: Vec2 = {
+        let g: f32 = preview_region.size / (k - 1) as f32;
+        Vec2::new(g, -g)
+    };
+
+    let mut samples: Vec<(Vec2, f32)> = vec![];
+    for y in 0..k {
+        for x in 0..k {
+            // Y is inverted.
+            let p = start + Vec2::new(x as f32, y as f32) * gap;
+            let mut h: f32 = 0.0;
+            for layer in layers.iter() {
+                h = layer.sample(p, h);
+            }
+            samples.push((p, h));
+        }
+    }
+    PreviewGrid2D::new(samples)
 }
 
 /// Serializer and deserializer for bevy::core::Name.
@@ -519,9 +546,72 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use bevy::tasks::{ComputeTaskPool, TaskPool};
+    use bevy::tasks::TaskPool;
 
     use super::*;
+    use crate::layer;
+
+    #[test]
+    fn compute_preview_returns_a_result_and_gets_finished() {
+        // Initialize task pool before creating a ComputePreview.
+        AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
+
+        let target_entity = Entity::PLACEHOLDER;
+        let preview_region = PreviewRegion::default();
+        // Note the subdivisions is set to minimum.
+        assert_eq!(preview_region.subdivisions(), MIN_SUBDIVISIONS);
+        let height = 10.0f32;
+        let layers = vec![layer::HeightMap::Constant(height)];
+        let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
+        thread::sleep(Duration::from_millis(50));
+        let first_result = compute_preview.poll();
+        assert!(matches!(first_result, ComputePreviewResult::Result(..)));
+        let second_result = compute_preview.poll();
+        assert_eq!(second_result, ComputePreviewResult::Finished);
+    }
+
+    #[test]
+    fn compute_preview_returns_multiple_results_and_gets_finished() {
+        // Initialize task pool before creating a ComputePreview.
+        AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
+
+        let subdivisions = unsafe { NonZeroU8::new_unchecked(MIN_SUBDIVISIONS.get() + 2) };
+        assert!(subdivisions < MAX_SUBDIVISIONS);
+        let target_entity = Entity::PLACEHOLDER;
+        let preview_region = PreviewRegion::new(Vec2::ZERO, 1000.0, subdivisions);
+
+        let height = 10.0f32;
+        let layers = vec![layer::HeightMap::Constant(height)];
+        let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
+        thread::sleep(Duration::from_millis(50));
+        let results = vec![
+            compute_preview.poll(),
+            compute_preview.poll(),
+            compute_preview.poll(),
+            compute_preview.poll(),
+            compute_preview.poll(),
+        ];
+        assert!(matches!(results[0], ComputePreviewResult::Result(..)));
+        if let ComputePreviewResult::Result(_, ref preview_data) = results[0] {
+            assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get());
+        } else {
+            unreachable!()
+        }
+        assert!(matches!(results[1], ComputePreviewResult::Result(..)));
+        if let ComputePreviewResult::Result(_, ref preview_data) = results[1] {
+            assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get() + 1);
+        } else {
+            unreachable!()
+        }
+        assert!(matches!(results[2], ComputePreviewResult::Result(..)));
+        if let ComputePreviewResult::Result(_, ref preview_data) = results[2] {
+            assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get() + 2);
+        } else {
+            unreachable!()
+        }
+        assert_eq!(results[3], ComputePreviewResult::Finished);
+        assert_eq!(results[4], ComputePreviewResult::Finished);
+    }
 
     #[test]
     fn preview_grid_subdivisions_are_calculated_correctly() {
@@ -543,46 +633,4 @@ mod tests {
             );
         }
     }
-
-    // FIXME: API changed, replace these tests.
-    //
-    // #[test]
-    // fn preview_poll_is_none_when_task_is_not_done() {
-    //     let task_pool = ComputeTaskPool::get_or_init(|| TaskPool::new());
-    //     let mut preview = Preview {
-    //         task: Some(task_pool.spawn_local(async {
-    //             thread::sleep(Duration::from_millis(10000));
-    //             (
-    //                 Entity::PLACEHOLDER,
-    //                 PreviewGrid2D::new([(Vec2::ZERO, 0.0f32)].repeat(4)),
-    //             )
-    //         })),
-    //         ..default()
-    //     };
-    //     assert!(preview.task.is_some());
-    //     assert_eq!(preview.task.poll(), ComputePreviewResult::);
-    //     assert!(preview
-    //         .task
-    //         .map(|task| !task.is_finished())
-    //         .unwrap_or(false));
-    // }
-
-    // #[test]
-    // fn preview_poll_returns_result_when_task_is_done() {
-    //     const A: (Vec2, f32) = (Vec2::new(-0.5, -0.5), 1.0);
-    //     const B: (Vec2, f32) = (Vec2::new(0.5, -0.5), 2.0);
-    //     const C: (Vec2, f32) = (Vec2::new(0.5, 0.5), 3.0);
-    //     const D: (Vec2, f32) = (Vec2::new(-0.5, 0.5), 4.0);
-
-    //     let task_pool = ComputeTaskPool::get_or_init(|| TaskPool::new());
-    //     let result = (Entity::PLACEHOLDER, PreviewGrid2D::new(vec![A, B, C, D]));
-    //     let result_clone = result.clone();
-    //     let mut preview = Preview {
-    //         task: Some(task_pool.spawn(async { result })),
-    //         ..default()
-    //     };
-    //     assert!(preview.task.is_some());
-    //     thread::sleep(Duration::from_millis(50));
-    //     assert_eq!(preview.poll_task(), Some(result_clone));
-    // }
 }
