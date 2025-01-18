@@ -94,7 +94,7 @@ fn update_height_map_ui_system(
                     timer.tick(time.delta());
                     let layer::HeightMap::Constant(original_height) = height_map;
                     if timer.just_finished() && *original_height != *height {
-                        commands.add::<undo::PushAction>(
+                        commands.queue::<undo::PushAction>(
                             layer::HeightMapConstantUpdateHeightAction::new(
                                 layer.id(),
                                 *original_height,
@@ -174,7 +174,7 @@ fn draw_ui_for_constant_layer(
             }
         }
         if ui.button("Delete").clicked() {
-            commands.add::<undo::PushAction>(
+            commands.queue::<undo::PushAction>(
                 layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
             )
         }
@@ -196,7 +196,7 @@ pub fn draw_ui_for_layers(
                 .sort::<&layer::Layer>()
                 .last()
                 .map(|(layer, _)| layer.id());
-            commands.add::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
+            commands.queue::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
         }
         {
             let mut parent_layer_id: Option<layer::LayerId> = Option::default();

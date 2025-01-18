@@ -99,7 +99,7 @@ impl TargetTransform {
     }
 
     fn looking_at(&self) -> Vec3 {
-        let ray = Ray3d::new(self.translation, self.rotation * Vec3::NEG_Z);
+        let ray = Ray3d::new(self.translation, self.rotation * Dir3::NEG_Z);
         //println!("{:?}", &ray);
         match ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::new(Vec3::Y)) {
             Some(distance) => return ray.get_point(distance),
@@ -151,8 +151,10 @@ fn draw_focal_point_system(
 ) {
     if let Ok(target_transform) = target_transform_query.get_single() {
         gizmos.circle(
-            target_transform.looking_at(),
-            Dir3::Y,
+            Isometry3d::new(
+                target_transform.looking_at(),
+                Quat::from_rotation_x(-90.0f32.to_radians()),
+            ),
             2.5f32,
             LinearRgba::RED,
         );
@@ -162,8 +164,7 @@ fn draw_focal_point_system(
 fn draw_grid_system(mut gizmos: Gizmos) {
     gizmos
         .grid_3d(
-            Vec3::ZERO,            // position
-            Quat::IDENTITY,        // rotation
+            Isometry3d::IDENTITY,
             UVec3::new(10, 0, 10), // cells
             Vec3::splat(100.0),    // spacing
             LinearRgba::GREEN.with_alpha(0.8),
@@ -172,8 +173,7 @@ fn draw_grid_system(mut gizmos: Gizmos) {
 
     gizmos
         .grid_3d(
-            Vec3::ZERO,              // position
-            Quat::IDENTITY,          // rotation
+            Isometry3d::IDENTITY,
             UVec3::new(100, 0, 100), // cells
             Vec3::splat(10.0),       // spacing
             LinearRgba::GREEN.with_alpha(0.15),
@@ -300,9 +300,10 @@ fn startup_system(
                 Name::new("Preview Mesh"),
                 PreviewMesh,
                 PbrBundle {
-                    mesh: meshes.add(Rectangle::new(1.0, 1.0)),
-                    material: materials
-                        .add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                    mesh: Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
+                    material: MeshMaterial3d(
+                        materials.add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                    ),
                     ..default()
                 },
             ));
@@ -329,13 +330,13 @@ fn update_camera_system(
         transform.translation = Vec3::interpolate(
             &target_transform.translation,
             &transform.translation,
-            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_seconds() * 60.0),
+            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
         );
 
         transform.rotation = Quat::interpolate(
             &target_transform.rotation,
             &transform.rotation,
-            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_seconds() * 60.0),
+            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
         );
     }
 }

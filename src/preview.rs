@@ -59,7 +59,7 @@ impl Plugin for PreviewPlugin {
             Update,
             (
                 manage_preview_system,
-                update_preview_region_system.run_if(on_event::<UpdatePreviewRegion>()),
+                update_preview_region_system.run_if(on_event::<UpdatePreviewRegion>),
             ),
         );
     }
@@ -302,7 +302,7 @@ impl Command for UpdatePreviewMesh {
         world
             .commands()
             .entity(preview_mesh_entity)
-            .insert(mesh_handle);
+            .insert(Mesh3d(mesh_handle));
     }
 }
 
@@ -348,7 +348,7 @@ fn manage_preview_system(
             && preview_resource.task.is_none();
         if project_has_changed && ready_to_trigger {
             preview_resource.last_preview_initiated = now;
-            commands.add(CalculatePreview);
+            commands.queue(CalculatePreview);
         }
     }
 
@@ -365,7 +365,7 @@ fn manage_preview_system(
                 ComputePreviewResult::Computing => (),
                 ComputePreviewResult::Result(entity, preview_grid) => {
                     commands.entity(entity).insert(preview_grid);
-                    commands.add(UpdatePreviewMesh(entity));
+                    commands.queue(UpdatePreviewMesh(entity));
                 }
             }
         }

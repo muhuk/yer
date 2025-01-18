@@ -86,18 +86,20 @@ struct ToolbarImages {
 
 impl FromWorld for ToolbarImages {
     fn from_world(world: &mut World) -> Self {
-        let result: Self = world.run_system_once(
-            |asset_server: Res<AssetServer>, mut contexts: EguiContexts| -> Self {
-                let undo_image_handle: Handle<Image> = asset_server.load("icons/undo.png");
-                let undo_image_texture_id = contexts.add_image(undo_image_handle);
-                let redo_image_handle: Handle<Image> = asset_server.load("icons/redo.png");
-                let redo_image_texture_id = contexts.add_image(redo_image_handle);
-                Self {
-                    undo_icon: undo_image_texture_id,
-                    redo_icon: redo_image_texture_id,
-                }
-            },
-        );
+        let result: Self = world
+            .run_system_once(
+                |asset_server: Res<AssetServer>, mut contexts: EguiContexts| -> Self {
+                    let undo_image_handle: Handle<Image> = asset_server.load("icons/undo.png");
+                    let undo_image_texture_id = contexts.add_image(undo_image_handle);
+                    let redo_image_handle: Handle<Image> = asset_server.load("icons/redo.png");
+                    let redo_image_texture_id = contexts.add_image(redo_image_handle);
+                    Self {
+                        undo_icon: undo_image_texture_id,
+                        redo_icon: redo_image_texture_id,
+                    }
+                },
+            )
+            .expect("Failed to load toolbar icons");
         result
     }
 }
@@ -166,7 +168,7 @@ fn draw_ui_dialogs_system(
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
                                 ui_state_next.set(UiState::Interactive);
-                                commands.add(session::LoadSession(path));
+                                commands.queue(session::LoadSession(path));
                             }
                             file_dialog::DialogState::Cancelled => {
                                 // Currently there is no cleanup necessary.  If there is
@@ -183,7 +185,7 @@ fn draw_ui_dialogs_system(
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
                                 ui_state_next.set(UiState::Interactive);
-                                commands.add(session::SaveSession(Some(path)));
+                                commands.queue(session::SaveSession(Some(path)));
                             }
                             file_dialog::DialogState::Cancelled => {
                                 // Currently there is no cleanup necessary.  If there is
@@ -241,7 +243,7 @@ fn draw_ui_panels_system(
                     )
                     .clicked()
                 {
-                    commands.add(undo::UndoAction)
+                    commands.queue(undo::UndoAction)
                 }
                 if ui
                     .add_enabled(
@@ -252,7 +254,7 @@ fn draw_ui_panels_system(
                     )
                     .clicked()
                 {
-                    commands.add(undo::RedoAction)
+                    commands.queue(undo::RedoAction)
                 }
             });
         })
@@ -363,7 +365,7 @@ fn draw_ui_menu(
     egui::menu::bar(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("New").clicked() {
-                commands.add(session::InitializeNewSession);
+                commands.queue(session::InitializeNewSession);
                 ui.close_menu();
             }
             if ui.button("Open...").clicked() {
@@ -372,7 +374,7 @@ fn draw_ui_menu(
             }
             if ui.button("Save").clicked() {
                 if session.has_save_file() {
-                    commands.add(session::SaveSession(None));
+                    commands.queue(session::SaveSession(None));
                 } else {
                     ui_state_next.set(UiState::ShowingSaveFileDialog);
                 }
@@ -395,7 +397,7 @@ fn draw_ui_menu(
                 .inner
                 .clicked()
             {
-                commands.add(undo::UndoAction);
+                commands.queue(undo::UndoAction);
                 ui.close_menu();
             }
             if ui
@@ -403,7 +405,7 @@ fn draw_ui_menu(
                 .inner
                 .clicked()
             {
-                commands.add(undo::RedoAction);
+                commands.queue(undo::RedoAction);
                 ui.close_menu();
             }
         });
