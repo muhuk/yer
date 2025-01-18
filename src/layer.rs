@@ -99,6 +99,7 @@ impl Sample2D for HeightMap {
 
 #[derive(Component, Clone, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
 #[reflect(Component)]
+#[require(HeightMap)]
 pub struct Layer {
     pub enable_baking: bool,
     pub enable_preview: bool,
