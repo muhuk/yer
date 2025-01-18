@@ -37,13 +37,7 @@ impl Plugin for UiFileDialogPlugin {
     }
 }
 
-// LIB
-
-pub enum DialogState {
-    Open,
-    Selected(PathBuf),
-    Cancelled,
-}
+// COMPONENTS
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -114,6 +108,14 @@ impl Default for SaveFileDialog {
 
         Self { file_dialog }
     }
+}
+
+// LIB
+
+pub enum DialogState {
+    Open,
+    Selected(PathBuf),
+    Cancelled,
 }
 
 fn sanitize_path(path: PathBuf) -> PathBuf {
