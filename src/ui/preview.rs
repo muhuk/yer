@@ -59,7 +59,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
         ui.horizontal(|ui| {
             ui.label("Subdivisions");
             let mut subdivisions: u8 = preview_region.subdivisions().get();
-            egui::ComboBox::from_id_source(format!("preview-subdivisions-{}", entity))
+            egui::ComboBox::from_id_salt(format!("preview-subdivisions-{}", entity))
                 .selected_text(format!("{:?}", subdivisions))
                 .show_ui(ui, |ui| {
                     for value in preview::MIN_SUBDIVISIONS.get()..=preview::MAX_SUBDIVISIONS.get() {

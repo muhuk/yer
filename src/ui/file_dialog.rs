@@ -100,8 +100,8 @@ impl SaveFileDialog {
 
 impl Default for SaveFileDialog {
     fn default() -> Self {
-        // `save_file` doesn't support file filters as of 0.6.1.
-        // See: https://github.com/fluxxcode/egui-file-dialog/issues/167
+        // `save_file` doesn't support file filters.
+        // See: https://github.com/fluxxcode/egui-file-dialog/issues/138
         let mut file_dialog = egui_file_dialog::FileDialog::new()
             .add_file_filter(
                 FILE_FILTER_PROJECT_FILES_NAME,
