@@ -271,10 +271,8 @@ fn startup_system(
     let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
         .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
     commands.spawn((
-        Camera3dBundle {
-            transform,
-            ..default()
-        },
+        Camera3d::default(),
+        transform,
         TargetTransform {
             translation: transform.translation,
             rotation: transform.rotation,
@@ -285,13 +283,8 @@ fn startup_system(
     // A pivot point so we can work in Z-up coords.
     commands
         .spawn((
-            TransformBundle {
-                local: Transform::from_rotation(Quat::from_rotation_x(
-                    -std::f32::consts::FRAC_PI_2,
-                )),
-                ..default()
-            },
-            VisibilityBundle::default(),
+            Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            Visibility::default(),
             Name::new("Pivot Z-Up"),
         ))
         .with_children(|parent| {
@@ -299,21 +292,18 @@ fn startup_system(
             parent.spawn((
                 Name::new("Preview Mesh"),
                 PreviewMesh,
-                PbrBundle {
-                    mesh: Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
-                    material: MeshMaterial3d(
-                        materials.add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
-                    ),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
+                MeshMaterial3d(
+                    materials.add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                ),
             ));
         });
 
     // Add light.
-    commands.spawn(DirectionalLightBundle {
-        transform: Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        DirectionalLight::default(),
+        Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 }
 
 fn update_camera_system(
