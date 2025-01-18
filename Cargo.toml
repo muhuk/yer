@@ -15,10 +15,10 @@ inspector = ["dep:bevy-inspector-egui"]
 
 
 [dependencies]
-bevy = "0.14.2"
-bevy_egui = "0.29"
-bevy-inspector-egui = {version = "0.25.2", optional = true}
-egui-file-dialog = "0.6"
+bevy = "0.15.1"
+bevy_egui = "0.31"
+bevy-inspector-egui = {version = "0.28.1", optional = true}
+egui-file-dialog = "0.7.0"
 rmp-serde = "1.3"
 serde = "1.0"
 serde_bytes = "0.11"

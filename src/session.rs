@@ -177,7 +177,7 @@ fn process_undo_events_system(
 }
 
 fn startup_system(mut commands: Commands) {
-    commands.add(InitializeNewSession);
+    commands.queue(InitializeNewSession);
 }
 
 // LIB

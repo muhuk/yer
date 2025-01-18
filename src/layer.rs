@@ -353,7 +353,7 @@ mod tests {
         assert_layer_count!(app, 0);
         app.world_mut()
             .commands()
-            .add::<undo::PushAction>(CreateLayerAction::new(None).into());
+            .queue::<undo::PushAction>(CreateLayerAction::new(None).into());
         app.update();
         assert_layer_count!(app, 1);
     }
@@ -383,7 +383,7 @@ mod tests {
             .collect();
         app.world_mut()
             .commands()
-            .add::<undo::PushAction>(CreateLayerAction::new(Some(initial_ids[0])).into());
+            .queue::<undo::PushAction>(CreateLayerAction::new(Some(initial_ids[0])).into());
         app.update();
         assert_layer_count!(app, 3);
 
