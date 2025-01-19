@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiContexts};
+use bevy_egui::{egui, EguiUserTextures};
 
 use crate::undo;
 
@@ -36,28 +35,17 @@ impl Plugin for ToolbarPlugin {
 #[reflect(Resource)]
 pub struct ToolbarImages {
     #[reflect(ignore)]
-    undo_icon: egui::TextureId,
-    #[reflect(ignore)]
-    redo_icon: egui::TextureId,
+    icon_atlas: egui::TextureId,
 }
 
 impl FromWorld for ToolbarImages {
     fn from_world(world: &mut World) -> Self {
-        let result: Self = world
-            .run_system_once(
-                |asset_server: Res<AssetServer>, mut contexts: EguiContexts| -> Self {
-                    let undo_image_handle: Handle<Image> = asset_server.load("icons/undo.png");
-                    let undo_image_texture_id = contexts.add_image(undo_image_handle);
-                    let redo_image_handle: Handle<Image> = asset_server.load("icons/redo.png");
-                    let redo_image_texture_id = contexts.add_image(redo_image_handle);
-                    Self {
-                        undo_icon: undo_image_texture_id,
-                        redo_icon: redo_image_texture_id,
-                    }
-                },
-            )
-            .expect("Failed to load toolbar icons");
-        result
+        let icon_atlas_handle: Handle<Image> =
+            world.resource::<AssetServer>().load("images/icons.png");
+        let icon_atlas = world
+            .resource_mut::<EguiUserTextures>()
+            .add_image(icon_atlas_handle);
+        Self { icon_atlas }
     }
 }
 
@@ -69,14 +57,27 @@ pub fn draw_toolbar(
     toolbar_images: &Res<ToolbarImages>,
     undo_stack: &Res<undo::UndoStack>,
 ) {
+    const ICON_SIZE: [f32; 2] = [32.0, 32.0];
+    const UNDO_UV: egui::Rect = egui::Rect {
+        min: egui::Pos2::new(0.0f32, 0.125f32),
+        max: egui::Pos2::new(0.125f32, 0.25f32),
+    };
+    const REDO_UV: egui::Rect = egui::Rect {
+        min: egui::Pos2::new(0.125f32, 0.125f32),
+        max: egui::Pos2::new(0.25f32, 0.25f32),
+    };
+
     ui.horizontal(|ui| {
         if ui
             .add_enabled(
                 undo_stack.can_undo(),
-                egui::widgets::ImageButton::new(egui::Image::new(egui::load::SizedTexture::new(
-                    toolbar_images.undo_icon,
-                    [64.0, 64.0],
-                ))),
+                egui::widgets::ImageButton::new(
+                    egui::Image::new(egui::load::SizedTexture::new(
+                        toolbar_images.icon_atlas,
+                        ICON_SIZE,
+                    ))
+                    .uv(UNDO_UV),
+                ),
             )
             .clicked()
         {
@@ -85,10 +86,13 @@ pub fn draw_toolbar(
         if ui
             .add_enabled(
                 undo_stack.can_redo(),
-                egui::widgets::ImageButton::new(egui::Image::new(egui::load::SizedTexture::new(
-                    toolbar_images.redo_icon,
-                    [64.0, 64.0],
-                ))),
+                egui::widgets::ImageButton::new(
+                    egui::Image::new(egui::load::SizedTexture::new(
+                        toolbar_images.icon_atlas,
+                        ICON_SIZE,
+                    ))
+                    .uv(REDO_UV),
+                ),
             )
             .clicked()
         {
