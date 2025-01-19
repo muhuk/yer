@@ -32,6 +32,7 @@ use crate::viewport;
 mod file_dialog;
 mod layer;
 mod preview;
+mod toolbar;
 
 pub struct UiPlugin;
 
@@ -42,9 +43,9 @@ impl Plugin for UiPlugin {
                 EguiPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
+                toolbar::ToolbarPlugin,
             ))
             .init_state::<UiState>()
-            .init_resource::<ToolbarImages>()
             .enable_state_scoped_entities::<UiState>()
             .add_systems(
                 Update,
@@ -71,35 +72,6 @@ impl Plugin for UiPlugin {
 }
 
 // RESOURCES
-
-#[derive(Debug, Reflect, Resource)]
-#[reflect(Resource)]
-struct ToolbarImages {
-    #[reflect(ignore)]
-    undo_icon: egui::TextureId,
-    #[reflect(ignore)]
-    redo_icon: egui::TextureId,
-}
-
-impl FromWorld for ToolbarImages {
-    fn from_world(world: &mut World) -> Self {
-        let result: Self = world
-            .run_system_once(
-                |asset_server: Res<AssetServer>, mut contexts: EguiContexts| -> Self {
-                    let undo_image_handle: Handle<Image> = asset_server.load("icons/undo.png");
-                    let undo_image_texture_id = contexts.add_image(undo_image_handle);
-                    let redo_image_handle: Handle<Image> = asset_server.load("icons/redo.png");
-                    let redo_image_texture_id = contexts.add_image(redo_image_handle);
-                    Self {
-                        undo_icon: undo_image_texture_id,
-                        redo_icon: redo_image_texture_id,
-                    }
-                },
-            )
-            .expect("Failed to load toolbar icons");
-        result
-    }
-}
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
 enum UiState {
@@ -220,7 +192,7 @@ fn draw_ui_panels_system(
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
-    toolbar_images: Res<ToolbarImages>,
+    toolbar_images: Res<toolbar::ToolbarImages>,
     undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
@@ -244,30 +216,7 @@ fn draw_ui_panels_system(
 
     let toolbar_height: f32 = egui::TopBottomPanel::top("toolbar")
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(
-                        undo_stack.can_undo(),
-                        egui::widgets::ImageButton::new(egui::Image::new(
-                            egui::load::SizedTexture::new(toolbar_images.undo_icon, [64.0, 64.0]),
-                        )),
-                    )
-                    .clicked()
-                {
-                    commands.queue(undo::UndoAction)
-                }
-                if ui
-                    .add_enabled(
-                        undo_stack.can_redo(),
-                        egui::widgets::ImageButton::new(egui::Image::new(
-                            egui::load::SizedTexture::new(toolbar_images.redo_icon, [64.0, 64.0]),
-                        )),
-                    )
-                    .clicked()
-                {
-                    commands.queue(undo::RedoAction)
-                }
-            });
+            toolbar::draw_toolbar(&mut commands, ui, &toolbar_images, &undo_stack);
         })
         .response
         .rect
