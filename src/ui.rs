@@ -22,10 +22,7 @@ use bevy_egui::{egui, EguiContexts, EguiPlugin};
 #[cfg(feature = "inspector")]
 use bevy_egui::EguiContext;
 #[cfg(feature = "inspector")]
-use bevy_inspector_egui::{
-    bevy_inspector::{ui_for_state, ui_for_world},
-    DefaultInspectorConfigPlugin,
-};
+use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
 use crate::constants;
 use crate::session;
@@ -139,11 +136,25 @@ fn inspector_ui_system(world: &mut World) {
         ))
         .show(egui_context.get_mut(), |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui_for_world(world, ui);
+                egui::CollapsingHeader::new("Entities")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        bevy_inspector::ui_for_world_entities_filtered::<(
+                            Without<Parent>,
+                            Without<Observer>,
+                        )>(world, ui, true);
+                    });
+                ui.collapsing("Resources", |ui| {
+                    bevy_inspector::ui_for_resources(world, ui);
+                });
+                ui.collapsing("Assets", |ui| {
+                    bevy_inspector::ui_for_all_assets(world, ui);
+                });
+                //bevy_inspector::ui_for_world(world, ui);
                 ui.collapsing("State", |ui| {
                     ui.horizontal(|ui| {
                         ui.label("UiState");
-                        ui_for_state::<UiState>(world, ui);
+                        bevy_inspector::ui_for_state::<UiState>(world, ui);
                     });
                 });
             });
