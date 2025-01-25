@@ -15,85 +15,35 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use bevy::prelude::*;
-use bevy_egui::{egui, EguiUserTextures};
+use bevy_egui::egui;
 
+use crate::ui::theme::Theme;
 use crate::undo;
-
-// PLUGIN
-
-pub struct ToolbarPlugin;
-
-impl Plugin for ToolbarPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<ToolbarImages>();
-    }
-}
-
-// RESOURCES
-
-#[derive(Debug, Reflect, Resource)]
-#[reflect(Resource)]
-pub struct ToolbarImages {
-    #[reflect(ignore)]
-    icon_atlas: egui::TextureId,
-}
-
-impl FromWorld for ToolbarImages {
-    fn from_world(world: &mut World) -> Self {
-        let icon_atlas_handle: Handle<Image> =
-            world.resource::<AssetServer>().load("images/icons.png");
-        let icon_atlas = world
-            .resource_mut::<EguiUserTextures>()
-            .add_image(icon_atlas_handle);
-        Self { icon_atlas }
-    }
-}
 
 // LIB
 
 pub fn draw_toolbar(
     commands: &mut Commands,
     ui: &mut egui::Ui,
-    toolbar_images: &Res<ToolbarImages>,
+    theme: &Res<Theme>,
     undo_stack: &Res<undo::UndoStack>,
 ) {
-    const ICON_SIZE: [f32; 2] = [32.0, 32.0];
-    const UNDO_UV: egui::Rect = egui::Rect {
-        min: egui::Pos2::new(0.0f32, 0.125f32),
-        max: egui::Pos2::new(0.125f32, 0.25f32),
-    };
-    const REDO_UV: egui::Rect = egui::Rect {
-        min: egui::Pos2::new(0.125f32, 0.125f32),
-        max: egui::Pos2::new(0.25f32, 0.25f32),
-    };
-
     ui.horizontal(|ui| {
+        // TODO: Add tooltips.
         if ui
-            .add_enabled(
-                undo_stack.can_undo(),
-                egui::widgets::ImageButton::new(
-                    egui::Image::new(egui::load::SizedTexture::new(
-                        toolbar_images.icon_atlas,
-                        ICON_SIZE,
-                    ))
-                    .uv(UNDO_UV),
-                ),
-            )
+            .add_enabled_ui(undo_stack.can_undo(), |ui| {
+                theme.draw_toolbar_button(ui, UVec2::new(0, 1))
+            })
+            .inner
             .clicked()
         {
             commands.queue(undo::UndoAction)
         }
         if ui
-            .add_enabled(
-                undo_stack.can_redo(),
-                egui::widgets::ImageButton::new(
-                    egui::Image::new(egui::load::SizedTexture::new(
-                        toolbar_images.icon_atlas,
-                        ICON_SIZE,
-                    ))
-                    .uv(REDO_UV),
-                ),
-            )
+            .add_enabled_ui(undo_stack.can_redo(), |ui| {
+                theme.draw_toolbar_button(ui, UVec2::new(1, 1))
+            })
+            .inner
             .clicked()
         {
             commands.queue(undo::RedoAction)

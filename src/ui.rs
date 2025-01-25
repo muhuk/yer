@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
@@ -32,6 +31,7 @@ use crate::viewport;
 mod file_dialog;
 mod layer;
 mod preview;
+mod theme;
 mod toolbar;
 
 pub struct UiPlugin;
@@ -43,7 +43,7 @@ impl Plugin for UiPlugin {
                 EguiPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
-                toolbar::ToolbarPlugin,
+                theme::ThemePlugin,
             ))
             .init_state::<UiState>()
             .enable_state_scoped_entities::<UiState>()
@@ -192,7 +192,7 @@ fn draw_ui_panels_system(
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
-    toolbar_images: Res<toolbar::ToolbarImages>,
+    theme: Res<theme::Theme>,
     undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
@@ -216,7 +216,7 @@ fn draw_ui_panels_system(
 
     let toolbar_height: f32 = egui::TopBottomPanel::top("toolbar")
         .show(ctx, |ui| {
-            toolbar::draw_toolbar(&mut commands, ui, &toolbar_images, &undo_stack);
+            toolbar::draw_toolbar(&mut commands, ui, &theme, &undo_stack);
         })
         .response
         .rect
