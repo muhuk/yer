@@ -40,29 +40,10 @@ impl Plugin for ThemePlugin {
 #[reflect(Resource)]
 pub struct Theme {
     #[reflect(ignore)]
-    colors: ThemeColors,
+    pub colors: ThemeColors,
 
     #[reflect(ignore)]
-    icon_atlas: egui::TextureId,
-}
-
-impl Theme {
-    pub fn draw_toolbar_button(&self, ui: &mut egui::Ui, sprite_index: UVec2) -> egui::Response {
-        const ICON_SIZE: [f32; 2] = [32.0, 32.0];
-        const SPRITE_SIZE: f32 = 0.125f32;
-        let uv_min = egui::Pos2::new(
-            sprite_index.x as f32 * SPRITE_SIZE,
-            sprite_index.y as f32 * SPRITE_SIZE,
-        );
-        let uv_max = uv_min + egui::Vec2::splat(SPRITE_SIZE);
-
-        let widget = egui::widgets::ImageButton::new(
-            egui::Image::new(egui::load::SizedTexture::new(self.icon_atlas, ICON_SIZE))
-                .tint(self.colors.primary_color.to_color32())
-                .uv(egui::Rect::from_min_max(uv_min, uv_max)),
-        );
-        ui.add(widget)
-    }
+    pub icon_atlas: egui::TextureId,
 }
 
 impl FromWorld for Theme {
@@ -75,6 +56,7 @@ impl FromWorld for Theme {
                 .add_image(icon_atlas_handle)
         };
 
+        // FIXME: Load theme from file.
         const BG_COLOR: Color = Color::Srgba(tailwind::STONE_800);
         const BG_ALT_COLOR: Color = Color::Srgba(tailwind::STONE_700);
         const FG_COLOR: Color = Color::Srgba(tailwind::STONE_200);
@@ -102,7 +84,6 @@ impl FromWorld for Theme {
 
 fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
     const EGUI_THEME: egui::Theme = egui::Theme::Dark;
-    const TEST_COLOR: Color = Color::Srgba(tailwind::FUCHSIA_500);
     let ctx = contexts.ctx_mut();
     ctx.set_theme(EGUI_THEME);
     let widgets = {
@@ -111,28 +92,32 @@ fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
         widgets.noninteractive.fg_stroke.color = theme.colors.fg_alt_color.to_color32();
         widgets.inactive.fg_stroke.color = theme.colors.fg_color.to_color32();
         widgets.hovered.fg_stroke.color = theme.colors.fg_color.to_color32();
-        widgets.active.fg_stroke.color = theme.colors.primary_color.to_color32();
+        widgets.active.fg_stroke.color = theme.colors.fg_color.to_color32();
         widgets.open.fg_stroke.color = theme.colors.primary_color.to_color32();
 
         // bg_fill
         widgets.noninteractive.bg_fill = theme.colors.bg_alt_color.to_color32();
         widgets.inactive.bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.hovered.bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.active.bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.open.bg_fill = theme.colors.bg_alt_color.to_color32();
+        widgets.hovered.bg_fill = theme.colors.primary_color.to_color32();
+        widgets.active.bg_fill = theme.colors.primary_color.to_color32();
+        widgets.open.bg_fill = theme.colors.primary_alt_color.to_color32();
 
         // weak_bg_fill
-        widgets.noninteractive.weak_bg_fill = theme.colors.bg_color.to_color32();
-        widgets.inactive.weak_bg_fill = theme.colors.bg_color.to_color32();
-        widgets.hovered.weak_bg_fill = theme.colors.bg_color.to_color32();
-        widgets.active.weak_bg_fill = theme.colors.bg_color.to_color32();
-        widgets.open.weak_bg_fill = theme.colors.bg_color.to_color32();
+        widgets.noninteractive.weak_bg_fill = theme
+            .colors
+            .bg_alt_color
+            .mix(&theme.colors.bg_color, 0.5)
+            .to_color32();
+        widgets.inactive.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
+        widgets.hovered.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
+        widgets.active.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
+        widgets.open.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
 
         widgets
     };
     let selection = {
         let mut selection = egui::style::Selection::default();
-        selection.bg_fill = theme.colors.primary_alt_color.to_color32();
+        selection.bg_fill = theme.colors.bg_alt_color.to_color32();
         selection.stroke.color = theme.colors.primary_color.to_color32();
         selection
     };
@@ -143,51 +128,27 @@ fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
     };
     let visuals = egui::style::Visuals {
         dark_mode: true,
-        override_text_color: None,
         widgets,
         selection,
-        hyperlink_color: TEST_COLOR.to_color32(),
+        hyperlink_color: theme.colors.secondary_color.to_color32(),
         faint_bg_color: theme
             .colors
             .bg_color
-            .mix(&theme.colors.bg_alt_color, 0.333)
+            .mix(&theme.colors.secondary_alt_color, 0.125)
             .to_color32(),
         extreme_bg_color: theme
             .colors
             .bg_color
-            .mix(&theme.colors.bg_alt_color, 0.667)
+            .mix(&theme.colors.secondary_alt_color, 0.25)
             .to_color32(),
-        // code_bg_color: theme.colors.test,
-        // warn_fg_color: theme.colors.test,
-        // error_fg_color: theme.colors.test,
-        // pub window_rounding: Rounding,
-        // pub window_shadow: Shadow,
         window_fill: theme
             .colors
             .bg_color
             .mix(&theme.colors.secondary_color, 0.0625)
             .to_color32(),
-        // pub window_stroke: Stroke,
-        // pub window_highlight_topmost: bool,
-        // pub menu_rounding: Rounding,
-        panel_fill: theme
-            .colors
-            .bg_color
-            .mix(&theme.colors.secondary_color, 0.03125)
-            .to_color32(),
-        // pub popup_shadow: Shadow,
-        // pub resize_corner_size: f32,
+        panel_fill: theme.colors.bg_color.to_color32(),
         text_cursor,
-        // pub clip_rect_margin: f32,
-        // pub button_frame: bool,
-        // pub collapsing_header_frame: bool,
-        // pub indent_has_left_vline: bool,
-        // pub striped: bool,
-        // pub slider_trailing_fill: bool,
-        // pub handle_shape: HandleShape,
-        // pub interact_cursor: Option<CursorIcon>,
-        // pub image_loading_spinners: bool,
-        // pub numeric_color_space: NumericColorSpace,
+        button_frame: true,
         ..default()
     };
     ctx.set_visuals_of(EGUI_THEME, visuals);
@@ -195,7 +156,7 @@ fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
 
 // LIB
 
-trait ToColor32 {
+pub trait ToColor32 {
     fn to_color32(self) -> Color32;
 }
 
@@ -207,15 +168,15 @@ impl ToColor32 for Color {
 }
 
 #[derive(Debug, Default)]
-struct ThemeColors {
-    bg_color: Color,
-    bg_alt_color: Color,
-    fg_color: Color,
-    fg_alt_color: Color,
-    primary_color: Color,
-    primary_alt_color: Color,
-    secondary_color: Color,
-    secondary_alt_color: Color,
+pub struct ThemeColors {
+    pub bg_color: Color,
+    pub bg_alt_color: Color,
+    pub fg_color: Color,
+    pub fg_alt_color: Color,
+    pub primary_color: Color,
+    pub primary_alt_color: Color,
+    pub secondary_color: Color,
+    pub secondary_alt_color: Color,
 }
 
 impl ThemeColors {

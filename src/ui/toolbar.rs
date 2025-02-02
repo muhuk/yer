@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::ui::theme::Theme;
+use crate::ui::theme::{Theme, ToColor32};
 use crate::undo;
 
 // LIB
@@ -32,7 +32,7 @@ pub fn draw_toolbar(
         // TODO: Add tooltips.
         if ui
             .add_enabled_ui(undo_stack.can_undo(), |ui| {
-                theme.draw_toolbar_button(ui, UVec2::new(0, 1))
+                draw_toolbar_button(theme, ui, UVec2::new(0, 1))
             })
             .inner
             .clicked()
@@ -41,7 +41,7 @@ pub fn draw_toolbar(
         }
         if ui
             .add_enabled_ui(undo_stack.can_redo(), |ui| {
-                theme.draw_toolbar_button(ui, UVec2::new(1, 1))
+                draw_toolbar_button(theme, ui, UVec2::new(1, 1))
             })
             .inner
             .clicked()
@@ -49,4 +49,25 @@ pub fn draw_toolbar(
             commands.queue(undo::RedoAction)
         }
     });
+}
+
+fn draw_toolbar_button(
+    theme: &Res<Theme>,
+    ui: &mut egui::Ui,
+    sprite_index: UVec2,
+) -> egui::Response {
+    const ICON_SIZE: [f32; 2] = [32.0, 32.0];
+    const SPRITE_SIZE: f32 = 0.125f32;
+    let uv_min = egui::Pos2::new(
+        sprite_index.x as f32 * SPRITE_SIZE,
+        sprite_index.y as f32 * SPRITE_SIZE,
+    );
+    let uv_max = uv_min + egui::Vec2::splat(SPRITE_SIZE);
+
+    let widget = egui::widgets::ImageButton::new(
+        egui::Image::new(egui::load::SizedTexture::new(theme.icon_atlas, ICON_SIZE))
+            .tint(theme.colors.fg_color.to_color32())
+            .uv(egui::Rect::from_min_max(uv_min, uv_max)),
+    );
+    ui.add(widget)
 }
