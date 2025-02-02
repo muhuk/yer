@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::ui::theme::{Theme, ToColor32};
+use crate::ui::theme::{IconAtlasSprite, Theme, ToColor32};
 use crate::undo;
 
 // LIB
@@ -32,7 +32,7 @@ pub fn draw_toolbar(
         // TODO: Add tooltips.
         if ui
             .add_enabled_ui(undo_stack.can_undo(), |ui| {
-                draw_toolbar_button(theme, ui, UVec2::new(0, 1))
+                draw_toolbar_button(theme, ui, IconAtlasSprite::Undo)
             })
             .inner
             .clicked()
@@ -41,7 +41,7 @@ pub fn draw_toolbar(
         }
         if ui
             .add_enabled_ui(undo_stack.can_redo(), |ui| {
-                draw_toolbar_button(theme, ui, UVec2::new(1, 1))
+                draw_toolbar_button(theme, ui, IconAtlasSprite::Redo)
             })
             .inner
             .clicked()
@@ -54,10 +54,11 @@ pub fn draw_toolbar(
 fn draw_toolbar_button(
     theme: &Res<Theme>,
     ui: &mut egui::Ui,
-    sprite_index: UVec2,
+    sprite: IconAtlasSprite,
 ) -> egui::Response {
     const ICON_SIZE: [f32; 2] = [32.0, 32.0];
     const SPRITE_SIZE: f32 = 0.125f32;
+    let sprite_index: UVec2 = sprite.into();
     let uv_min = egui::Pos2::new(
         sprite_index.x as f32 * SPRITE_SIZE,
         sprite_index.y as f32 * SPRITE_SIZE,
