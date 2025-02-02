@@ -156,6 +156,21 @@ fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
 
 // LIB
 
+#[derive(Copy, Clone, Debug)]
+pub enum IconAtlasSprite {
+    Undo,
+    Redo,
+}
+
+impl Into<UVec2> for IconAtlasSprite {
+    fn into(self) -> UVec2 {
+        match self {
+            Self::Undo => UVec2::new(0, 1),
+            Self::Redo => UVec2::new(1, 1),
+        }
+    }
+}
+
 pub trait ToColor32 {
     fn to_color32(self) -> Color32;
 }
