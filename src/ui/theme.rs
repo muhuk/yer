@@ -28,7 +28,8 @@ pub struct ThemePlugin;
 
 impl Plugin for ThemePlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<ThemeColors>()
+        app.register_type::<Theme>()
+            .register_asset_reflect::<ThemeColors>()
             .init_asset::<ThemeColors>()
             .add_plugins(TomlAssetPlugin::<ThemeColors>::new(&[".color_theme.toml"]))
             .init_resource::<Theme>()
@@ -72,7 +73,7 @@ impl FromWorld for Theme {
 
 // ASSETS
 
-#[derive(Asset, Debug, Default, Deserialize, Reflect)]
+#[derive(Asset, Debug, Deserialize, Reflect)]
 pub struct ThemeColors {
     pub bg_color: Color,
     pub bg_alt_color: Color,
