@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::color::palettes::tailwind;
 use bevy::prelude::*;
+use bevy_common_assets::toml::TomlAssetPlugin;
 use bevy_egui::{
     egui::{self, Color32},
     EguiContexts, EguiSet, EguiUserTextures,
 };
+use serde::Deserialize;
 
 // PLUGIN
 
@@ -27,10 +28,11 @@ pub struct ThemePlugin;
 
 impl Plugin for ThemePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Theme>().add_systems(
-            Startup,
-            setup_egui_theme_system.after(EguiSet::InitContexts),
-        );
+        app.register_type::<ThemeColors>()
+            .init_asset::<ThemeColors>()
+            .add_plugins(TomlAssetPlugin::<ThemeColors>::new(&[".color_theme.toml"]))
+            .init_resource::<Theme>()
+            .add_systems(Update, update_theme_system.after(EguiSet::InitContexts));
     }
 }
 
@@ -39,11 +41,12 @@ impl Plugin for ThemePlugin {
 #[derive(Debug, Reflect, Resource)]
 #[reflect(Resource)]
 pub struct Theme {
-    #[reflect(ignore)]
-    pub colors: ThemeColors,
+    pub colors: Handle<ThemeColors>,
 
     #[reflect(ignore)]
     pub icon_atlas: egui::TextureId,
+
+    needs_update: bool,
 }
 
 impl FromWorld for Theme {
@@ -55,103 +58,110 @@ impl FromWorld for Theme {
                 .resource_mut::<EguiUserTextures>()
                 .add_image(icon_atlas_handle)
         };
-
-        // FIXME: Load theme from file.
-        const BG_COLOR: Color = Color::Srgba(tailwind::STONE_800);
-        const BG_ALT_COLOR: Color = Color::Srgba(tailwind::STONE_700);
-        const FG_COLOR: Color = Color::Srgba(tailwind::STONE_200);
-        const FG_ALT_COLOR: Color = Color::Srgba(tailwind::ZINC_400);
-        const PRIMARY_COLOR: Color = Color::Srgba(tailwind::AMBER_600);
-        const PRIMARY_ALT_COLOR: Color = Color::Srgba(tailwind::YELLOW_950);
-        const SECONDARY_COLOR: Color = Color::Srgba(tailwind::BLUE_500);
-        const SECONDARY_ALT_COLOR: Color = Color::Srgba(tailwind::BLUE_300);
-        let colors = ThemeColors::new(
-            BG_COLOR,
-            BG_ALT_COLOR,
-            FG_COLOR,
-            FG_ALT_COLOR,
-            PRIMARY_COLOR,
-            PRIMARY_ALT_COLOR,
-            SECONDARY_COLOR,
-            SECONDARY_ALT_COLOR,
-        );
-
-        Self { colors, icon_atlas }
+        let colors = world
+            .resource::<AssetServer>()
+            .load("themes/dark.color_theme.toml");
+        let needs_update = true;
+        Self {
+            colors,
+            icon_atlas,
+            needs_update,
+        }
     }
+}
+
+// ASSETS
+
+#[derive(Asset, Debug, Default, Deserialize, Reflect)]
+pub struct ThemeColors {
+    pub bg_color: Color,
+    pub bg_alt_color: Color,
+    pub fg_color: Color,
+    pub fg_alt_color: Color,
+    pub primary_color: Color,
+    pub primary_alt_color: Color,
+    pub secondary_color: Color,
+    pub secondary_alt_color: Color,
 }
 
 // SYSTEMS
 
-fn setup_egui_theme_system(mut contexts: EguiContexts, theme: Res<Theme>) {
+fn update_theme_system(
+    mut contexts: EguiContexts,
+    mut theme: ResMut<Theme>,
+    theme_colors: Res<Assets<ThemeColors>>,
+) {
+    if !theme.needs_update {
+        return;
+    }
+
     const EGUI_THEME: egui::Theme = egui::Theme::Dark;
-    let ctx = contexts.ctx_mut();
-    ctx.set_theme(EGUI_THEME);
-    let widgets = {
-        let mut widgets = egui::style::Widgets::default();
-        // fg_stroke
-        widgets.noninteractive.fg_stroke.color = theme.colors.fg_alt_color.to_color32();
-        widgets.inactive.fg_stroke.color = theme.colors.fg_color.to_color32();
-        widgets.hovered.fg_stroke.color = theme.colors.fg_color.to_color32();
-        widgets.active.fg_stroke.color = theme.colors.fg_color.to_color32();
-        widgets.open.fg_stroke.color = theme.colors.primary_color.to_color32();
+    if let Some(colors) = theme_colors.get(&theme.colors) {
+        debug!("Updating theme.");
+        let ctx = contexts.ctx_mut();
+        ctx.set_theme(EGUI_THEME);
+        let widgets = {
+            let mut widgets = egui::style::Widgets::default();
+            // fg_stroke
+            widgets.noninteractive.fg_stroke.color = colors.fg_alt_color.to_color32();
+            widgets.inactive.fg_stroke.color = colors.fg_color.to_color32();
+            widgets.hovered.fg_stroke.color = colors.fg_color.to_color32();
+            widgets.active.fg_stroke.color = colors.fg_color.to_color32();
+            widgets.open.fg_stroke.color = colors.primary_color.to_color32();
 
-        // bg_fill
-        widgets.noninteractive.bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.inactive.bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.hovered.bg_fill = theme.colors.primary_color.to_color32();
-        widgets.active.bg_fill = theme.colors.primary_color.to_color32();
-        widgets.open.bg_fill = theme.colors.primary_alt_color.to_color32();
+            // bg_fill
+            widgets.noninteractive.bg_fill = colors.bg_alt_color.to_color32();
+            widgets.inactive.bg_fill = colors.bg_alt_color.to_color32();
+            widgets.hovered.bg_fill = colors.primary_color.to_color32();
+            widgets.active.bg_fill = colors.primary_color.to_color32();
+            widgets.open.bg_fill = colors.primary_alt_color.to_color32();
 
-        // weak_bg_fill
-        widgets.noninteractive.weak_bg_fill = theme
-            .colors
-            .bg_alt_color
-            .mix(&theme.colors.bg_color, 0.5)
-            .to_color32();
-        widgets.inactive.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.hovered.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.active.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
-        widgets.open.weak_bg_fill = theme.colors.bg_alt_color.to_color32();
+            // weak_bg_fill
+            widgets.noninteractive.weak_bg_fill =
+                colors.bg_alt_color.mix(&colors.bg_color, 0.5).to_color32();
+            widgets.inactive.weak_bg_fill = colors.bg_alt_color.to_color32();
+            widgets.hovered.weak_bg_fill = colors.bg_alt_color.to_color32();
+            widgets.active.weak_bg_fill = colors.bg_alt_color.to_color32();
+            widgets.open.weak_bg_fill = colors.bg_alt_color.to_color32();
 
-        widgets
-    };
-    let selection = {
-        let mut selection = egui::style::Selection::default();
-        selection.bg_fill = theme.colors.bg_alt_color.to_color32();
-        selection.stroke.color = theme.colors.primary_color.to_color32();
-        selection
-    };
-    let text_cursor = {
-        let mut text_cursor = egui::style::TextCursorStyle::default();
-        text_cursor.stroke.color = theme.colors.primary_color.to_color32();
-        text_cursor
-    };
-    let visuals = egui::style::Visuals {
-        dark_mode: true,
-        widgets,
-        selection,
-        hyperlink_color: theme.colors.secondary_color.to_color32(),
-        faint_bg_color: theme
-            .colors
-            .bg_color
-            .mix(&theme.colors.secondary_alt_color, 0.125)
-            .to_color32(),
-        extreme_bg_color: theme
-            .colors
-            .bg_color
-            .mix(&theme.colors.secondary_alt_color, 0.25)
-            .to_color32(),
-        window_fill: theme
-            .colors
-            .bg_color
-            .mix(&theme.colors.secondary_color, 0.0625)
-            .to_color32(),
-        panel_fill: theme.colors.bg_color.to_color32(),
-        text_cursor,
-        button_frame: true,
-        ..default()
-    };
-    ctx.set_visuals_of(EGUI_THEME, visuals);
+            widgets
+        };
+        let selection = {
+            let mut selection = egui::style::Selection::default();
+            selection.bg_fill = colors.bg_alt_color.to_color32();
+            selection.stroke.color = colors.primary_color.to_color32();
+            selection
+        };
+        let text_cursor = {
+            let mut text_cursor = egui::style::TextCursorStyle::default();
+            text_cursor.stroke.color = colors.primary_color.to_color32();
+            text_cursor
+        };
+        let visuals = egui::style::Visuals {
+            dark_mode: true,
+            widgets,
+            selection,
+            hyperlink_color: colors.secondary_color.to_color32(),
+            faint_bg_color: colors
+                .bg_color
+                .mix(&colors.secondary_alt_color, 0.125)
+                .to_color32(),
+            extreme_bg_color: colors
+                .bg_color
+                .mix(&colors.secondary_alt_color, 0.25)
+                .to_color32(),
+            window_fill: colors
+                .bg_color
+                .mix(&colors.secondary_color, 0.0625)
+                .to_color32(),
+            panel_fill: colors.bg_color.to_color32(),
+            text_cursor,
+            button_frame: true,
+            ..default()
+        };
+        ctx.set_visuals_of(EGUI_THEME, visuals);
+        theme.needs_update = false;
+    }
 }
 
 // LIB
@@ -179,41 +189,5 @@ impl ToColor32 for Color {
     fn to_color32(self) -> Color32 {
         let [r, g, b] = self.to_srgba().to_u8_array_no_alpha();
         Color32::from_rgb(r, g, b)
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ThemeColors {
-    pub bg_color: Color,
-    pub bg_alt_color: Color,
-    pub fg_color: Color,
-    pub fg_alt_color: Color,
-    pub primary_color: Color,
-    pub primary_alt_color: Color,
-    pub secondary_color: Color,
-    pub secondary_alt_color: Color,
-}
-
-impl ThemeColors {
-    fn new(
-        bg_color: Color,
-        bg_alt_color: Color,
-        fg_color: Color,
-        fg_alt_color: Color,
-        primary_color: Color,
-        primary_alt_color: Color,
-        secondary_color: Color,
-        secondary_alt_color: Color,
-    ) -> Self {
-        Self {
-            bg_color,
-            bg_alt_color,
-            fg_color,
-            fg_alt_color,
-            primary_color,
-            primary_alt_color,
-            secondary_color,
-            secondary_alt_color,
-        }
     }
 }
