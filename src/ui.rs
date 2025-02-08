@@ -193,6 +193,7 @@ fn draw_ui_panels_system(
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
     theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
     undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
@@ -216,7 +217,9 @@ fn draw_ui_panels_system(
 
     let toolbar_height: f32 = egui::TopBottomPanel::top("toolbar")
         .show(ctx, |ui| {
-            toolbar::draw_toolbar(&mut commands, ui, &theme, &undo_stack);
+            if let Some(colors) = theme_colors.get(&theme.colors) {
+                toolbar::draw_toolbar(&mut commands, ui, &theme, colors, &undo_stack);
+            }
         })
         .response
         .rect
