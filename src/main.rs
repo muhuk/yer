@@ -16,6 +16,8 @@
 
 use bevy::log::LogPlugin;
 use bevy::prelude::*;
+#[cfg(feature = "embed-assets")]
+use bevy_embedded_assets::{self, EmbeddedAssetPlugin};
 
 mod constants;
 mod layer;
@@ -32,29 +34,36 @@ const LOG_FILTER: &str = concat!(
 );
 
 fn main() {
-    App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        title: constants::APPLICATION_TITLE.to_owned(),
-                        ..Default::default()
-                    }),
+    let mut app = App::new();
+    #[cfg(feature = "embed-assets")]
+    {
+        // This needs to happen before AssetPlugin (DefaultPlugins) is added.
+        app.add_plugins(EmbeddedAssetPlugin {
+            mode: bevy_embedded_assets::PluginMode::ReplaceDefault,
+        });
+    }
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: constants::APPLICATION_TITLE.to_owned(),
                     ..Default::default()
-                })
-                .set(LogPlugin {
-                    filter: LOG_FILTER.into(),
-                    level: bevy::log::Level::DEBUG,
-                    ..default()
                 }),
-        )
-        .add_plugins((
-            layer::LayerPlugin,
-            preview::PreviewPlugin,
-            session::SessionPlugin,
-            ui::UiPlugin,
-            undo::UndoPlugin,
-            viewport::ViewportPlugin,
-        ))
-        .run();
+                ..Default::default()
+            })
+            .set(LogPlugin {
+                filter: LOG_FILTER.into(),
+                level: bevy::log::Level::DEBUG,
+                ..default()
+            }),
+    );
+    app.add_plugins((
+        layer::LayerPlugin,
+        preview::PreviewPlugin,
+        session::SessionPlugin,
+        ui::UiPlugin,
+        undo::UndoPlugin,
+        viewport::ViewportPlugin,
+    ));
+    app.run();
 }
