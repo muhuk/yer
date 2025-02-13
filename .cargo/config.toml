@@ -1,0 +1,2 @@
+[alias]
+build-release = "build --release --no-default-features --features release"
