@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::log::LogPlugin;
 use bevy::prelude::*;
 #[cfg(feature = "embed-assets")]
 use bevy_embedded_assets::{self, EmbeddedAssetPlugin};
@@ -27,12 +26,6 @@ mod ui;
 mod undo;
 mod viewport;
 
-const LOG_FILTER: &str = concat!(
-    "info,bevy_render=warn,wgpu_core=warn,wgpu_hal=warn,",
-    env!("CARGO_PKG_NAME"),
-    "=debug"
-);
-
 fn main() {
     let mut app = App::new();
     #[cfg(feature = "embed-assets")]
@@ -42,21 +35,13 @@ fn main() {
             mode: bevy_embedded_assets::PluginMode::ReplaceDefault,
         });
     }
-    app.add_plugins(
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: constants::APPLICATION_TITLE.to_owned(),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            })
-            .set(LogPlugin {
-                filter: LOG_FILTER.into(),
-                level: bevy::log::Level::DEBUG,
-                ..default()
-            }),
-    );
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: constants::APPLICATION_TITLE.to_owned(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }));
     app.add_plugins((
         layer::LayerPlugin,
         preview::PreviewPlugin,
