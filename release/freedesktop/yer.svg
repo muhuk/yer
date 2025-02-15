@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 512 512"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer2">
+    <rect
+       style="fill:#93c5fd;fill-opacity:1;stroke:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dashoffset:16;stroke-opacity:1"
+       id="rect17"
+       width="512"
+       height="448"
+       x="0"
+       y="0"
+       rx="32"
+       ry="32" />
+    <path
+       id="rect18"
+       style="fill:#3b82f6;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dashoffset:16"
+       d="m 224,260 h 23.78103 c 0,0 16.65959,1.38541 24.81411,0 7.49555,-1.27345 21.52909,-7.53278 21.52909,-7.53278 0,0 13.92613,7.53278 21.52909,7.53278 7.60295,0 21.52908,-7.53278 21.52908,-7.53278 0,0 13.92613,7.53278 21.52909,7.53278 7.60296,0 21.52909,-7.53278 21.52909,-7.53278 0,0 13.92613,7.53278 21.52909,7.53278 7.60295,0 21.52908,-7.53278 21.52908,-7.53278 0,0 14.03354,6.25933 21.52909,7.53278 8.91339,1.51434 27.12333,0 27.12333,0 H 480 V 480 H 224 Z" />
+  </g>
+  <g
+     id="layer1"
+     style="display:inline">
+    <path
+       style="fill:#854d0e;fill-opacity:1;stroke:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dashoffset:16;stroke-opacity:1"
+       d="M 512,256 H 480 C 416,256 448,416 352,416 240,416 268.36564,96 160,96 64,96 96,256 32,256 H 0 v 224 a 32,32 45 0 0 32,32 h 448 a 32,32 135 0 0 32,-32 z"
+       id="path18" />
+    <path
+       style="fill:none;fill-opacity:1;stroke:#422006;stroke-width:32;stroke-linecap:butt;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="M 512,256 H 480 C 416,256 448,416 352,416 240,416 272,96 160,96 64,96 96,256 32,256 H 0"
+       id="path19" />
+    <path
+       style="fill:#422006;fill-opacity:1;stroke:#422006;stroke-width:16;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="M 16,464 H 64"
+       id="path4" />
+    <path
+       style="fill:#422006;fill-opacity:1;stroke:#422006;stroke-width:16;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="M 16,432 H 192"
+       id="path5" />
+    <path
+       style="fill:#422006;fill-opacity:1;stroke:#422006;stroke-width:16;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="m 432,400 h 64"
+       id="path16" />
+    <path
+       style="fill:#422006;fill-opacity:1;stroke:#422006;stroke-width:16;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="m 96,464 h 48"
+       id="path23" />
+    <path
+       id="path28"
+       style="fill:#422006;fill-opacity:1;stroke:#422006;stroke-width:16;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:16;stroke-opacity:1"
+       d="m 176,304 h 48 M 128,208 H 112 M 304,496 H 480 M 368,464 h 128 m -320,0 H 336 M 224,432 h 64 m 128,0 h 80 M 16,400 h 96 m 32,0 H 272 M 32,496 H 272 M 480,304 h 16 m -32,32 h 32 m -48,32 h 48 M 128,144 h 48 m -64,32 h 80 m -32,32 h 48 M 96,240 H 224 M 80,272 H 224 M 16,304 H 144 M 16,336 H 240 M 16,368 h 240" />
+  </g>
+</svg>
