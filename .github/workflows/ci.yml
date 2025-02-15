@@ -63,6 +63,7 @@ jobs:
         cp target/release/${{ matrix.executable }} target/release/package/$NAME/$FILENAME
     - name: Copy Release Files
       id: copy-release-files
+      shell: bash
       run: |
         cp COPYING.txt target/release/package/${{ steps.rename-executable.outputs.name }}/
         if [ ${{ matrix.os }} = "linux" ]; then
