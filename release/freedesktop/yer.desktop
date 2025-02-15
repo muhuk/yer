@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Yer
+GenericName=Terrain Generator
+Comment=A terrain generation toolkit
+Keywords=3d;cg;terrain;height map;
+Exec=yer %f
+Icon=yer
+Terminal=false
+Type=Application
+Categories=Graphics;
+MimeType=application/x-yer;
