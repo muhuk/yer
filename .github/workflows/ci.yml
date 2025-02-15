@@ -59,11 +59,11 @@ jobs:
         fi;
         echo "name=$NAME" >> "$GITHUB_OUTPUT"
         echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
-        mkdir target/release/$NAME
-        cp target/release/${{ matrix.executable }} target/release/$NAME/$FILENAME
-        cp COPYING.txt target/release/$NAME/
+        mkdir -p target/release/package/$NAME
+        cp target/release/${{ matrix.executable }} target/release/package/$NAME/$FILENAME
+        cp COPYING.txt target/release/package/$NAME/
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.rename-executable.outputs.name }}
-        path: target/release/${{ steps.rename-executable.outputs.name }}
+        path: target/release/package
