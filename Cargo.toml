@@ -29,6 +29,11 @@ serde_bytes = "0.11"
 thiserror = "1.0"
 uuid = { version = "1.10", features = ["v7"] }
 
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
 opt-level = 1
