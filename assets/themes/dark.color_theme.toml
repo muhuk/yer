@@ -1,0 +1,55 @@
+# tailwind::STONE_800
+[bg_color.Srgba]
+red = 0.16078
+green = 0.14510
+blue = 0.14118
+alpha = 1.0
+
+# tailwind::STONE_700
+[bg_alt_color.Srgba]
+red = 0.26666
+green = 0.2510
+blue = 0.23529
+alpha = 1.0
+
+# tailwind::STONE_200
+[fg_color.Srgba]
+red = 0.90588
+green = 0.89803
+blue = 0.89411
+alpha = 1.0
+
+# tailwind::ZINC_400
+[fg_alt_color.Srgba]
+red = 0.63137
+green = 0.63137
+blue = 0.66667
+alpha = 1.0
+
+# tailwind::AMBER_600
+[primary_color.Srgba]
+red = 0.85098
+green = 0.46667
+blue = 0.02353
+alpha = 1.0
+
+# tailwind::YELLOW_950
+[primary_alt_color.Srgba]
+red = 0.25882
+green = 0.12549
+blue = 0.02353
+alpha = 1.0
+
+# tailwind::BLUE_500
+[secondary_color.Srgba]
+red = 0.5
+green = 0.5
+blue = 0.5
+alpha = 1.0
+
+# tailwind::BLUE_300
+[secondary_alt_color.Srgba]
+red = 0.57647
+green = 0.77255
+blue = 0.99216
+alpha = 1.0

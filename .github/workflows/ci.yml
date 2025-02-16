@@ -49,7 +49,7 @@ jobs:
       run: |
         CRATE_VERSION=$(cargo pkgid | cut -d "#" -f2)
         GIT_REVISION=$(git rev-parse --short=7 HEAD)
-        BRANCH=$GITHUB_HEAD_REF
+        BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
         NAME="yer-$CRATE_VERSION-dev-$BRANCH-$GIT_REVISION-${{ matrix.os }}"
         if [ ${{ matrix.os }} = "linux" ]; then
             FILENAME=$NAME
@@ -59,9 +59,18 @@ jobs:
         fi;
         echo "name=$NAME" >> "$GITHUB_OUTPUT"
         echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
-        cp target/release/${{ matrix.executable }} target/release/$FILENAME
+        mkdir -p target/release/package/$NAME
+        cp target/release/${{ matrix.executable }} target/release/package/$NAME/$FILENAME
+    - name: Copy Release Files
+      id: copy-release-files
+      shell: bash
+      run: |
+        cp COPYING.txt target/release/package/${{ steps.rename-executable.outputs.name }}/
+        if [ ${{ matrix.os }} = "linux" ]; then
+            cp -r release/freedesktop/* target/release/package/${{ steps.rename-executable.outputs.name }}/
+        fi;
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.rename-executable.outputs.name }}
-        path: target/release/${{ steps.rename-executable.outputs.filename }}
+        path: target/release/package
