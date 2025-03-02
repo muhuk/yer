@@ -451,8 +451,15 @@ impl ComputePreview {
 
 #[derive(Debug, PartialEq)]
 enum ComputePreviewResult {
+    /// This is returned **after** the last result is polled (read).
     Finished,
+    /// This is returned when the task is not finished and also there are no
+    /// results available to read.
     Computing,
+    /// A result produced by task.
+    ///
+    /// The `PreviewGrid2D` is to be inserted to the `Entity`, when world
+    /// access is available.
     Result(Entity, PreviewGrid2D),
 }
 
