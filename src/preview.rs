@@ -15,7 +15,7 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::num::NonZeroU8;
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Mutex, TryLockError};
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
@@ -430,9 +430,22 @@ impl ComputePreview {
     }
 
     fn poll(&mut self) -> ComputePreviewResult {
-        let result = match self.receiver.try_lock().map(|receiver| receiver.try_recv()) {
-            Ok(Ok(preview_grid)) => ComputePreviewResult::Result(self.target_entity, preview_grid),
-            Ok(Err(mpsc::TryRecvError::Disconnected)) => ComputePreviewResult::Finished,
+        let result = match self
+            .receiver
+            .try_lock()
+            .map(|receiver| receiver.try_iter().last())
+        {
+            Ok(Some(preview_grid)) => {
+                ComputePreviewResult::Result(self.target_entity, preview_grid)
+            }
+            Err(TryLockError::WouldBlock) => {
+                error!("ComputePreview.receiver lock cannot be acquired.");
+                ComputePreviewResult::Computing
+            }
+            Err(TryLockError::Poisoned(poison_error)) => {
+                error_once!("ComputePreview.receiver lock is poisoned: {}", poison_error);
+                ComputePreviewResult::Computing
+            }
             _ => {
                 if self.task.is_finished() {
                     ComputePreviewResult::Finished
@@ -441,10 +454,6 @@ impl ComputePreview {
                 }
             }
         };
-
-        if self.receiver.is_poisoned() {
-            error_once!("ComputePreview.receiver lock is poisoned.");
-        }
         result
     }
 }
@@ -578,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_preview_returns_multiple_results_and_gets_finished() {
+    fn compute_preview_returns_the_last_result_in_channel_and_gets_finished() {
         // Initialize task pool before creating a ComputePreview.
         AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
 
@@ -595,29 +604,15 @@ mod tests {
             compute_preview.poll(),
             compute_preview.poll(),
             compute_preview.poll(),
-            compute_preview.poll(),
-            compute_preview.poll(),
         ];
         assert!(matches!(results[0], ComputePreviewResult::Result(..)));
         if let ComputePreviewResult::Result(_, ref preview_data) = results[0] {
-            assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get());
-        } else {
-            unreachable!()
-        }
-        assert!(matches!(results[1], ComputePreviewResult::Result(..)));
-        if let ComputePreviewResult::Result(_, ref preview_data) = results[1] {
-            assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get() + 1);
-        } else {
-            unreachable!()
-        }
-        assert!(matches!(results[2], ComputePreviewResult::Result(..)));
-        if let ComputePreviewResult::Result(_, ref preview_data) = results[2] {
             assert_eq!(preview_data.subdivisions, MIN_SUBDIVISIONS.get() + 2);
         } else {
             unreachable!()
         }
-        assert_eq!(results[3], ComputePreviewResult::Finished);
-        assert_eq!(results[4], ComputePreviewResult::Finished);
+        assert_eq!(results[1], ComputePreviewResult::Finished);
+        assert_eq!(results[2], ComputePreviewResult::Finished);
     }
 
     #[test]
