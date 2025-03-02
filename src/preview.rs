@@ -413,15 +413,8 @@ impl ComputePreview {
         layers: Vec<layer::HeightMap>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<PreviewGrid2D>();
-        let task: Task<()> = AsyncComputeTaskPool::get().spawn(async move {
-            (MIN_SUBDIVISIONS.get()..=preview_region.subdivisions.get())
-                .map(|s| unsafe { NonZeroU8::new_unchecked(s) })
-                .for_each(|subdivisions| {
-                    sender
-                        .send(sample_layers(subdivisions, &preview_region, &layers))
-                        .unwrap();
-                });
-        });
+        let task: Task<()> =
+            AsyncComputeTaskPool::get().spawn(Self::run(sender, preview_region, layers));
         Self {
             target_entity,
             task,
@@ -455,6 +448,20 @@ impl ComputePreview {
             }
         };
         result
+    }
+
+    async fn run(
+        sender: mpsc::Sender<PreviewGrid2D>,
+        preview_region: PreviewRegion,
+        layers: Vec<layer::HeightMap>,
+    ) {
+        (MIN_SUBDIVISIONS.get()..=preview_region.subdivisions.get())
+            .map(|s| unsafe { NonZeroU8::new_unchecked(s) })
+            .for_each(|subdivisions| {
+                sender
+                    .send(sample_layers(subdivisions, &preview_region, &layers))
+                    .unwrap();
+            });
     }
 }
 
