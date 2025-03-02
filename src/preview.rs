@@ -15,7 +15,7 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::num::NonZeroU8;
-use std::sync::{mpsc, Mutex, TryLockError};
+use std::sync::{mpsc, Arc, Mutex, TryLockError};
 
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
@@ -24,7 +24,7 @@ use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
 
-use crate::layer::{self, Sample2D};
+use crate::layer;
 use crate::undo;
 use crate::viewport;
 
@@ -42,6 +42,8 @@ const SUBDIVISIONS_SQRT_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     }
     ns
 };
+
+type Layers = Arc<[Box<dyn layer::Sample2D>]>;
 
 pub struct PreviewPlugin;
 
@@ -91,7 +93,7 @@ impl Preview {
         &mut self,
         preview_entity: Entity,
         preview_region: PreviewRegion,
-        layers: Vec<layer::HeightMap>,
+        layers: Layers,
     ) {
         let task = ComputePreview::new(preview_entity, preview_region, layers);
         if let Some(previous_task) = self.task.replace(task) {
@@ -262,16 +264,16 @@ impl Command for CalculatePreview {
             .map(|(e, p)| (e, p.clone()))
             .next()
             .unwrap();
-        let layers: Vec<layer::HeightMap> = world
+        // Currently we have only HeightMap's that implement Sample2D.
+        let layers: Vec<Box<dyn layer::Sample2D>> = world
             .query::<(&layer::Layer, &layer::HeightMap)>()
             .iter(world)
             .sort::<&layer::Layer>()
-            .map(|t| t.1)
-            .cloned()
+            .map(|(_, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
             .collect();
         world
             .resource_mut::<Preview>()
-            .start_new_task(entity, preview_region, layers);
+            .start_new_task(entity, preview_region, layers.into());
     }
 }
 
@@ -407,11 +409,7 @@ struct ComputePreview {
 }
 
 impl ComputePreview {
-    fn new(
-        target_entity: Entity,
-        preview_region: PreviewRegion,
-        layers: Vec<layer::HeightMap>,
-    ) -> Self {
+    fn new(target_entity: Entity, preview_region: PreviewRegion, layers: Layers) -> Self {
         let (sender, receiver) = mpsc::channel::<PreviewGrid2D>();
         let task: Task<()> =
             AsyncComputeTaskPool::get().spawn(Self::run(sender, preview_region, layers));
@@ -453,7 +451,7 @@ impl ComputePreview {
     async fn run(
         sender: mpsc::Sender<PreviewGrid2D>,
         preview_region: PreviewRegion,
-        layers: Vec<layer::HeightMap>,
+        layers: Layers,
     ) {
         (MIN_SUBDIVISIONS.get()..=preview_region.subdivisions.get())
             .map(|s| unsafe { NonZeroU8::new_unchecked(s) })
@@ -487,14 +485,11 @@ pub fn create_default_preview_region(world: &mut World) {
     });
 }
 
-fn sample_layers<T>(
+fn sample_layers(
     subdivisions: NonZeroU8,
     preview_region: &PreviewRegion,
-    layers: &Vec<T>,
-) -> PreviewGrid2D
-where
-    T: Sample2D,
-{
+    layers: &Layers,
+) -> PreviewGrid2D {
     // TODO: Reuse existing samples.
     assert!(subdivisions <= preview_region.subdivisions);
     assert!(subdivisions >= MIN_SUBDIVISIONS);
@@ -584,7 +579,8 @@ mod tests {
         // Note the subdivisions is set to minimum.
         assert_eq!(preview_region.subdivisions(), MIN_SUBDIVISIONS);
         let height = 10.0f32;
-        let layers = vec![layer::HeightMap::Constant(height)];
+        let layers: Layers =
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
         let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
         thread::sleep(Duration::from_millis(50));
         let first_result = compute_preview.poll();
@@ -604,7 +600,8 @@ mod tests {
         let preview_region = PreviewRegion::new(Vec2::ZERO, 1000.0, subdivisions);
 
         let height = 10.0f32;
-        let layers = vec![layer::HeightMap::Constant(height)];
+        let layers: Layers =
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
         let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
         thread::sleep(Duration::from_millis(50));
         let results = vec![
