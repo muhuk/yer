@@ -308,7 +308,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
     }
 }
 
-pub trait Sample2D {
+pub trait Sample2D: Send + Sync {
     fn sample(&self, position: Vec2, height: f32) -> f32;
 }
 
