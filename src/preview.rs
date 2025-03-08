@@ -20,8 +20,7 @@ use std::sync::{mpsc, Arc, Mutex, TryLockError};
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
-use bevy::tasks::TaskPool;
-use bevy::tasks::{AsyncComputeTaskPool, Task};
+use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
 
@@ -32,13 +31,23 @@ use crate::viewport;
 pub const MAX_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(12) };
 pub const MIN_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(3) };
 const PREVIEW_TIME_BETWEEN_MS: Duration = Duration::from_millis(100);
-// Value is the # of vertices, index is the subdivision level.
-const SUBDIVISIONS_SQRT_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
+// Value is the # of vertices in a row or column, index is the subvidision level.
+const SUBDIVISIONS_SQRT_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     let mut ns = [0; MAX_SUBDIVISIONS.get() as usize + 1usize];
     let mut idx: u8 = 0;
     while idx <= MAX_SUBDIVISIONS.get() {
         // (2**n + 1) ** 2
-        ns[idx as usize] = (2u32.pow(idx as u32) + 1).pow(2);
+        ns[idx as usize] = 2u32.pow(idx as u32) + 1;
+        idx += 1;
+    }
+    ns
+};
+// Value is the # of vertices, index is the subdivision level.
+const SUBDIVISIONS_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
+    let mut ns = [0; MAX_SUBDIVISIONS.get() as usize + 1usize];
+    let mut idx: u8 = 0;
+    while idx <= MAX_SUBDIVISIONS.get() {
+        ns[idx as usize] = SUBDIVISIONS_SQRT_VERTS_TABLE[idx as usize].pow(2);
         idx += 1;
     }
     ns
@@ -84,7 +93,7 @@ pub enum UpdatePreviewRegion {
 struct Preview {
     last_project_changed: Duration,
     last_preview_initiated: Duration,
-    last_preview_completed: Option<Duration>,
+    last_preview_updated: Option<Duration>,
     #[reflect(ignore)]
     task: Option<ComputePreview>,
 }
@@ -152,7 +161,7 @@ impl PreviewGrid2D {
     fn new(samples: Vec<(Vec2, f32)>) -> Self {
         let subdivisions = {
             let samples_count: u32 = u32::try_from(samples.len()).unwrap();
-            SUBDIVISIONS_SQRT_TABLE
+            SUBDIVISIONS_VERTS_TABLE
                 .iter()
                 .enumerate()
                 .find(|(_, w)| **w == samples_count)
@@ -339,9 +348,9 @@ fn manage_preview_system(
 
     // Trigger a new preview if necessary.
     {
-        let project_has_changed: bool = match preview_resource.last_preview_completed {
-            Some(last_preview_completed) => {
-                last_preview_completed < preview_resource.last_project_changed
+        let project_has_changed: bool = match preview_resource.last_preview_updated {
+            Some(last_preview_updated) => {
+                last_preview_updated < preview_resource.last_project_changed
             }
             None => true,
         };
@@ -351,9 +360,8 @@ fn manage_preview_system(
         // calculation either.  This is okay because worst case we will
         // trigger a new calculation when the currently running preview is
         // finished.
-        let ready_to_trigger: bool = now - preview_resource.last_preview_initiated
-            > PREVIEW_TIME_BETWEEN_MS
-            && preview_resource.task.is_none();
+        let ready_to_trigger: bool =
+            now - preview_resource.last_preview_initiated > PREVIEW_TIME_BETWEEN_MS;
         if project_has_changed && ready_to_trigger {
             preview_resource.last_preview_initiated = now;
             commands.queue(CalculatePreview);
@@ -365,13 +373,12 @@ fn manage_preview_system(
         if let Some(ref mut task) = preview_resource.task {
             match task.poll() {
                 ComputePreviewResult::Finished => {
-                    // When the task is finished we can set it to None
-                    // on Preview.
-                    preview_resource.last_preview_completed = Some(now);
+                    // When the task is finished we can drop it.
                     preview_resource.task = None;
                 }
                 ComputePreviewResult::Computing => (),
                 ComputePreviewResult::Result(entity, preview_grid) => {
+                    preview_resource.last_preview_updated = Some(now);
                     commands.entity(entity).insert(preview_grid);
                     commands.queue(UpdatePreviewMesh(entity));
                 }
@@ -463,13 +470,21 @@ impl ComputePreview {
         preview_region: PreviewRegion,
         layers: Layers,
     ) {
-        (MIN_SUBDIVISIONS.get()..=preview_region.subdivisions.get())
-            .map(|s| unsafe { NonZeroU8::new_unchecked(s) })
-            .for_each(|subdivisions| {
-                sender
-                    .send(sample_layers(subdivisions, &preview_region, &layers))
-                    .unwrap();
-            });
+        let mut subdivisions = MIN_SUBDIVISIONS;
+        let mut preview: Option<PreviewGrid2D> = None;
+        while subdivisions <= preview_region.subdivisions {
+            if let Some(preview) = preview.as_ref() {
+                debug!(
+                    "Reusing {} samples from previous preview.",
+                    preview.samples.len()
+                );
+            }
+            preview =
+                Some(sample_layers(subdivisions, &preview_region, &layers, preview.as_ref()).await);
+            sender.send(preview.clone().unwrap()).unwrap();
+            subdivisions = subdivisions.checked_add(1).unwrap();
+            future::yield_now().await;
+        }
     }
 }
 
@@ -495,17 +510,26 @@ pub fn create_default_preview_region(world: &mut World) {
     });
 }
 
-fn sample_layers(
+#[inline]
+fn even(x: u32) -> bool {
+    x % 2 == 0
+}
+
+async fn sample_layers(
     subdivisions: NonZeroU8,
     preview_region: &PreviewRegion,
     layers: &Layers,
+    previous_preview: Option<&PreviewGrid2D>,
 ) -> PreviewGrid2D {
     // TODO: Reuse existing samples.
     assert!(subdivisions <= preview_region.subdivisions);
     assert!(subdivisions >= MIN_SUBDIVISIONS);
+    assert!(previous_preview
+        .map(|p| p.subdivisions + 1 == subdivisions.get())
+        .unwrap_or(true));
 
     // Number of vertices on one axis.
-    let k: i32 = 2i32.pow(subdivisions.get().into()) + 1;
+    let k: u32 = 2u32.pow(subdivisions.get().into()) + 1;
     let start: Vec2 = {
         let hs: f32 = preview_region.size / 2.0;
         // Y is inverted.
@@ -521,11 +545,30 @@ fn sample_layers(
         for x in 0..k {
             // Y is inverted.
             let p = start + Vec2::new(x as f32, y as f32) * gap;
-            let mut h: f32 = 0.0;
-            for layer in layers.iter() {
-                h = layer.sample(p, h);
+            if previous_preview.is_some() && even(y) && even(x) {
+                if let Some(PreviewGrid2D {
+                    samples: previous_samples,
+                    subdivisions,
+                    ..
+                }) = previous_preview
+                {
+                    let idx: usize = ((y / 2)
+                        * SUBDIVISIONS_SQRT_VERTS_TABLE[*subdivisions as usize] as u32
+                        + (x / 2)) as usize;
+                    let h: f32 = previous_samples[idx].1;
+                    samples.push((p, h));
+                } else {
+                    unreachable!()
+                }
+            } else {
+                let mut h: f32 = 0.0;
+                for layer in layers.iter() {
+                    h = layer.sample(p, h);
+                }
+                samples.push((p, h));
+                // Yield control at every calculated sample.
+                future::yield_now().await;
             }
-            samples.push((p, h));
         }
     }
     PreviewGrid2D::new(samples)
@@ -574,7 +617,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    use bevy::tasks::TaskPool;
+    use bevy::tasks::{block_on, TaskPool};
 
     use super::*;
     use crate::layer;
@@ -646,5 +689,58 @@ mod tests {
                 *subdivisions
             );
         }
+    }
+
+    #[test]
+    fn sample_layers_can_calculate_first_pass() {
+        let subdivisions = MIN_SUBDIVISIONS;
+        let preview_region = PreviewRegion::default();
+        let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(0.0))]);
+        assert_eq!(
+            block_on(sample_layers(subdivisions, &preview_region, &layers, None)).subdivisions,
+            subdivisions.get(),
+        );
+    }
+
+    #[test]
+    fn sample_layers_reuse_previous_previews_samples() {
+        const PREVIOUS_HEIGHT: f32 = 1.0;
+        const HEIGHT: f32 = 0.0;
+
+        let previous_subdivisions = MIN_SUBDIVISIONS;
+        let subdivisions = previous_subdivisions.checked_add(1).unwrap();
+        let preview_region = PreviewRegion {
+            subdivisions,
+            ..default()
+        };
+        // Changing the level on previous layers to be able check reuise.
+        let previous_layers: Layers =
+            Arc::new([Box::new(layer::HeightMap::Constant(PREVIOUS_HEIGHT))]);
+        let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(HEIGHT))]);
+        let previous_preview = block_on(sample_layers(
+            previous_subdivisions,
+            &preview_region,
+            &previous_layers,
+            None,
+        ));
+        let preview = block_on(sample_layers(
+            subdivisions,
+            &preview_region,
+            &layers,
+            Some(&previous_preview),
+        ));
+        assert_eq!(preview.samples[0].1, PREVIOUS_HEIGHT);
+        assert_eq!(
+            preview.samples[preview.samples.len() - 1].1,
+            PREVIOUS_HEIGHT
+        );
+        assert_eq!(
+            preview
+                .samples
+                .iter()
+                .filter(|(_, h)| (h - PREVIOUS_HEIGHT).abs() <= f32::EPSILON)
+                .count(),
+            previous_preview.samples.len()
+        );
     }
 }
