@@ -20,6 +20,7 @@ use std::sync::{mpsc, Arc, Mutex, TryLockError};
 use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
+use bevy::tasks::TaskPool;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
@@ -91,11 +92,12 @@ struct Preview {
 impl Preview {
     fn start_new_task(
         &mut self,
+        task_pool: &TaskPool,
         preview_entity: Entity,
         preview_region: PreviewRegion,
         layers: Layers,
     ) {
-        let task = ComputePreview::new(preview_entity, preview_region, layers);
+        let task = ComputePreview::new(task_pool, preview_entity, preview_region, layers);
         if let Some(previous_task) = self.task.replace(task) {
             // TODO: We might want to use the result of previous task while
             //       the new task is running.
@@ -271,9 +273,13 @@ impl Command for CalculatePreview {
             .sort::<&layer::Layer>()
             .map(|(_, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
             .collect();
-        world
-            .resource_mut::<Preview>()
-            .start_new_task(entity, preview_region, layers.into());
+        let task_pool = AsyncComputeTaskPool::get();
+        world.resource_mut::<Preview>().start_new_task(
+            task_pool,
+            entity,
+            preview_region,
+            layers.into(),
+        );
     }
 }
 
@@ -409,10 +415,14 @@ struct ComputePreview {
 }
 
 impl ComputePreview {
-    fn new(target_entity: Entity, preview_region: PreviewRegion, layers: Layers) -> Self {
+    fn new(
+        task_pool: &TaskPool,
+        target_entity: Entity,
+        preview_region: PreviewRegion,
+        layers: Layers,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel::<PreviewGrid2D>();
-        let task: Task<()> =
-            AsyncComputeTaskPool::get().spawn(Self::run(sender, preview_region, layers));
+        let task: Task<()> = task_pool.spawn(Self::run(sender, preview_region, layers));
         Self {
             target_entity,
             task,
@@ -571,9 +581,6 @@ mod tests {
 
     #[test]
     fn compute_preview_returns_a_result_and_gets_finished() {
-        // Initialize task pool before creating a ComputePreview.
-        AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-
         let target_entity = Entity::PLACEHOLDER;
         let preview_region = PreviewRegion::default();
         // Note the subdivisions is set to minimum.
@@ -581,7 +588,9 @@ mod tests {
         let height = 10.0f32;
         let layers: Layers =
             vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
-        let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
+        let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
+        let mut compute_preview =
+            ComputePreview::new(task_pool, target_entity, preview_region, layers);
         thread::sleep(Duration::from_millis(50));
         let first_result = compute_preview.poll();
         assert!(matches!(first_result, ComputePreviewResult::Result(..)));
@@ -591,9 +600,6 @@ mod tests {
 
     #[test]
     fn compute_preview_returns_the_last_result_in_channel_and_gets_finished() {
-        // Initialize task pool before creating a ComputePreview.
-        AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-
         let subdivisions = unsafe { NonZeroU8::new_unchecked(MIN_SUBDIVISIONS.get() + 2) };
         assert!(subdivisions < MAX_SUBDIVISIONS);
         let target_entity = Entity::PLACEHOLDER;
@@ -602,7 +608,9 @@ mod tests {
         let height = 10.0f32;
         let layers: Layers =
             vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
-        let mut compute_preview = ComputePreview::new(target_entity, preview_region, layers);
+        let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
+        let mut compute_preview =
+            ComputePreview::new(task_pool, target_entity, preview_region, layers);
         thread::sleep(Duration::from_millis(50));
         let results = vec![
             compute_preview.poll(),
