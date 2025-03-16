@@ -290,7 +290,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .find(|(layer, _)| layer.id() == self.layer_id)
             .map(|(_, mut height_map)| match *height_map {
                 HeightMap::Constant(ref mut height) => {
-                    assert!((*height - self.old_height) < f32::EPSILON);
+                    debug_assert!((*height - self.old_height).abs() < f32::EPSILON);
                     *height = self.new_height;
                 }
             })
