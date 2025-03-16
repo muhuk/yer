@@ -119,7 +119,6 @@ impl Preview {
 
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct PreviewBundle {
-    #[serde(with = "name_serde")]
     name: Name,
     // ActivePreview should only be on the active preview but
     // since we're having only one preview region now, this
@@ -572,44 +571,6 @@ async fn sample_layers(
         }
     }
     PreviewGrid2D::new(samples)
-}
-
-/// Serializer and deserializer for bevy::core::Name.
-mod name_serde {
-    use bevy::core::Name;
-    use serde::{de::Error, de::Visitor, Deserializer, Serializer};
-    use std::fmt;
-
-    struct NameVisitor;
-
-    impl<'de> Visitor<'de> for NameVisitor {
-        type Value = Name;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            write!(formatter, "a string")
-        }
-
-        fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-        where
-            E: Error,
-        {
-            Ok(Name::from(s))
-        }
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Name, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_string(NameVisitor)
-    }
-
-    pub fn serialize<S>(name: &Name, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(name.as_str())
-    }
 }
 
 #[cfg(test)]
