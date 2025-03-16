@@ -200,17 +200,16 @@ impl PreviewGrid2D {
         let mut mesh = PlaneMeshBuilder::new(Dir3::Z, self.bounds.size())
             .subdivisions(2u32.pow(self.subdivisions.into()) - 1)
             .build();
-        if let Some(VertexAttributeValues::Float32x3(positions)) =
-            mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
-        {
-            for (idx, p) in positions.iter_mut().enumerate() {
-                // Preview mesh is Z-up.
-                p[0] = self.samples[idx].0.x;
-                p[1] = self.samples[idx].0.y;
-                p[2] = self.samples[idx].1;
+        match mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION) {
+            Some(VertexAttributeValues::Float32x3(positions)) => {
+                for (idx, p) in positions.iter_mut().enumerate() {
+                    // Preview mesh is Z-up.
+                    p[0] = self.samples[idx].0.x;
+                    p[1] = self.samples[idx].0.y;
+                    p[2] = self.samples[idx].1;
+                }
             }
-        } else {
-            panic!("Cannot build preview mesh.");
+            _ => unreachable!(),
         }
         mesh
     }
