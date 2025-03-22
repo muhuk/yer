@@ -294,8 +294,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
                     *height = self.new_height;
                 }
             })
-            // TODO: Handle errors instead of unwrapping.
-            .unwrap();
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
     }
 
     fn revert(&self, world: &mut World) {
