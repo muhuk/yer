@@ -277,7 +277,8 @@ impl Command for CalculatePreview {
         let layers: Vec<Box<dyn layer::Sample2D>> = world
             .query::<(&layer::Layer, &layer::HeightMap)>()
             .iter(world)
-            .sort::<&layer::Layer>()
+            .sort_unstable::<&layer::Layer>()
+            .filter(|(layer, _)| layer.enable_preview)
             .map(|(_, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
             .collect();
         let task_pool = AsyncComputeTaskPool::get();
