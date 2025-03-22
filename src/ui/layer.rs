@@ -173,7 +173,9 @@ fn draw_ui_for_constant_layer(
             if ui.toggle_value(&mut layer_preview, "preview").changed()
                 && layer_preview != layer.enable_preview
             {
-                todo!("update preview");
+                commands.queue::<undo::PushAction>(
+                    layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
+                );
             }
         }
         {
@@ -181,7 +183,9 @@ fn draw_ui_for_constant_layer(
             if ui.toggle_value(&mut layer_baking, "bake").changed()
                 && layer_baking != layer.enable_baking
             {
-                todo!("update bake");
+                commands.queue::<undo::PushAction>(
+                    layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
+                );
             }
         }
         if ui.button("Delete").clicked() {
