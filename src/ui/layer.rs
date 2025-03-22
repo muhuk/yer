@@ -68,6 +68,7 @@ impl From<&layer::HeightMap> for HeightMapUi {
 
 // SYSTEMS
 
+/// Add a HeightMapUi component to each entity that got HeightMap component added.
 fn add_height_map_ui_system(
     mut commands: Commands,
     layers: Query<(Entity, &layer::HeightMap), Added<layer::HeightMap>>,
@@ -79,6 +80,13 @@ fn add_height_map_ui_system(
     }
 }
 
+/// Update HeightMap based on Ui changes.
+///
+/// This [HeightMapUi] to [HeightMap](layer::HeightMap) update is triggered only after a short
+/// duration.  When there are frequent updates to HeightMapUi (such as
+/// dragging the input) only the last one gets triggered.  See [LATENCY].
+///
+/// See also [HeightMapConstantUpdateHeightAction](layer::HeightMapConstantUpdateHeightAction).
 fn update_height_map_ui_system(
     mut commands: Commands,
     time: Res<Time<Real>>,
@@ -109,6 +117,9 @@ fn update_height_map_ui_system(
     }
 }
 
+/// Update HeightMapUi based on changes to HeightMap.
+///
+/// This gets triggered when undo/redo changes [HeightMap](layer::HeightMap).
 fn reset_height_map_ui_system(
     mut layers: Query<(&layer::HeightMap, &mut HeightMapUi), Changed<layer::HeightMap>>,
 ) {
@@ -162,7 +173,9 @@ fn draw_ui_for_constant_layer(
             if ui.toggle_value(&mut layer_preview, "preview").changed()
                 && layer_preview != layer.enable_preview
             {
-                todo!("update preview");
+                commands.queue::<undo::PushAction>(
+                    layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
+                );
             }
         }
         {
@@ -170,7 +183,9 @@ fn draw_ui_for_constant_layer(
             if ui.toggle_value(&mut layer_baking, "bake").changed()
                 && layer_baking != layer.enable_baking
             {
-                todo!("update bake");
+                commands.queue::<undo::PushAction>(
+                    layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
+                );
             }
         }
         if ui.button("Delete").clicked() {

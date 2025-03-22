@@ -290,12 +290,11 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .find(|(layer, _)| layer.id() == self.layer_id)
             .map(|(_, mut height_map)| match *height_map {
                 HeightMap::Constant(ref mut height) => {
-                    assert!((*height - self.old_height) < f32::EPSILON);
+                    debug_assert!((*height - self.old_height).abs() < f32::EPSILON);
                     *height = self.new_height;
                 }
             })
-            // TODO: Handle errors instead of unwrapping.
-            .unwrap();
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
     }
 
     fn revert(&self, world: &mut World) {
@@ -310,6 +309,63 @@ impl Action for HeightMapConstantUpdateHeightAction {
 
 pub trait Sample2D: Send + Sync {
     fn sample(&self, position: Vec2, height: f32) -> f32;
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub struct UpdateLayerAction {
+    layer_id: LayerId,
+    old_enable_baking: bool,
+    new_enable_baking: bool,
+    old_enable_preview: bool,
+    new_enable_preview: bool,
+}
+
+impl UpdateLayerAction {
+    pub fn toggle_enable_baking(layer: &Layer) -> Self {
+        Self {
+            layer_id: layer.id(),
+            old_enable_baking: layer.enable_baking,
+            new_enable_baking: !layer.enable_baking,
+            old_enable_preview: layer.enable_preview,
+            new_enable_preview: layer.enable_preview,
+        }
+    }
+
+    pub fn toggle_enable_preview(layer: &Layer) -> Self {
+        Self {
+            layer_id: layer.id(),
+            old_enable_baking: layer.enable_baking,
+            new_enable_baking: layer.enable_baking,
+            old_enable_preview: layer.enable_preview,
+            new_enable_preview: !layer.enable_preview,
+        }
+    }
+}
+
+impl Action for UpdateLayerAction {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<&mut Layer>()
+            .iter_mut(world)
+            .find(|layer| layer.id() == self.layer_id)
+            .map(|mut layer| {
+                layer.enable_baking = self.new_enable_baking;
+                layer.enable_preview = self.new_enable_preview;
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_enable_baking: self.new_enable_baking,
+            new_enable_baking: self.old_enable_baking,
+            old_enable_preview: self.new_enable_preview,
+            new_enable_preview: self.old_enable_preview,
+        };
+        reverse_action.apply(world);
+    }
 }
 
 /// This is intended to be called to create the initial layer only.  It does
