@@ -120,10 +120,6 @@ fn update_height_map_ui_system(
 /// Update HeightMapUi based on changes to HeightMap.
 ///
 /// This gets triggered when undo/redo changes [HeightMap](layer::HeightMap).
-///
-/// FIXME: This also gets triggered when
-/// [HeightMapConstantUpdateHeightAction](layer::HeightMapConstantUpdateHeightAction)
-/// changes HeightMap.  Because we are pausing the timer an infinite recursion is avoided.
 fn reset_height_map_ui_system(
     mut layers: Query<(&layer::HeightMap, &mut HeightMapUi), Changed<layer::HeightMap>>,
 ) {
