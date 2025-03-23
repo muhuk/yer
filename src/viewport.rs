@@ -14,16 +14,21 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::input::common_conditions::input_pressed;
-use bevy::input::mouse::MouseMotion;
+use bevy::input::{common_conditions::input_pressed, mouse::MouseMotion};
 use bevy::math::Affine3A;
+use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframePlugin};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+
+// PLUGIN
 
 pub struct ViewportPlugin;
 
 impl Plugin for ViewportPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WireframePlugin>() {
+            app.add_plugins(WireframePlugin);
+        }
         app.register_type::<TargetTransform>()
             .register_type::<ViewportRegion>()
             .init_resource::<ViewportRegion>()
@@ -294,8 +299,19 @@ fn startup_system(
                 PreviewMesh,
                 Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
                 MeshMaterial3d(
-                    materials.add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                    materials.add(
+                        Color::Srgba(bevy::color::palettes::tailwind::AMBER_400).with_alpha(0.5),
+                    ),
                 ),
+                // This is a quick and dirty way of rendering the wireframe,
+                // but it is not capable of quad rendering.  To do proper quad
+                // wireframes we either need to mark the diagonal edges
+                // somehow (how?) and use a custom shader, or we need to use a
+                // second edges-only mesh.
+                Wireframe,
+                WireframeColor {
+                    color: bevy::color::palettes::tailwind::AMBER_400.into(),
+                },
             ));
         });
 
