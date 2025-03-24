@@ -17,23 +17,25 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::ui::theme::{IconAtlasSprite, Theme, ThemeColors, ToColor32};
+use crate::theme;
 use crate::undo;
+
+use super::egui_ext::{EguiTheme, ToColor32};
 
 // LIB
 
 pub fn draw_toolbar(
     commands: &mut Commands,
     ui: &mut egui::Ui,
-    theme: &Res<Theme>,
-    colors: &ThemeColors,
+    theme: &Res<EguiTheme>,
+    colors: &theme::ThemeColors,
     undo_stack: &Res<undo::UndoStack>,
 ) {
     ui.horizontal(|ui| {
         // TODO: Add tooltips.
         if ui
             .add_enabled_ui(undo_stack.can_undo(), |ui| {
-                draw_toolbar_button(theme, colors, ui, IconAtlasSprite::Undo)
+                draw_toolbar_button(theme, colors, ui, theme::IconAtlasSprite::Undo)
             })
             .inner
             .clicked()
@@ -42,7 +44,7 @@ pub fn draw_toolbar(
         }
         if ui
             .add_enabled_ui(undo_stack.can_redo(), |ui| {
-                draw_toolbar_button(theme, colors, ui, IconAtlasSprite::Redo)
+                draw_toolbar_button(theme, colors, ui, theme::IconAtlasSprite::Redo)
             })
             .inner
             .clicked()
@@ -53,10 +55,10 @@ pub fn draw_toolbar(
 }
 
 fn draw_toolbar_button(
-    theme: &Res<Theme>,
-    colors: &ThemeColors,
+    theme: &Res<EguiTheme>,
+    colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    sprite: IconAtlasSprite,
+    sprite: theme::IconAtlasSprite,
 ) -> egui::Response {
     const ICON_SIZE: [f32; 2] = [32.0, 32.0];
     const SPRITE_SIZE: f32 = 0.125f32;
@@ -66,7 +68,6 @@ fn draw_toolbar_button(
         sprite_index.y as f32 * SPRITE_SIZE,
     );
     let uv_max = uv_min + egui::Vec2::splat(SPRITE_SIZE);
-
     let widget = egui::widgets::ImageButton::new(
         egui::Image::new(egui::load::SizedTexture::new(theme.icon_atlas, ICON_SIZE))
             .tint(colors.fg_color.to_color32())

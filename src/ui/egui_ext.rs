@@ -15,25 +15,25 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use bevy::prelude::*;
-use bevy_common_assets::toml::TomlAssetPlugin;
 use bevy_egui::{
     egui::{self, Color32},
     EguiContexts, EguiSet, EguiUserTextures,
 };
-use serde::Deserialize;
+
+use crate::theme;
 
 // PLUGIN
 
-pub struct ThemePlugin;
+pub struct UiBevyExtPlugin;
 
-impl Plugin for ThemePlugin {
+impl Plugin for UiBevyExtPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Theme>()
-            .register_asset_reflect::<ThemeColors>()
-            .init_asset::<ThemeColors>()
-            .add_plugins(TomlAssetPlugin::<ThemeColors>::new(&[".color_theme.toml"]))
-            .init_resource::<Theme>()
-            .add_systems(Update, update_theme_system.after(EguiSet::InitContexts));
+        app.register_type::<EguiTheme>()
+            .init_resource::<EguiTheme>()
+            .add_systems(
+                Update,
+                update_egui_theme_system.after(EguiSet::InitContexts),
+            );
     }
 }
 
@@ -41,58 +41,36 @@ impl Plugin for ThemePlugin {
 
 #[derive(Debug, Reflect, Resource)]
 #[reflect(Resource)]
-pub struct Theme {
-    pub colors: Handle<ThemeColors>,
-
+pub struct EguiTheme {
     #[reflect(ignore)]
     pub icon_atlas: egui::TextureId,
-
-    needs_update: bool,
 }
 
-impl FromWorld for Theme {
+impl FromWorld for EguiTheme {
     fn from_world(world: &mut World) -> Self {
-        let icon_atlas = {
-            let icon_atlas_handle: Handle<Image> =
-                world.resource::<AssetServer>().load("images/icons.png");
-            world
-                .resource_mut::<EguiUserTextures>()
-                .add_image(icon_atlas_handle)
-        };
-        let colors = world
-            .resource::<AssetServer>()
-            .load("themes/dark.color_theme.toml");
-        let needs_update = true;
+        // FIXME: Make icon_atlas updateable.
+        //
+        // This is currently just taking the icon atlas loaded
+        // on startup and does not update if the Theme changes.
+        // See also [update_egui_theme_system].
+        let icon_atlas_handle: Handle<Image> = world.resource::<theme::Theme>().icon_atlas.clone();
+        let icon_atlas_texture_id = world
+            .resource_mut::<EguiUserTextures>()
+            .add_image(icon_atlas_handle);
         Self {
-            colors,
-            icon_atlas,
-            needs_update,
+            icon_atlas: icon_atlas_texture_id,
         }
     }
 }
 
-// ASSETS
-
-#[derive(Asset, Debug, Deserialize, Reflect)]
-pub struct ThemeColors {
-    pub bg_color: Color,
-    pub bg_alt_color: Color,
-    pub fg_color: Color,
-    pub fg_alt_color: Color,
-    pub primary_color: Color,
-    pub primary_alt_color: Color,
-    pub secondary_color: Color,
-    pub secondary_alt_color: Color,
-}
-
 // SYSTEMS
 
-fn update_theme_system(
+fn update_egui_theme_system(
     mut contexts: EguiContexts,
-    mut theme: ResMut<Theme>,
-    theme_colors: Res<Assets<ThemeColors>>,
+    theme: ResMut<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
-    if !theme.needs_update {
+    if !theme.is_changed() {
         return;
     }
 
@@ -161,26 +139,10 @@ fn update_theme_system(
             ..default()
         };
         ctx.set_visuals_of(EGUI_THEME, visuals);
-        theme.needs_update = false;
     }
 }
 
 // LIB
-
-#[derive(Copy, Clone, Debug)]
-pub enum IconAtlasSprite {
-    Undo,
-    Redo,
-}
-
-impl Into<UVec2> for IconAtlasSprite {
-    fn into(self) -> UVec2 {
-        match self {
-            Self::Undo => UVec2::new(0, 1),
-            Self::Redo => UVec2::new(1, 1),
-        }
-    }
-}
 
 pub trait ToColor32 {
     fn to_color32(self) -> Color32;
