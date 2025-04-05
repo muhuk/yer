@@ -276,6 +276,57 @@ impl Action for DeleteLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
+pub struct RenameLayerAction {
+    layer_id: LayerId,
+    old_name: String,
+    new_name: String,
+}
+
+impl RenameLayerAction {
+    pub fn new<A, B>(layer_id: LayerId, old_name: A, new_name: B) -> Self
+    where
+        A: Into<String>,
+        B: Into<String>,
+    {
+        Self {
+            layer_id,
+            old_name: old_name.into(),
+            new_name: new_name.into(),
+        }
+    }
+
+    fn rename(&self, world: &mut World, reversed: bool) {
+        let (new_name, old_name) = if reversed {
+            (&self.old_name, &self.new_name)
+        } else {
+            (&self.new_name, &self.old_name)
+        };
+        world
+            .query::<&mut Layer>()
+            .iter_mut(world)
+            .find(|layer| layer.id() == self.layer_id)
+            .map(|mut layer| {
+                debug_assert!(layer.name == *old_name);
+                layer.name = new_name.to_string();
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+}
+
+impl Action for RenameLayerAction {
+    fn apply(&self, world: &mut World) {
+        let reversed = false;
+        self.rename(world, reversed);
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reversed = true;
+        self.rename(world, reversed);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
 pub struct HeightMapConstantUpdateHeightAction {
     layer_id: LayerId,
     old_height: f32,
