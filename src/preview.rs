@@ -520,7 +520,6 @@ async fn sample_layers(
     layers: &Layers,
     previous_preview: Option<&PreviewGrid2D>,
 ) -> PreviewGrid2D {
-    // TODO: Reuse existing samples.
     assert!(subdivisions <= preview_region.subdivisions);
     assert!(subdivisions >= MIN_SUBDIVISIONS);
     assert!(previous_preview
