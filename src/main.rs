@@ -22,6 +22,7 @@ mod constants;
 mod layer;
 mod preview;
 mod session;
+mod theme;
 mod ui;
 mod undo;
 mod viewport;
@@ -46,6 +47,7 @@ fn main() {
         layer::LayerPlugin,
         preview::PreviewPlugin,
         session::SessionPlugin,
+        theme::ThemePlugin,
         ui::UiPlugin,
         undo::UndoPlugin,
         viewport::ViewportPlugin,

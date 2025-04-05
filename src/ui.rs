@@ -25,14 +25,17 @@ use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
 use crate::constants;
 use crate::session;
+use crate::theme;
 use crate::undo;
 use crate::viewport;
 
+mod egui_ext;
 mod file_dialog;
 mod layer;
 mod preview;
-mod theme;
 mod toolbar;
+
+// PLUGIN
 
 pub struct UiPlugin;
 
@@ -41,9 +44,9 @@ impl Plugin for UiPlugin {
         app.register_type::<UiState>()
             .add_plugins((
                 EguiPlugin,
+                egui_ext::UiBevyExtPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
-                theme::ThemePlugin,
             ))
             .init_state::<UiState>()
             .enable_state_scoped_entities::<UiState>()
@@ -188,6 +191,7 @@ fn draw_ui_panels_system(
     mut app_exit_events: EventWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
+    egui_theme: Res<egui_ext::EguiTheme>,
     layers_query: layer::LayersQuery,
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
@@ -218,7 +222,7 @@ fn draw_ui_panels_system(
     let toolbar_height: f32 = egui::TopBottomPanel::top("toolbar")
         .show(ctx, |ui| {
             if let Some(colors) = theme_colors.get(&theme.colors) {
-                toolbar::draw_toolbar(&mut commands, ui, &theme, colors, &undo_stack);
+                toolbar::draw_toolbar(&mut commands, ui, &egui_theme, colors, &undo_stack);
             }
         })
         .response

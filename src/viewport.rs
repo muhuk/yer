@@ -14,16 +14,25 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::input::common_conditions::input_pressed;
-use bevy::input::mouse::MouseMotion;
+use bevy::input::{common_conditions::input_pressed, mouse::MouseMotion};
 use bevy::math::Affine3A;
+use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframePlugin};
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+
+use crate::theme;
+
+const PREVIEW_FACE_ALPHA: f32 = 0.65f32;
+
+// PLUGIN
 
 pub struct ViewportPlugin;
 
 impl Plugin for ViewportPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WireframePlugin>() {
+            app.add_plugins(WireframePlugin);
+        }
         app.register_type::<TargetTransform>()
             .register_type::<ViewportRegion>()
             .init_resource::<ViewportRegion>()
@@ -39,6 +48,7 @@ impl Plugin for ViewportPlugin {
                     mouse_over_viewport_system,
                     keyboard_actions_system,
                     update_camera_system,
+                    update_viewport_colors_system,
                 ),
             );
     }
@@ -148,7 +158,10 @@ impl TargetTransform {
 fn draw_focal_point_system(
     mut gizmos: Gizmos,
     target_transform_query: Query<&TargetTransform, With<Camera>>,
+    theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
+    let color = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
     if let Ok(target_transform) = target_transform_query.get_single() {
         gizmos.circle(
             Isometry3d::new(
@@ -156,18 +169,24 @@ fn draw_focal_point_system(
                 Quat::from_rotation_x(-90.0f32.to_radians()),
             ),
             2.5f32,
-            LinearRgba::RED,
+            color,
         );
     }
 }
 
-fn draw_grid_system(mut gizmos: Gizmos) {
+fn draw_grid_system(
+    mut gizmos: Gizmos,
+    theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
+) {
+    let color_major = theme_colors.get(&theme.colors).unwrap().secondary_color;
+    let color_minor = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
     gizmos
         .grid_3d(
             Isometry3d::IDENTITY,
             UVec3::new(10, 0, 10), // cells
             Vec3::splat(100.0),    // spacing
-            LinearRgba::GREEN.with_alpha(0.8),
+            color_minor.with_alpha(0.8),
         )
         .outer_edges();
 
@@ -176,7 +195,7 @@ fn draw_grid_system(mut gizmos: Gizmos) {
             Isometry3d::IDENTITY,
             UVec3::new(100, 0, 100), // cells
             Vec3::splat(10.0),       // spacing
-            LinearRgba::GREEN.with_alpha(0.15),
+            color_major.with_alpha(0.15),
         )
         .outer_edges();
 }
@@ -258,7 +277,7 @@ fn middle_mouse_actions_system(
     }
 }
 
-/// Placeholder code to set up a basic 3D viewport.
+/// Create camera and preview mesh.
 fn startup_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -266,6 +285,8 @@ fn startup_system(
 ) {
     const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
     const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
+    const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
+    const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
 
     // Create camera
     let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
@@ -288,14 +309,23 @@ fn startup_system(
             Name::new("Pivot Z-Up"),
         ))
         .with_children(|parent| {
-            // Create ground quad
+            // Create preview mesh.
             parent.spawn((
                 Name::new("Preview Mesh"),
                 PreviewMesh,
                 Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
                 MeshMaterial3d(
-                    materials.add(Color::Srgba(bevy::color::palettes::tailwind::AMBER_400)),
+                    materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA)),
                 ),
+                // This is a quick and dirty way of rendering the wireframe,
+                // but it is not capable of quad rendering.  To do proper quad
+                // wireframes we either need to mark the diagonal edges
+                // somehow (how?) and use a custom shader, or we need to use a
+                // second edges-only mesh.
+                Wireframe,
+                WireframeColor {
+                    color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
+                },
             ));
         });
 
@@ -328,5 +358,36 @@ fn update_camera_system(
             &transform.rotation,
             (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
         );
+    }
+}
+
+/// Update preview mesh colors and clear color when the theme changes.
+fn update_viewport_colors_system(
+    mut clear_color: ResMut<ClearColor>,
+    mut preview_mesh: Single<
+        (&mut MeshMaterial3d<StandardMaterial>, &mut WireframeColor),
+        With<PreviewMesh>,
+    >,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
+) {
+    if !theme.is_changed() {
+        return;
+    }
+
+    debug!("Updating preview mesh colors from theme.");
+    match (
+        theme_colors.get(&theme.colors),
+        standard_materials.get_mut(&preview_mesh.0 .0),
+    ) {
+        (Some(colors), Some(standard_material)) => {
+            standard_material.base_color = colors.primary_color.with_alpha(PREVIEW_FACE_ALPHA);
+            preview_mesh.1.color = colors.primary_color;
+            clear_color.0 = colors.bg_color;
+        }
+        _ => {
+            error!("Cannot update preview mesh colors from theme.");
+        }
     }
 }
