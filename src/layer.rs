@@ -59,15 +59,17 @@ impl Plugin for LayerPlugin {
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct LayerBundle {
     layer: Layer,
+    name: Name,
     height_map: HeightMap,
 }
 
 impl LayerBundle {
     pub fn extract_all(world: &mut World) -> Vec<Self> {
         let mut layer_bundles = vec![];
-        for (layer, height_map) in world.query::<(&Layer, &HeightMap)>().iter(world) {
+        for (layer, name, height_map) in world.query::<(&Layer, &Name, &HeightMap)>().iter(world) {
             layer_bundles.push(Self {
                 layer: layer.clone(),
+                name: name.clone(),
                 height_map: height_map.clone(),
             });
         }
@@ -214,13 +216,11 @@ impl Action for CreateLayerAction {
                 .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
             Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
         };
-        world.spawn((
-            layer.name_component(),
-            LayerBundle {
-                layer,
-                height_map: HeightMap::default(),
-            },
-        ));
+        world.spawn(LayerBundle {
+            name: layer.name_component(),
+            layer,
+            height_map: HeightMap::default(),
+        });
     }
 
     fn revert(&self, world: &mut World) {
@@ -380,13 +380,11 @@ impl Action for UpdateLayerAction {
 pub fn create_initial_layer(world: &mut World) {
     const ORDER: u32 = 0;
     let layer = Layer::new(Layer::new_id(), ORDER);
-    world.spawn((
-        layer.name_component(),
-        LayerBundle {
-            layer,
-            height_map: HeightMap::default(),
-        },
-    ));
+    world.spawn(LayerBundle {
+        name: layer.name_component(),
+        layer,
+        height_map: HeightMap::default(),
+    });
 }
 
 #[cfg(test)]
