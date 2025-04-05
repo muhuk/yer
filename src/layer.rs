@@ -108,6 +108,14 @@ pub struct Layer {
 }
 
 impl Layer {
+    pub fn id(&self) -> LayerId {
+        self.id
+    }
+
+    fn name_component(&self) -> Name {
+        Name::new(format!("Layer 0x{}", &self.id.simple().to_string()[25..32]))
+    }
+
     fn new(id: LayerId, order: u32) -> Self {
         Self {
             enable_baking: true,
@@ -119,10 +127,6 @@ impl Layer {
 
     fn new_id() -> LayerId {
         Uuid::now_v7()
-    }
-
-    pub fn id(&self) -> LayerId {
-        self.id
     }
 }
 
@@ -210,10 +214,13 @@ impl Action for CreateLayerAction {
                 .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
             Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
         };
-        world.spawn(LayerBundle {
-            layer,
-            height_map: HeightMap::default(),
-        });
+        world.spawn((
+            layer.name_component(),
+            LayerBundle {
+                layer,
+                height_map: HeightMap::default(),
+            },
+        ));
     }
 
     fn revert(&self, world: &mut World) {
@@ -372,10 +379,14 @@ impl Action for UpdateLayerAction {
 /// not emit LayerChange::Added event.
 pub fn create_initial_layer(world: &mut World) {
     const ORDER: u32 = 0;
-    world.spawn(LayerBundle {
-        layer: Layer::new(Layer::new_id(), ORDER),
-        height_map: HeightMap::default(),
-    });
+    let layer = Layer::new(Layer::new_id(), ORDER);
+    world.spawn((
+        layer.name_component(),
+        LayerBundle {
+            layer,
+            height_map: HeightMap::default(),
+        },
+    ));
 }
 
 #[cfg(test)]
