@@ -29,6 +29,7 @@ pub type LayerId = uuid::Uuid;
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 
+const DEFAULT_LAYER_NAME: &str = "<unnamed>";
 const LAYER_SPACING: u32 = 100;
 const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
 
@@ -59,15 +60,17 @@ impl Plugin for LayerPlugin {
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct LayerBundle {
     layer: Layer,
+    name: Name,
     height_map: HeightMap,
 }
 
 impl LayerBundle {
     pub fn extract_all(world: &mut World) -> Vec<Self> {
         let mut layer_bundles = vec![];
-        for (layer, height_map) in world.query::<(&Layer, &HeightMap)>().iter(world) {
+        for (layer, name, height_map) in world.query::<(&Layer, &Name, &HeightMap)>().iter(world) {
             layer_bundles.push(Self {
                 layer: layer.clone(),
+                name: name.clone(),
                 height_map: height_map.clone(),
             });
         }
@@ -101,6 +104,7 @@ impl Sample2D for HeightMap {
 #[reflect(Component)]
 #[require(HeightMap)]
 pub struct Layer {
+    pub name: String,
     pub enable_baking: bool,
     pub enable_preview: bool,
     id: LayerId,
@@ -108,8 +112,17 @@ pub struct Layer {
 }
 
 impl Layer {
+    pub fn id(&self) -> LayerId {
+        self.id
+    }
+
+    fn name_component(&self) -> Name {
+        Name::new(format!("Layer 0x{}", &self.id.simple().to_string()[25..32]))
+    }
+
     fn new(id: LayerId, order: u32) -> Self {
         Self {
+            name: DEFAULT_LAYER_NAME.to_owned(),
             enable_baking: true,
             enable_preview: true,
             id,
@@ -119,10 +132,6 @@ impl Layer {
 
     fn new_id() -> LayerId {
         Uuid::now_v7()
-    }
-
-    pub fn id(&self) -> LayerId {
-        self.id
     }
 }
 
@@ -211,6 +220,7 @@ impl Action for CreateLayerAction {
             Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
         };
         world.spawn(LayerBundle {
+            name: layer.name_component(),
             layer,
             height_map: HeightMap::default(),
         });
@@ -261,6 +271,57 @@ impl Action for DeleteLayerAction {
             parent_id: self.parent_id,
         }
         .apply(world)
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub struct RenameLayerAction {
+    layer_id: LayerId,
+    old_name: String,
+    new_name: String,
+}
+
+impl RenameLayerAction {
+    pub fn new<A, B>(layer_id: LayerId, old_name: A, new_name: B) -> Self
+    where
+        A: Into<String>,
+        B: Into<String>,
+    {
+        Self {
+            layer_id,
+            old_name: old_name.into(),
+            new_name: new_name.into(),
+        }
+    }
+
+    fn rename(&self, world: &mut World, reversed: bool) {
+        let (new_name, old_name) = if reversed {
+            (&self.old_name, &self.new_name)
+        } else {
+            (&self.new_name, &self.old_name)
+        };
+        world
+            .query::<&mut Layer>()
+            .iter_mut(world)
+            .find(|layer| layer.id() == self.layer_id)
+            .map(|mut layer| {
+                debug_assert!(layer.name == *old_name);
+                layer.name = new_name.to_string();
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+}
+
+impl Action for RenameLayerAction {
+    fn apply(&self, world: &mut World) {
+        let reversed = false;
+        self.rename(world, reversed);
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reversed = true;
+        self.rename(world, reversed);
     }
 }
 
@@ -372,8 +433,10 @@ impl Action for UpdateLayerAction {
 /// not emit LayerChange::Added event.
 pub fn create_initial_layer(world: &mut World) {
     const ORDER: u32 = 0;
+    let layer = Layer::new(Layer::new_id(), ORDER);
     world.spawn(LayerBundle {
-        layer: Layer::new(Layer::new_id(), ORDER),
+        name: layer.name_component(),
+        layer,
         height_map: HeightMap::default(),
     });
 }

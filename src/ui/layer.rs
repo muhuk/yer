@@ -27,7 +27,15 @@ const LATENCY: Duration = Duration::from_millis(100);
 
 #[derive(SystemParam)]
 pub struct LayersQuery<'w, 's> {
-    layers: Query<'w, 's, (&'static layer::Layer, &'static mut HeightMapUi)>,
+    layers: Query<
+        'w,
+        's,
+        (
+            &'static layer::Layer,
+            &'static mut LayerUi,
+            &'static mut HeightMapUi,
+        ),
+    >,
 }
 
 // PLUGIN
@@ -36,14 +44,17 @@ pub struct LayerUiPlugin;
 
 impl Plugin for LayerUiPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<HeightMapUi>().add_systems(
-            Update,
-            (
-                add_height_map_ui_system,
-                update_height_map_ui_system,
-                reset_height_map_ui_system,
-            ),
-        );
+        app.register_type::<HeightMapUi>()
+            .register_type::<LayerUi>()
+            .add_systems(
+                Update,
+                (
+                    add_height_map_ui_system,
+                    add_layer_ui_system,
+                    update_height_map_ui_system,
+                    reset_height_map_ui_system,
+                ),
+            );
     }
 }
 
@@ -66,6 +77,20 @@ impl From<&layer::HeightMap> for HeightMapUi {
     }
 }
 
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component)]
+struct LayerUi {
+    name: String,
+}
+
+impl From<&layer::Layer> for LayerUi {
+    fn from(layer: &layer::Layer) -> Self {
+        Self {
+            name: layer.name.clone(),
+        }
+    }
+}
+
 // SYSTEMS
 
 /// Add a HeightMapUi component to each entity that got HeightMap component added.
@@ -77,6 +102,16 @@ fn add_height_map_ui_system(
         commands
             .entity(entity)
             .insert(HeightMapUi::from(height_map));
+    }
+}
+
+/// Add a LayerUi component to each entity that got Layer component added.
+fn add_layer_ui_system(
+    mut commands: Commands,
+    layers: Query<(Entity, &layer::Layer), Added<layer::Layer>>,
+) {
+    for (entity, layer) in layers.iter() {
+        commands.entity(entity).insert(LayerUi::from(layer));
     }
 }
 
@@ -143,12 +178,67 @@ fn draw_ui_for_constant_layer(
     commands: &mut Commands,
     ui: &mut egui::Ui,
     layer: &layer::Layer,
+    layer_ui: &mut LayerUi,
     height_map_ui: &mut HeightMapUi,
     parent_layer_id: Option<layer::LayerId>,
 ) {
+    const LAYER_NAME_CHAR_LIMIT: usize = 20;
+
     ui.group(|ui| {
-        ui.label(format!("{}", layer));
         {
+            let widget = egui::widgets::TextEdit::singleline(&mut layer_ui.name)
+                .char_limit(LAYER_NAME_CHAR_LIMIT);
+            let mut output = widget.show(ui);
+            // Select everything when the widget first gains focus.
+            if output.response.gained_focus() {
+                output
+                    .state
+                    .cursor
+                    .set_char_range(Some(egui::text_selection::CCursorRange::two(
+                        egui::text::CCursor::new(0),
+                        egui::text::CCursor::new(layer_ui.name.len()),
+                    )));
+                output.state.store(ui.ctx(), output.response.id);
+            }
+            if output.response.lost_focus() && layer_ui.name != layer.name {
+                commands.queue::<undo::PushAction>(
+                    layer::RenameLayerAction::new(layer.id(), &layer.name, &layer_ui.name).into(),
+                );
+            }
+        }
+        {
+            ui.horizontal(|ui| {
+                {
+                    let mut layer_preview: bool = layer.enable_preview;
+                    if ui.toggle_value(&mut layer_preview, "Preview").changed()
+                        && layer_preview != layer.enable_preview
+                    {
+                        commands.queue::<undo::PushAction>(
+                            layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
+                        );
+                    }
+                }
+                {
+                    let mut layer_baking: bool = layer.enable_baking;
+                    if ui.toggle_value(&mut layer_baking, "Bake").changed()
+                        && layer_baking != layer.enable_baking
+                    {
+                        commands.queue::<undo::PushAction>(
+                            layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
+                        );
+                    }
+                }
+                ui.separator();
+                if ui.button("Delete").clicked() {
+                    commands.queue::<undo::PushAction>(
+                        layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
+                    )
+                }
+            });
+        };
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label("Height:");
             let original_height: f32 = {
                 let HeightMapUi::Constant { height, .. } = height_map_ui;
                 *height
@@ -157,7 +247,7 @@ fn draw_ui_for_constant_layer(
             let widget = egui::widgets::DragValue::new(&mut height_edited)
                 .range(layer::HEIGHT_RANGE)
                 .update_while_editing(false);
-            let response = ui.add(widget);
+            let response = ui.add_sized(ui.available_size_before_wrap(), widget);
             if response.changed() && height_edited != original_height {
                 match height_map_ui {
                     HeightMapUi::Constant { height, timer } => {
@@ -167,32 +257,7 @@ fn draw_ui_for_constant_layer(
                     }
                 }
             }
-        }
-        {
-            let mut layer_preview: bool = layer.enable_preview;
-            if ui.toggle_value(&mut layer_preview, "preview").changed()
-                && layer_preview != layer.enable_preview
-            {
-                commands.queue::<undo::PushAction>(
-                    layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
-                );
-            }
-        }
-        {
-            let mut layer_baking: bool = layer.enable_baking;
-            if ui.toggle_value(&mut layer_baking, "bake").changed()
-                && layer_baking != layer.enable_baking
-            {
-                commands.queue::<undo::PushAction>(
-                    layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
-                );
-            }
-        }
-        if ui.button("Delete").clicked() {
-            commands.queue::<undo::PushAction>(
-                layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
-            )
-        }
+        });
     });
 }
 
@@ -210,7 +275,7 @@ pub fn draw_ui_for_layers(
                 .iter()
                 .sort::<&layer::Layer>()
                 .last()
-                .map(|(layer, _)| layer.id());
+                .map(|(layer, _, _)| layer.id());
             commands.queue::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
         }
         {
@@ -218,7 +283,7 @@ pub fn draw_ui_for_layers(
 
             // We need to iterate layers in reverse order to place the topmost
             // (last applied) layer on top.
-            for (layer, mut height_map_ui) in
+            for (layer, mut layer_ui, mut height_map_ui) in
                 layers_query.layers.iter_mut().sort::<&layer::Layer>().rev()
             {
                 match *height_map_ui {
@@ -226,6 +291,7 @@ pub fn draw_ui_for_layers(
                         commands,
                         ui,
                         layer,
+                        layer_ui.as_mut(),
                         height_map_ui.as_mut(),
                         parent_layer_id,
                     ),
