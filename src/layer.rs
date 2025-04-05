@@ -29,6 +29,7 @@ pub type LayerId = uuid::Uuid;
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 
+const DEFAULT_LAYER_NAME: &str = "<unnamed>";
 const LAYER_SPACING: u32 = 100;
 const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
 
@@ -103,6 +104,7 @@ impl Sample2D for HeightMap {
 #[reflect(Component)]
 #[require(HeightMap)]
 pub struct Layer {
+    pub name: String,
     pub enable_baking: bool,
     pub enable_preview: bool,
     id: LayerId,
@@ -120,6 +122,7 @@ impl Layer {
 
     fn new(id: LayerId, order: u32) -> Self {
         Self {
+            name: DEFAULT_LAYER_NAME.to_owned(),
             enable_baking: true,
             enable_preview: true,
             id,
