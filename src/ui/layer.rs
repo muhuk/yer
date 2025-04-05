@@ -210,7 +210,7 @@ fn draw_ui_for_constant_layer(
             ui.horizontal(|ui| {
                 {
                     let mut layer_preview: bool = layer.enable_preview;
-                    if ui.toggle_value(&mut layer_preview, "preview").changed()
+                    if ui.toggle_value(&mut layer_preview, "Preview").changed()
                         && layer_preview != layer.enable_preview
                     {
                         commands.queue::<undo::PushAction>(
@@ -220,7 +220,7 @@ fn draw_ui_for_constant_layer(
                 }
                 {
                     let mut layer_baking: bool = layer.enable_baking;
-                    if ui.toggle_value(&mut layer_baking, "bake").changed()
+                    if ui.toggle_value(&mut layer_baking, "Bake").changed()
                         && layer_baking != layer.enable_baking
                     {
                         commands.queue::<undo::PushAction>(
@@ -228,18 +228,12 @@ fn draw_ui_for_constant_layer(
                         );
                     }
                 }
-                ui.allocate_ui_with_layout(
-                    ui.available_size_before_wrap(),
-                    egui::Layout::right_to_left(egui::Align::default()),
-                    |ui| {
-                        if ui.button("Delete").clicked() {
-                            commands.queue::<undo::PushAction>(
-                                layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
-                            )
-                        }
-                        ui.separator();
-                    },
-                );
+                ui.separator();
+                if ui.button("Delete").clicked() {
+                    commands.queue::<undo::PushAction>(
+                        layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
+                    )
+                }
             });
         };
         ui.separator();
@@ -253,7 +247,7 @@ fn draw_ui_for_constant_layer(
             let widget = egui::widgets::DragValue::new(&mut height_edited)
                 .range(layer::HEIGHT_RANGE)
                 .update_while_editing(false);
-            let response = ui.add_sized(ui.available_size(), widget);
+            let response = ui.add_sized(ui.available_size_before_wrap(), widget);
             if response.changed() && height_edited != original_height {
                 match height_map_ui {
                     HeightMapUi::Constant { height, timer } => {
