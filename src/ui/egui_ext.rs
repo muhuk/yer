@@ -67,7 +67,7 @@ impl FromWorld for EguiTheme {
 
 fn update_egui_theme_system(
     mut contexts: EguiContexts,
-    theme: ResMut<theme::Theme>,
+    theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
     if !theme.is_changed() {
