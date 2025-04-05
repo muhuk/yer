@@ -147,6 +147,7 @@ fn draw_ui_for_constant_layer(
     parent_layer_id: Option<layer::LayerId>,
 ) {
     ui.group(|ui| {
+        ui.label(&layer.name);
         ui.label(format!("{}", layer));
         {
             let original_height: f32 = {
