@@ -82,6 +82,7 @@ impl LayerBundle {
 
 #[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
 #[reflect(Component, Default)]
+#[require(Layer)]
 pub enum HeightMap {
     Constant(f32),
 }
@@ -102,7 +103,6 @@ impl Sample2D for HeightMap {
 
 #[derive(Component, Clone, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
 #[reflect(Component)]
-#[require(HeightMap)]
 pub struct Layer {
     pub name: String,
     pub enable_baking: bool,
@@ -112,6 +112,8 @@ pub struct Layer {
 }
 
 impl Layer {
+    const DEFAULT_ORDER: u32 = 0;
+
     pub fn id(&self) -> LayerId {
         self.id
     }
@@ -132,6 +134,12 @@ impl Layer {
 
     fn new_id() -> LayerId {
         Uuid::now_v7()
+    }
+}
+
+impl Default for Layer {
+    fn default() -> Self {
+        Self::new(Self::new_id(), Self::DEFAULT_ORDER)
     }
 }
 
@@ -432,8 +440,7 @@ impl Action for UpdateLayerAction {
 /// This is intended to be called to create the initial layer only.  It does
 /// not emit LayerChange::Added event.
 pub fn create_initial_layer(world: &mut World) {
-    const ORDER: u32 = 0;
-    let layer = Layer::new(Layer::new_id(), ORDER);
+    let layer = Layer::default();
     world.spawn(LayerBundle {
         name: layer.name_component(),
         layer,
