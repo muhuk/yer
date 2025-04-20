@@ -49,7 +49,6 @@ impl Plugin for LayerUiPlugin {
             .add_systems(
                 Update,
                 (
-                    add_height_map_ui_system,
                     add_layer_ui_system,
                     update_height_map_ui_system,
                     reset_height_map_ui_system,
@@ -93,25 +92,22 @@ impl From<&layer::Layer> for LayerUi {
 
 // SYSTEMS
 
-/// Add a HeightMapUi component to each entity that got HeightMap component added.
-fn add_height_map_ui_system(
-    mut commands: Commands,
-    layers: Query<(Entity, &layer::HeightMap), Added<layer::HeightMap>>,
-) {
-    for (entity, height_map) in layers.iter() {
-        commands
-            .entity(entity)
-            .insert(HeightMapUi::from(height_map));
-    }
-}
-
-/// Add a LayerUi component to each entity that got Layer component added.
+/// Add a LayerUi & a HeightMapUi component to each entity that got Layer component added.
 fn add_layer_ui_system(
     mut commands: Commands,
-    layers: Query<(Entity, &layer::Layer), Added<layer::Layer>>,
+    layers: Query<(Entity, &layer::Layer, Option<&layer::HeightMap>), Added<layer::Layer>>,
 ) {
-    for (entity, layer) in layers.iter() {
-        commands.entity(entity).insert(LayerUi::from(layer));
+    for (entity, layer, maybe_height_map) in layers.iter() {
+        match maybe_height_map {
+            Some(height_map) => {
+                commands
+                    .entity(entity)
+                    .insert((LayerUi::from(layer), HeightMapUi::from(height_map)));
+            }
+            None => {
+                error!("Layer without height map: '{}'.", &layer);
+            }
+        }
     }
 }
 
