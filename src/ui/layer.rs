@@ -21,7 +21,10 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::layer;
+use crate::theme;
 use crate::undo;
+
+use super::egui_ext::ToColor32;
 
 const LATENCY: Duration = Duration::from_millis(100);
 
@@ -31,9 +34,11 @@ pub struct LayersQuery<'w, 's> {
         'w,
         's,
         (
+            Entity,
             &'static layer::Layer,
             &'static mut LayerUi,
             &'static mut HeightMapUi,
+            Has<Selected>,
         ),
     >,
 }
@@ -89,6 +94,10 @@ impl From<&layer::Layer> for LayerUi {
         }
     }
 }
+
+#[derive(Component, Debug, Reflect)]
+#[reflect(Component)]
+struct Selected;
 
 // SYSTEMS
 
@@ -170,96 +179,100 @@ fn reset_height_map_ui_system(
 
 // LIB
 
-fn draw_ui_for_constant_layer(
+fn draw_ui_for_layer_common(
     commands: &mut Commands,
     ui: &mut egui::Ui,
     layer: &layer::Layer,
     layer_ui: &mut LayerUi,
-    height_map_ui: &mut HeightMapUi,
     parent_layer_id: Option<layer::LayerId>,
 ) {
     const LAYER_NAME_CHAR_LIMIT: usize = 20;
-
-    ui.group(|ui| {
-        {
-            let widget = egui::widgets::TextEdit::singleline(&mut layer_ui.name)
-                .char_limit(LAYER_NAME_CHAR_LIMIT);
-            let mut output = widget.show(ui);
-            // Select everything when the widget first gains focus.
-            if output.response.gained_focus() {
-                output
-                    .state
-                    .cursor
-                    .set_char_range(Some(egui::text_selection::CCursorRange::two(
-                        egui::text::CCursor::new(0),
-                        egui::text::CCursor::new(layer_ui.name.len()),
-                    )));
-                output.state.store(ui.ctx(), output.response.id);
-            }
-            if output.response.lost_focus() && layer_ui.name != layer.name {
-                commands.queue::<undo::PushAction>(
-                    layer::RenameLayerAction::new(layer.id(), &layer.name, &layer_ui.name).into(),
-                );
-            }
+    {
+        let widget = egui::widgets::TextEdit::singleline(&mut layer_ui.name)
+            .char_limit(LAYER_NAME_CHAR_LIMIT);
+        let mut output = widget.show(ui);
+        // Select everything when the widget first gains focus.
+        if output.response.gained_focus() {
+            output
+                .state
+                .cursor
+                .set_char_range(Some(egui::text_selection::CCursorRange::two(
+                    egui::text::CCursor::new(0),
+                    egui::text::CCursor::new(layer_ui.name.len()),
+                )));
+            output.state.store(ui.ctx(), output.response.id);
         }
-        {
-            ui.horizontal(|ui| {
-                {
-                    let mut layer_preview: bool = layer.enable_preview;
-                    if ui.toggle_value(&mut layer_preview, "Preview").changed()
-                        && layer_preview != layer.enable_preview
-                    {
-                        commands.queue::<undo::PushAction>(
-                            layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
-                        );
-                    }
-                }
-                {
-                    let mut layer_baking: bool = layer.enable_baking;
-                    if ui.toggle_value(&mut layer_baking, "Bake").changed()
-                        && layer_baking != layer.enable_baking
-                    {
-                        commands.queue::<undo::PushAction>(
-                            layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
-                        );
-                    }
-                }
-                ui.separator();
-                if ui.button("Delete").clicked() {
-                    commands.queue::<undo::PushAction>(
-                        layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
-                    )
-                }
-            });
-        };
-        ui.separator();
+        if output.response.lost_focus() && layer_ui.name != layer.name {
+            commands.queue::<undo::PushAction>(
+                layer::RenameLayerAction::new(layer.id(), &layer.name, &layer_ui.name).into(),
+            );
+        }
+    }
+    {
         ui.horizontal(|ui| {
-            ui.label("Height:");
-            let original_height: f32 = {
-                let HeightMapUi::Constant { height, .. } = height_map_ui;
-                *height
-            };
-            let mut height_edited: f32 = original_height;
-            let widget = egui::widgets::DragValue::new(&mut height_edited)
-                .range(layer::HEIGHT_RANGE)
-                .update_while_editing(false);
-            let response = ui.add_sized(ui.available_size_before_wrap(), widget);
-            if response.changed() && height_edited != original_height {
-                match height_map_ui {
-                    HeightMapUi::Constant { height, timer } => {
-                        *height = height_edited;
-                        timer.unpause();
-                        timer.reset();
-                    }
+            {
+                let mut layer_preview: bool = layer.enable_preview;
+                if ui.toggle_value(&mut layer_preview, "Preview").changed()
+                    && layer_preview != layer.enable_preview
+                {
+                    commands.queue::<undo::PushAction>(
+                        layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
+                    );
                 }
+            }
+            {
+                let mut layer_baking: bool = layer.enable_baking;
+                if ui.toggle_value(&mut layer_baking, "Bake").changed()
+                    && layer_baking != layer.enable_baking
+                {
+                    commands.queue::<undo::PushAction>(
+                        layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
+                    );
+                }
+            }
+            ui.separator();
+            if ui.button("Delete").clicked() {
+                commands.queue::<undo::PushAction>(
+                    layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
+                )
             }
         });
+    };
+}
+
+fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
+    ui.horizontal(|ui| {
+        ui.label("Height:");
+        let original_height: f32 = {
+            let HeightMapUi::Constant { height, .. } = height_map_ui;
+            *height
+        };
+        let mut height_edited: f32 = original_height;
+        let widget = egui::widgets::DragValue::new(&mut height_edited)
+            .range(layer::HEIGHT_RANGE)
+            .update_while_editing(false);
+        let response = ui
+            .with_layout(
+                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                |ui| ui.add(widget),
+            )
+            .inner;
+        if response.changed() && height_edited != original_height {
+            match height_map_ui {
+                HeightMapUi::Constant { height, timer } => {
+                    *height = height_edited;
+                    timer.unpause();
+                    timer.reset();
+                }
+            }
+        }
     });
 }
 
 /// Draw the UI for the stack of layers in the project.
 pub fn draw_ui_for_layers(
     commands: &mut Commands,
+    theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
     mut layers_query: LayersQuery,
 ) {
@@ -271,30 +284,67 @@ pub fn draw_ui_for_layers(
                 .iter()
                 .sort::<&layer::Layer>()
                 .last()
-                .map(|(layer, _, _)| layer.id());
+                .map(|(_, layer, _, _, _)| layer.id());
             commands.queue::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
         }
         {
             let mut parent_layer_id: Option<layer::LayerId> = Option::default();
-
             // We need to iterate layers in reverse order to place the topmost
             // (last applied) layer on top.
-            for (layer, mut layer_ui, mut height_map_ui) in
+            for (entity, layer, mut layer_ui, mut height_map_ui, is_selected) in
                 layers_query.layers.iter_mut().sort::<&layer::Layer>().rev()
             {
-                match *height_map_ui {
-                    HeightMapUi::Constant { .. } => draw_ui_for_constant_layer(
-                        commands,
-                        ui,
-                        layer,
-                        layer_ui.as_mut(),
-                        height_map_ui.as_mut(),
-                        parent_layer_id,
-                    ),
-                };
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        let height_id = ui.id().with("height");
+                        {
+                            let height: f32 =
+                                ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
+                            let (response, painter) =
+                                ui.allocate_painter([32.0, height].into(), egui::Sense::click());
+                            painter.rect_filled(
+                                response.rect,
+                                4.0,
+                                if is_selected {
+                                    theme_colors.secondary_color.to_color32()
+                                } else {
+                                    theme_colors.bg_alt_color.to_color32()
+                                },
+                            );
+                            if response.clicked() {
+                                if is_selected {
+                                    commands.entity(entity).remove::<Selected>();
+                                } else {
+                                    commands.entity(entity).insert(Selected);
+                                }
+                            }
+                        }
+                        let actual_height: f32 = ui
+                            .vertical_centered_justified(|ui| {
+                                match *height_map_ui {
+                                    HeightMapUi::Constant { .. } => {
+                                        draw_ui_for_layer_common(
+                                            commands,
+                                            ui,
+                                            layer,
+                                            &mut layer_ui,
+                                            parent_layer_id,
+                                        );
+                                        ui.separator();
+                                        draw_ui_for_constant_layer(ui, height_map_ui.as_mut())
+                                    }
+                                };
+                            })
+                            .response
+                            .rect
+                            .height();
+                        // Save the actual height for the next frame.
+                        ui.data_mut(|map| map.insert_temp(height_id, actual_height));
+                    });
 
-                // Set parent's layer_id for the next iteration.
-                parent_layer_id = Some(layer.id());
+                    // Set parent's layer_id for the next iteration.
+                    parent_layer_id = Some(layer.id());
+                });
             }
         }
     });
