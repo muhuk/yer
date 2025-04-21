@@ -245,7 +245,11 @@ fn draw_ui_panels_system(
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 ui.heading("Side Panel Right");
-                layer::draw_ui_for_layers(&mut commands, ui, layers_query);
+                if let Some(colors) = theme_colors.get(&theme.colors) {
+                    layer::draw_ui_for_layers(&mut commands, colors, ui, layers_query);
+                } else {
+                    warn!("Cannot read theme colors.");
+                }
                 // Normally this should be placed in between the top and
                 // bottom parts.  However `available_rect_before_wrap` takes
                 // up all the available space before layers are considered,
