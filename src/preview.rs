@@ -59,8 +59,11 @@ pub struct PreviewPlugin;
 impl Plugin for PreviewPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ActivePreview>()
+            // FIXME: Check this in inspector, either re-enable
+            //        or remove.
+            //
             // See: https://github.com/jakobhellermann/bevy-inspector-egui/issues/217
-            .register_type::<NonZeroU8>()
+            // .register_type::<NonZeroU8>()
             .register_type::<Preview>()
             .register_type::<PreviewGrid2D>()
             .register_type::<PreviewRegion>();

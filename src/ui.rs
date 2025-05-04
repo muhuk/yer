@@ -43,7 +43,9 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UiState>()
             .add_plugins((
-                EguiPlugin,
+                EguiPlugin {
+                    enable_multipass_for_primary_context: false,
+                },
                 egui_ext::UiBevyExtPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
