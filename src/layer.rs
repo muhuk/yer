@@ -16,10 +16,10 @@
 
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
+use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy::time::common_conditions::on_timer;
-use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -480,7 +480,7 @@ mod tests {
         assert_layer_count!(app, 0);
         app.world_mut()
             .commands()
-            .queue::<undo::PushAction>(CreateLayerAction::new(None).into());
+            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
         app.update();
         assert_layer_count!(app, 1);
     }
@@ -510,7 +510,9 @@ mod tests {
             .collect();
         app.world_mut()
             .commands()
-            .queue::<undo::PushAction>(CreateLayerAction::new(Some(initial_ids[0])).into());
+            .queue(undo::PushAction::from(CreateLayerAction::new(Some(
+                initial_ids[0],
+            ))));
         app.update();
         assert_layer_count!(app, 3);
 

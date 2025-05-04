@@ -161,14 +161,13 @@ fn update_height_map_ui_system(
                     timer.tick(time.delta());
                     let layer::HeightMap::Constant(original_height) = height_map;
                     if timer.just_finished() && *original_height != *height {
-                        commands.queue::<undo::PushAction>(
+                        commands.queue(undo::PushAction::from(
                             layer::HeightMapConstantUpdateHeightAction::new(
                                 layer.id(),
                                 *original_height,
                                 *height,
-                            )
-                            .into(),
-                        );
+                            ),
+                        ));
                     }
                 }
             }
@@ -222,9 +221,11 @@ fn draw_ui_for_layer_common(
             output.state.store(ui.ctx(), output.response.id);
         }
         if output.response.lost_focus() && layer_ui.name != layer.name {
-            commands.queue::<undo::PushAction>(
-                layer::RenameLayerAction::new(layer.id(), &layer.name, &layer_ui.name).into(),
-            );
+            commands.queue(undo::PushAction::from(layer::RenameLayerAction::new(
+                layer.id(),
+                &layer.name,
+                &layer_ui.name,
+            )));
         }
     }
     {
@@ -234,9 +235,9 @@ fn draw_ui_for_layer_common(
                 if ui.toggle_value(&mut layer_preview, "Preview").changed()
                     && layer_preview != layer.enable_preview
                 {
-                    commands.queue::<undo::PushAction>(
-                        layer::UpdateLayerAction::toggle_enable_preview(layer).into(),
-                    );
+                    commands.queue(undo::PushAction::from(
+                        layer::UpdateLayerAction::toggle_enable_preview(layer),
+                    ));
                 }
             }
             {
@@ -244,16 +245,17 @@ fn draw_ui_for_layer_common(
                 if ui.toggle_value(&mut layer_baking, "Bake").changed()
                     && layer_baking != layer.enable_baking
                 {
-                    commands.queue::<undo::PushAction>(
-                        layer::UpdateLayerAction::toggle_enable_baking(layer).into(),
-                    );
+                    commands.queue(undo::PushAction::from(
+                        layer::UpdateLayerAction::toggle_enable_baking(layer),
+                    ));
                 }
             }
             ui.separator();
             if ui.button("Delete").clicked() {
-                commands.queue::<undo::PushAction>(
-                    layer::DeleteLayerAction::new(layer.id(), parent_layer_id).into(),
-                )
+                commands.queue(undo::PushAction::from(layer::DeleteLayerAction::new(
+                    layer.id(),
+                    parent_layer_id,
+                )))
             }
         });
     };
@@ -304,7 +306,9 @@ pub fn draw_ui_for_layers(
                 .sort::<&layer::Layer>()
                 .last()
                 .map(|(_, layer, _, _, _)| layer.id());
-            commands.queue::<undo::PushAction>(layer::CreateLayerAction::new(top_layer_id).into());
+            commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
+                top_layer_id,
+            )));
         }
         {
             let mut parent_layer_id: Option<layer::LayerId> = Option::default();

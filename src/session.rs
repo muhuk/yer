@@ -17,7 +17,6 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
-use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use thiserror::Error;
 
@@ -201,7 +200,7 @@ fn clear_session(world: &mut World) {
             .iter(world)
             .collect();
         layers.iter().for_each(|entity| {
-            world.entity_mut(*entity).despawn_recursive();
+            world.entity_mut(*entity).despawn();
         });
     }
 
@@ -212,7 +211,7 @@ fn clear_session(world: &mut World) {
             .iter(world)
             .collect();
         previews.iter().for_each(|entity| {
-            world.entity_mut(*entity).despawn_recursive();
+            world.entity_mut(*entity).despawn();
         });
     }
 }

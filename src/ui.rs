@@ -115,7 +115,7 @@ fn inspector_ui_system(world: &mut World) {
                     .default_open(true)
                     .show(ui, |ui| {
                         bevy_inspector::ui_for_world_entities_filtered::<(
-                            Without<Parent>,
+                            Without<ChildOf>,
                             Without<Observer>,
                         )>(world, ui, true);
                     });
