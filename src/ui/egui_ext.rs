@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 use bevy_egui::{
     egui::{self, Color32},
-    EguiContexts, EguiSet, EguiUserTextures,
+    EguiContexts, EguiPreUpdateSet, EguiUserTextures,
 };
 
 use crate::theme;
@@ -32,7 +32,7 @@ impl Plugin for UiBevyExtPlugin {
             .init_resource::<EguiTheme>()
             .add_systems(
                 Update,
-                update_egui_theme_system.after(EguiSet::InitContexts),
+                update_egui_theme_system.after(EguiPreUpdateSet::InitContexts),
             );
     }
 }
