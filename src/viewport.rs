@@ -31,7 +31,7 @@ pub struct ViewportPlugin;
 impl Plugin for ViewportPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WireframePlugin>() {
-            app.add_plugins(WireframePlugin);
+            app.add_plugins(WireframePlugin::default());
         }
         app.register_type::<TargetTransform>()
             .register_type::<ViewportRegion>()
@@ -205,7 +205,7 @@ fn keyboard_actions_system(
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Home) {
-        target_transform_query.single_mut().reset();
+        target_transform_query.single_mut().unwrap().reset();
     }
 }
 
