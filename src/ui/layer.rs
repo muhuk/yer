@@ -27,6 +27,7 @@ use crate::undo;
 use super::egui_ext::ToColor32;
 
 const LATENCY: Duration = Duration::from_millis(100);
+const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 
 #[derive(SystemParam)]
 pub struct LayersQuery<'w, 's> {
@@ -312,14 +313,20 @@ pub fn draw_ui_for_layers(
             for (entity, layer, mut layer_ui, mut height_map_ui, is_selected) in
                 layers_query.layers.iter_mut().sort::<&layer::Layer>().rev()
             {
-                ui.group(|ui| {
+                let mut frame = egui::containers::Frame::group(ui.style());
+                if is_selected {
+                    frame = frame.fill(ui.style().visuals.widgets.noninteractive.weak_bg_fill);
+                }
+                frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         let height_id = ui.id().with("height");
                         {
                             let height: f32 =
                                 ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
-                            let (response, painter) =
-                                ui.allocate_painter([32.0, height].into(), egui::Sense::click());
+                            let (response, painter) = ui.allocate_painter(
+                                [LAYER_SELECTION_BOX_WIDTH, height].into(),
+                                egui::Sense::click(),
+                            );
                             painter.rect_filled(
                                 response.rect,
                                 4.0,
