@@ -97,7 +97,25 @@ impl From<&layer::Layer> for LayerUi {
 
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component)]
+#[require(layer::Layer)]
 struct Selected;
+
+// COMMANDS
+
+struct SelectLayer(Entity);
+
+impl Command for SelectLayer {
+    fn apply(self, world: &mut World) {
+        let already_selected: Vec<Entity> = world
+            .query_filtered::<Entity, With<Selected>>()
+            .iter_mut(world)
+            .collect();
+        for entity in already_selected {
+            world.entity_mut(entity).remove::<Selected>();
+        }
+        world.entity_mut(self.0).insert(Selected);
+    }
+}
 
 // SYSTEMS
 
@@ -311,12 +329,9 @@ pub fn draw_ui_for_layers(
                                     theme_colors.bg_alt_color.to_color32()
                                 },
                             );
-                            if response.clicked() {
-                                if is_selected {
-                                    commands.entity(entity).remove::<Selected>();
-                                } else {
-                                    commands.entity(entity).insert(Selected);
-                                }
+
+                            if response.clicked() && !is_selected {
+                                commands.queue(SelectLayer(entity));
                             }
                         }
                         let actual_height: f32 = ui
