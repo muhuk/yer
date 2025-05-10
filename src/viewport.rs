@@ -162,7 +162,7 @@ fn draw_focal_point_system(
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
     let color = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
-    if let Ok(target_transform) = target_transform_query.get_single() {
+    if let Ok(target_transform) = target_transform_query.single() {
         gizmos.circle(
             Isometry3d::new(
                 target_transform.looking_at(),
@@ -212,18 +212,11 @@ fn keyboard_actions_system(
 fn mouse_over_viewport_system(
     mut viewport: ResMut<ViewportRegion>,
     window: Query<&Window, With<PrimaryWindow>>,
-) {
-    match window.get_single() {
-        Ok(window) => {
-            if let Some(mouse_position) = window.physical_cursor_position() {
-                viewport.mouse_position = mouse_position;
-            }
-        }
-        Err(err) => {
-            error!("{}", err.to_string());
-            return;
-        }
+) -> Result<(), BevyError> {
+    if let Some(mouse_position) = window.single()?.physical_cursor_position() {
+        viewport.mouse_position = mouse_position;
     }
+    Ok(())
 }
 
 fn middle_mouse_actions_system(
@@ -232,9 +225,9 @@ fn middle_mouse_actions_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
     viewport: Res<ViewportRegion>,
-) {
+) -> Result<(), BevyError> {
     if !viewport.is_mouse_over() {
-        return;
+        return Ok(());
     }
 
     // We are reading these events without fear becuase this system must be
@@ -253,28 +246,25 @@ fn middle_mouse_actions_system(
         (true, true, true, false) => {
             // Pan
             target_transform_query
-                .get_single_mut()
-                .expect("There must be one and only one camera.")
+                .single_mut()?
                 .pan_xy(-mouse_motion.x, -mouse_motion.y);
         }
         (true, true, false, true) => {
             // Dolly
-            target_transform_query
-                .get_single_mut()
-                .expect("There must be one and only one camera.")
-                .dolly(mouse_motion.y)
+            target_transform_query.single_mut()?.dolly(mouse_motion.y);
         }
         (true, true, false, false) => {
             // Orbit
             target_transform_query
-                .get_single_mut()
-                .expect("There must be one and only one camera.")
+                .single_mut()?
                 .orbit_xy(-mouse_motion.x, -mouse_motion.y);
         }
         (true, _, true, true) => (), // Do nothing if both shift and control is pressed.
         (true, false, _, _) => (),   // Do nothing if there is no mouse movement.
         (false, _, _, _) => unreachable!(),
     }
+
+    Ok(())
 }
 
 /// Create camera and preview mesh.
@@ -338,27 +328,26 @@ fn startup_system(
 
 fn update_camera_system(
     time: Res<Time>,
-    mut camera_query: Query<(&TargetTransform, &mut Transform), With<Camera>>,
+    mut camera_query: Single<(&TargetTransform, &mut Transform), With<Camera>>,
 ) {
     const INTERPOLATION_FACTOR: f32 = 1.0f32 / 3.0f32;
 
-    if let Ok((target_transform, mut transform)) = camera_query.get_single_mut() {
-        // https://www.reddit.com/r/gamedev/comments/cayb4f/basic_smooth_spring_movement/
-        //
-        // pow keeps the interpolation factor about the
-        // same, but adds frame-rate sensitivity.
-        transform.translation = Vec3::interpolate(
-            &target_transform.translation,
-            &transform.translation,
-            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
-        );
+    let (target_transform, ref mut transform) = *camera_query;
+    // https://www.reddit.com/r/gamedev/comments/cayb4f/basic_smooth_spring_movement/
+    //
+    // pow keeps the interpolation factor about the
+    // same, but adds frame-rate sensitivity.
+    transform.translation = Vec3::interpolate(
+        &target_transform.translation,
+        &transform.translation,
+        (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
+    );
 
-        transform.rotation = Quat::interpolate(
-            &target_transform.rotation,
-            &transform.rotation,
-            (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
-        );
-    }
+    transform.rotation = Quat::interpolate(
+        &target_transform.rotation,
+        &transform.rotation,
+        (1.0f32 - INTERPOLATION_FACTOR).powf(time.delta_secs() * 60.0),
+    );
 }
 
 /// Update preview mesh colors and clear color when the theme changes.
