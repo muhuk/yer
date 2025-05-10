@@ -51,7 +51,7 @@ impl LoadFileDialog {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => DialogState::Open,
             egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
-            egui_file_dialog::DialogState::Selected(path) => DialogState::Selected(path),
+            egui_file_dialog::DialogState::Picked(path) => DialogState::Selected(path),
             _ => unreachable!(),
         }
     }
@@ -66,7 +66,7 @@ impl Default for LoadFileDialog {
             )
             .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
             .as_modal(true);
-        file_dialog.select_file();
+        file_dialog.pick_file();
 
         Self { file_dialog }
     }
@@ -84,7 +84,7 @@ impl SaveFileDialog {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => DialogState::Open,
             egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
-            egui_file_dialog::DialogState::Selected(path) => {
+            egui_file_dialog::DialogState::Picked(path) => {
                 DialogState::Selected(sanitize_path(path))
             }
             _ => unreachable!(),

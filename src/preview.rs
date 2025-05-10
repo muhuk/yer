@@ -16,12 +16,11 @@
 
 use std::num::NonZeroU8;
 use std::sync::{mpsc, Arc, Mutex, TryLockError};
+use std::time::Duration;
 
-use bevy::ecs::world::Command;
 use bevy::prelude::*;
 use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
 use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
-use bevy::utils::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
@@ -60,8 +59,6 @@ pub struct PreviewPlugin;
 impl Plugin for PreviewPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<ActivePreview>()
-            // See: https://github.com/jakobhellermann/bevy-inspector-egui/issues/217
-            .register_type::<NonZeroU8>()
             .register_type::<Preview>()
             .register_type::<PreviewGrid2D>()
             .register_type::<PreviewRegion>();
@@ -313,7 +310,8 @@ impl Command for UpdatePreviewMesh {
 
         let preview_mesh_entity: Entity = world
             .query_filtered::<Entity, With<viewport::PreviewMesh>>()
-            .single(world);
+            .single(world)
+            .unwrap();
         let mesh_handle: Handle<Mesh> = world.resource_mut::<Assets<Mesh>>().add(mesh);
         world
             .commands()

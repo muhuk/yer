@@ -32,7 +32,7 @@ pub struct PreviewQuery<'w, 's> {
 
 pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
     ui.heading("Preview");
-    if let Ok((entity, preview_region)) = preview_query.preview_regions.get_single() {
+    if let Ok((entity, preview_region)) = preview_query.preview_regions.single() {
         ui.horizontal(|ui| {
             ui.label("Center");
             let mut center: Vec2 = preview_region.center();
@@ -41,7 +41,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
             if center != preview_region.center() {
                 preview_query
                     .update_preview_region_events
-                    .send(preview::UpdatePreviewRegion::SetCenter(entity, center));
+                    .write(preview::UpdatePreviewRegion::SetCenter(entity, center));
             }
         });
 
@@ -52,7 +52,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
             if size != preview_region.size() {
                 preview_query
                     .update_preview_region_events
-                    .send(preview::UpdatePreviewRegion::SetSize(entity, size));
+                    .write(preview::UpdatePreviewRegion::SetSize(entity, size));
             }
         });
 
@@ -76,7 +76,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
                     }
                 });
             if subdivisions != preview_region.subdivisions().get() {
-                preview_query.update_preview_region_events.send(
+                preview_query.update_preview_region_events.write(
                     preview::UpdatePreviewRegion::SetSubdivisions(
                         entity,
                         NonZeroU8::new(subdivisions).unwrap(),
@@ -84,5 +84,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
                 );
             }
         });
+    } else {
+        panic!("There are multiple preview regions, or none.");
     }
 }
