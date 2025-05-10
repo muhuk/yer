@@ -359,7 +359,7 @@ fn draw_ui_menu(
             }
             ui.separator();
             if ui.button("Quit").clicked() {
-                app_exit_events.send(AppExit::Success);
+                app_exit_events.write(AppExit::Success);
                 ui.close_menu();
             }
         });
