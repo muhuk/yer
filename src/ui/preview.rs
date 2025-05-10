@@ -32,7 +32,7 @@ pub struct PreviewQuery<'w, 's> {
 
 pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
     ui.heading("Preview");
-    if let Ok((entity, preview_region)) = preview_query.preview_regions.get_single() {
+    if let Ok((entity, preview_region)) = preview_query.preview_regions.single() {
         ui.horizontal(|ui| {
             ui.label("Center");
             let mut center: Vec2 = preview_region.center();
@@ -84,5 +84,7 @@ pub fn draw_ui_for_preview(ui: &mut egui::Ui, mut preview_query: PreviewQuery) {
                 );
             }
         });
+    } else {
+        panic!("There are multiple preview regions, or none.");
     }
 }

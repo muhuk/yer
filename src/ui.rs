@@ -98,7 +98,7 @@ impl UiState {
 fn inspector_ui_system(world: &mut World) {
     let Ok((window, egui_context)) = world
         .query_filtered::<(&Window, &mut EguiContext), With<PrimaryWindow>>()
-        .get_single(world)
+        .single(world)
     else {
         return;
     };
@@ -116,10 +116,13 @@ fn inspector_ui_system(world: &mut World) {
                 egui::CollapsingHeader::new("Entities")
                     .default_open(true)
                     .show(ui, |ui| {
-                        bevy_inspector::ui_for_world_entities_filtered::<(
-                            Without<ChildOf>,
-                            Without<Observer>,
-                        )>(world, ui, true);
+                        const WITH_CHILDREN: bool = true;
+                        bevy_inspector::ui_for_entities_filtered(
+                            world,
+                            ui,
+                            WITH_CHILDREN,
+                            &bevy_inspector::Filter::<(Without<ChildOf>, Without<Observer>)>::all(),
+                        );
                     });
                 ui.collapsing("Resources", |ui| {
                     bevy_inspector::ui_for_resources(world, ui);
@@ -151,7 +154,7 @@ fn draw_ui_dialogs_system(
             match ui_state.as_ref().get() {
                 UiState::Interactive => unreachable!(),
                 UiState::ShowingLoadFileDialog => {
-                    if let Ok(mut dialog) = load_file_dialogs.get_single_mut() {
+                    if let Ok(mut dialog) = load_file_dialogs.single_mut() {
                         match dialog.show(ctx) {
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
@@ -168,7 +171,7 @@ fn draw_ui_dialogs_system(
                     }
                 }
                 UiState::ShowingSaveFileDialog => {
-                    if let Ok(mut dialog) = save_file_dialogs.get_single_mut() {
+                    if let Ok(mut dialog) = save_file_dialogs.single_mut() {
                         match dialog.show(ctx) {
                             file_dialog::DialogState::Open => (),
                             file_dialog::DialogState::Selected(path) => {
@@ -306,7 +309,7 @@ fn update_window_title_system(
     mut primary_window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     info!("Updating window title.");
-    if let Ok(mut window) = primary_window.get_single_mut() {
+    if let Ok(mut window) = primary_window.single_mut() {
         let file_path_part: String = session
             .get_file_path()
             .map(|p| p.to_string_lossy().into())
@@ -395,7 +398,7 @@ fn set_viewport_region(
     primary_window: Query<&Window, With<PrimaryWindow>>,
     mut viewport_region: ResMut<viewport::ViewportRegion>,
 ) {
-    if let Ok(window) = primary_window.get_single() {
+    if let Ok(window) = primary_window.single() {
         let scale_factor: f32 = window.scale_factor();
         viewport_region.set_rect(Rect::new(
             panel_left_width * scale_factor,
