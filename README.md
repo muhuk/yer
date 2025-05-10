@@ -14,12 +14,12 @@ lack of documentation and occasional bugs.
 
 ### Roadmap for Version 1.0
 
-- [ ] Basic editor UI.
+- [x] Basic editor UI.
 
-  - [ ] 3D viewport with preview mesh.
-  - [ ] Layers list.
-  - [ ] Layer parameters.
-  - [ ] Undo/Redo.
+  - [x] 3D viewport with preview mesh.
+  - [x] Layers list.
+  - [x] Layer parameters.
+  - [x] Undo/Redo.
 
 - [ ] Layer types:
 
