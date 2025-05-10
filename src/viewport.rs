@@ -179,6 +179,13 @@ fn draw_grid_system(
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
+    // TODO: Use retained gizmos.
+    //
+    //       See: https://bevyengine.org/news/bevy-0-16/#retained-gizmos
+    //
+    //       Implementing this before https://github.com/bevyengine/bevy/issues/16041
+    //       is resolved doesn't make a lot of sense.  Once asset events start
+    //       being triggered, implemening retained gizmos will be easier.
     let color_major = theme_colors.get(&theme.colors).unwrap().secondary_color;
     let color_minor = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
     gizmos
