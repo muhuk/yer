@@ -42,7 +42,7 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     - name: Build
-      run: cargo build --release --no-default-features --verbose
+      run: cargo build --release --no-default-features --features release --verbose
     - name: Rename executable
       id: rename-executable
       shell: bash
