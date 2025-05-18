@@ -59,18 +59,18 @@ jobs:
         fi;
         echo "name=$NAME" >> "$GITHUB_OUTPUT"
         echo "filename=$FILENAME" >> "$GITHUB_OUTPUT"
-        mkdir -p target/release/package/$NAME
-        cp target/release/${{ matrix.executable }} target/release/package/$NAME/$FILENAME
+        mkdir -p artifact/$NAME
+        cp target/release/${{ matrix.executable }} artifact/$NAME/$FILENAME
     - name: Copy Release Files
       id: copy-release-files
       shell: bash
       run: |
-        cp COPYING.txt target/release/package/${{ steps.rename-executable.outputs.name }}/
+        cp COPYING.txt artifact/${{ steps.rename-executable.outputs.name }}/
         if [ ${{ matrix.os }} = "linux" ]; then
-            cp -r release/freedesktop/* target/release/package/${{ steps.rename-executable.outputs.name }}/
+            cp -r release/freedesktop/* artifact/${{ steps.rename-executable.outputs.name }}/
         fi;
     - name: Upload executable
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.rename-executable.outputs.name }}
-        path: target/release/package
+        path: artifact
