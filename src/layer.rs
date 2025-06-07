@@ -23,6 +23,7 @@ use bevy::time::common_conditions::on_timer;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::math::approx_eq;
 use crate::undo::{self, Action, ReflectAction};
 
 pub type LayerId = uuid::Uuid;
@@ -359,7 +360,11 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .find(|(layer, _)| layer.id() == self.layer_id)
             .map(|(_, mut height_map)| match *height_map {
                 HeightMap::Constant(ref mut height) => {
-                    debug_assert!((*height - self.old_height).abs() < f32::EPSILON);
+                    debug_assert!(approx_eq(
+                        *height,
+                        self.old_height,
+                        0.001 // 0.1%
+                    ));
                     *height = self.new_height;
                 }
             })
