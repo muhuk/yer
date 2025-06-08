@@ -213,7 +213,7 @@ impl Action for RenameLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
-pub struct SwitchLayerPositions(LayerId, LayerId);
+pub struct SwitchLayerPositions(pub LayerId, pub LayerId);
 
 impl Action for SwitchLayerPositions {
     fn apply(&self, world: &mut World) {

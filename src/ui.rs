@@ -24,6 +24,7 @@ use bevy_egui::EguiContext;
 use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
 use crate::constants;
+use crate::layer as crate_layer;
 use crate::session;
 use crate::theme;
 use crate::undo;
@@ -389,6 +390,7 @@ fn draw_ui_menu(
         });
 
         ui.menu_button("Layer", |ui| {
+            let mut selected_layer_idx: usize = usize::MAX;
             let mut raise_enabled: bool = false;
             let mut lower_enabled: bool = false;
 
@@ -401,8 +403,13 @@ fn draw_ui_menu(
             // Check the general conditions first.
             // There must be at least 2 layers.
             // And there must be one and only one layer selected.
-            let layer_count = layers_query.layers.iter().count();
-            if layer_count >= 2
+            let layer_ids = layers_query
+                .layers
+                .iter()
+                .sort::<&crate_layer::Layer>()
+                .map(|(_, layer, _, _, _)| layer.id())
+                .collect::<Vec<_>>();
+            if layer_ids.len() >= 2
                 && layers_query
                     .layers
                     .iter()
@@ -410,15 +417,15 @@ fn draw_ui_menu(
                     .count()
                     == 1
             {
-                let selected_layer_idx: usize = layers_query
+                selected_layer_idx = layers_query
                     .layers
                     .iter()
-                    .sort::<&crate::layer::Layer>()
+                    .sort::<&crate_layer::Layer>()
                     .enumerate()
                     .find(|(_, (_, _, _, _, is_selected))| *is_selected)
                     .map(|(idx, _)| idx)
                     .unwrap();
-                if selected_layer_idx + 1 < layer_count {
+                if selected_layer_idx + 1 < layer_ids.len() {
                     raise_enabled = true;
                 }
                 if selected_layer_idx > 0 {
@@ -427,11 +434,23 @@ fn draw_ui_menu(
             }
 
             ui.add_enabled_ui(raise_enabled, |ui| {
-                ui.button("Raise Layer");
+                if ui.button("Raise Layer").clicked() {
+                    commands.queue(undo::PushAction::from(crate_layer::SwitchLayerPositions(
+                        layer_ids[selected_layer_idx],
+                        layer_ids[selected_layer_idx + 1],
+                    )));
+                    ui.close_menu();
+                }
             });
 
             ui.add_enabled_ui(lower_enabled, |ui| {
-                ui.button("Lower Layer");
+                if ui.button("Lower Layer").clicked() {
+                    commands.queue(undo::PushAction::from(crate_layer::SwitchLayerPositions(
+                        layer_ids[selected_layer_idx],
+                        layer_ids[selected_layer_idx - 1],
+                    )));
+                    ui.close_menu();
+                }
             })
         });
     });
