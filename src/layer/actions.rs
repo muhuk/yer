@@ -213,6 +213,36 @@ impl Action for RenameLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
+pub struct SwitchLayerPositions(LayerId, LayerId);
+
+impl Action for SwitchLayerPositions {
+    fn apply(&self, world: &mut World) {
+        // TODO: Ensure the layers are adjacent.
+        let (entity_a, order_a) = world
+            .query::<(Entity, &Layer)>()
+            .iter(world)
+            .find(|(_, l)| l.id() == self.0)
+            .map(|(e, l)| (e, l.order))
+            .expect(format!("Unknown layer id: {}", self.0).as_str());
+        let (entity_b, order_b) = world
+            .query::<(Entity, &Layer)>()
+            .iter(world)
+            .find(|(_, l)| l.id() == self.1)
+            .map(|(e, l)| (e, l.order))
+            .expect(format!("Unknown layer id: {}", self.1).as_str());
+        // Set the values in reverse order:
+        world.entity_mut(entity_a).get_mut::<Layer>().unwrap().order = order_b;
+        world.entity_mut(entity_b).get_mut::<Layer>().unwrap().order = order_a;
+    }
+
+    fn revert(&self, world: &mut World) {
+        // Reverse of this action is just the same as applying.
+        self.apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
 pub struct UpdateLayerAction {
     layer_id: LayerId,
     old_enable_baking: bool,
@@ -347,5 +377,73 @@ mod tests {
             .unwrap();
         assert!(new_layer.order > FIRST_LAYER_ORDER);
         assert!(new_layer.order < FIRST_LAYER_ORDER + LAYER_SPACING);
+    }
+
+    #[test]
+    fn switch_layer_positions_is_an_involution() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, LayerPlugin));
+        app.finish();
+        app.cleanup();
+        app.update();
+
+        app.world_mut()
+            .commands()
+            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
+        app.world_mut()
+            .commands()
+            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
+        app.update();
+        let layer_id_ordered: Vec<LayerId> = {
+            let world = app.world_mut();
+            let layer_id_ordered = world
+                .query::<&Layer>()
+                .iter(world)
+                .sort::<&Layer>()
+                .map(|l| l.id())
+                .collect::<Vec<_>>();
+            assert_eq!(layer_id_ordered.len(), 2);
+            layer_id_ordered
+        };
+        {
+            app.world_mut()
+                .commands()
+                .queue(undo::PushAction::from(SwitchLayerPositions(
+                    layer_id_ordered[0],
+                    layer_id_ordered[1],
+                )));
+            app.update();
+        }
+        {
+            let world = app.world_mut();
+            let layer_id_ordered_reversed = world
+                .query::<&Layer>()
+                .iter(world)
+                .sort::<&Layer>()
+                .map(|l| l.id())
+                .collect::<Vec<_>>();
+            assert_eq!(layer_id_ordered_reversed.len(), 2);
+            assert_eq!(layer_id_ordered_reversed[0], layer_id_ordered[1]);
+            assert_eq!(layer_id_ordered_reversed[1], layer_id_ordered[0]);
+        };
+        {
+            app.world_mut()
+                .commands()
+                .queue(undo::PushAction::from(SwitchLayerPositions(
+                    layer_id_ordered[1],
+                    layer_id_ordered[0],
+                )));
+            app.update();
+        }
+        {
+            let world = app.world_mut();
+            let layer_id_ordered_reversed_again = world
+                .query::<&Layer>()
+                .iter(world)
+                .sort::<&Layer>()
+                .map(|l| l.id())
+                .collect::<Vec<_>>();
+            assert_eq!(layer_id_ordered_reversed_again, layer_id_ordered);
+        };
     }
 }
