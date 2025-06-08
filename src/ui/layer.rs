@@ -317,61 +317,83 @@ pub fn draw_ui_for_layers(
             for (entity, layer, mut layer_ui, mut height_map_ui, is_selected) in
                 layers_query.layers.iter_mut().sort::<&layer::Layer>().rev()
             {
-                let mut frame = egui::containers::Frame::group(ui.style());
-                if is_selected {
-                    frame = frame.fill(ui.style().visuals.widgets.noninteractive.weak_bg_fill);
-                }
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let height_id = ui.id().with("height");
-                        {
-                            let height: f32 =
-                                ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
-                            let (response, painter) = ui.allocate_painter(
-                                [LAYER_SELECTION_BOX_WIDTH, height].into(),
-                                egui::Sense::click(),
-                            );
-                            painter.rect_filled(
-                                response.rect,
-                                4.0,
-                                if is_selected {
-                                    theme_colors.secondary_color.to_color32()
-                                } else {
-                                    theme_colors.bg_alt_color.to_color32()
-                                },
-                            );
-
-                            if response.clicked() && !is_selected {
-                                commands.queue(SelectLayer(entity));
-                            }
-                        }
-                        let actual_height: f32 = ui
-                            .vertical_centered_justified(|ui| {
-                                match *height_map_ui {
-                                    HeightMapUi::Constant { .. } => {
-                                        draw_ui_for_layer_common(
-                                            commands,
-                                            ui,
-                                            layer,
-                                            &mut layer_ui,
-                                            parent_layer_id,
-                                        );
-                                        ui.separator();
-                                        draw_ui_for_constant_layer(ui, height_map_ui.as_mut())
-                                    }
-                                };
-                            })
-                            .response
-                            .rect
-                            .height();
-                        // Save the actual height for the next frame.
-                        ui.data_mut(|map| map.insert_temp(height_id, actual_height));
-                    });
-
-                    // Set parent's layer_id for the next iteration.
-                    parent_layer_id = Some(layer.id());
-                });
+                draw_ui_for_layer(
+                    commands,
+                    theme_colors,
+                    ui,
+                    parent_layer_id,
+                    entity,
+                    layer,
+                    layer_ui.as_mut(),
+                    height_map_ui.as_mut(),
+                    is_selected,
+                );
+                // Set parent's layer_id for the next iteration.
+                parent_layer_id = Some(layer.id());
             }
         }
+    });
+}
+
+fn draw_ui_for_layer(
+    commands: &mut Commands,
+    theme_colors: &theme::ThemeColors,
+    ui: &mut egui::Ui,
+    parent_layer_id: Option<layer::LayerId>,
+    entity: Entity,
+    layer: &layer::Layer,
+    layer_ui: &mut LayerUi,
+    height_map_ui: &mut HeightMapUi,
+    is_selected: bool,
+) {
+    let mut frame = egui::containers::Frame::group(ui.style());
+    if is_selected {
+        frame = frame.fill(ui.style().visuals.widgets.noninteractive.weak_bg_fill);
+    }
+    frame.show(ui, |ui| {
+        ui.horizontal(|ui| {
+            let height_id = ui.id().with("height");
+            {
+                let height: f32 = ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
+                let (response, painter) = ui.allocate_painter(
+                    [LAYER_SELECTION_BOX_WIDTH, height].into(),
+                    egui::Sense::click(),
+                );
+                painter.rect_filled(
+                    response.rect,
+                    4.0,
+                    if is_selected {
+                        theme_colors.secondary_color.to_color32()
+                    } else {
+                        theme_colors.bg_alt_color.to_color32()
+                    },
+                );
+
+                if response.clicked() && !is_selected {
+                    commands.queue(SelectLayer(entity));
+                }
+            }
+            let actual_height: f32 = ui
+                .vertical_centered_justified(|ui| {
+                    match *height_map_ui {
+                        HeightMapUi::Constant { .. } => {
+                            draw_ui_for_layer_common(
+                                commands,
+                                ui,
+                                layer,
+                                layer_ui,
+                                parent_layer_id,
+                            );
+                            ui.separator();
+                            draw_ui_for_constant_layer(ui, height_map_ui)
+                        }
+                    };
+                })
+                .response
+                .rect
+                .height();
+            // Save the actual height for the next frame.
+            ui.data_mut(|map| map.insert_temp(height_id, actual_height));
+        });
     });
 }
