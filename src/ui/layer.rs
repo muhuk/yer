@@ -31,7 +31,7 @@ const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 
 #[derive(SystemParam)]
 pub struct LayersQuery<'w, 's> {
-    layers: Query<
+    pub layers: Query<
         'w,
         's,
         (
@@ -67,7 +67,7 @@ impl Plugin for LayerUiPlugin {
 
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component)]
-enum HeightMapUi {
+pub(super) enum HeightMapUi {
     Constant { height: f32, timer: Timer },
 }
 
@@ -84,7 +84,7 @@ impl From<&layer::HeightMap> for HeightMapUi {
 
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component)]
-struct LayerUi {
+pub(super) struct LayerUi {
     name: String,
 }
 
@@ -99,7 +99,7 @@ impl From<&layer::Layer> for LayerUi {
 #[derive(Component, Debug, Reflect)]
 #[reflect(Component)]
 #[require(layer::Layer)]
-struct Selected;
+pub(super) struct Selected;
 
 // COMMANDS
 
@@ -295,7 +295,7 @@ pub fn draw_ui_for_layers(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    mut layers_query: LayersQuery,
+    layers_query: &mut LayersQuery,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");

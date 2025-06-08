@@ -197,7 +197,7 @@ fn draw_ui_panels_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
-    layers_query: layer::LayersQuery,
+    mut layers_query: layer::LayersQuery,
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
@@ -215,6 +215,7 @@ fn draw_ui_panels_system(
                 ui,
                 &mut app_exit_events,
                 &mut commands,
+                &layers_query,
                 session.as_ref(),
                 undo_stack.as_ref(),
                 &mut ui_state_next,
@@ -251,7 +252,7 @@ fn draw_ui_panels_system(
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 ui.heading("Side Panel Right");
                 if let Some(colors) = theme_colors.get(&theme.colors) {
-                    layer::draw_ui_for_layers(&mut commands, colors, ui, layers_query);
+                    layer::draw_ui_for_layers(&mut commands, colors, ui, &mut layers_query);
                 } else {
                     warn!("Cannot read theme colors.");
                 }
@@ -334,6 +335,7 @@ fn draw_ui_menu(
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
     commands: &mut Commands,
+    layers_query: &layer::LayersQuery,
     session: &session::Session,
     undo_stack: &undo::UndoStack,
     ui_state_next: &mut ResMut<NextState<UiState>>,
@@ -384,6 +386,53 @@ fn draw_ui_menu(
                 commands.queue(undo::RedoAction);
                 ui.close_menu();
             }
+        });
+
+        ui.menu_button("Layer", |ui| {
+            let mut raise_enabled: bool = false;
+            let mut lower_enabled: bool = false;
+
+            // TODO: Add can_lower, can_raise info to layer entities.
+            //
+            //       This will allow us to not duplicate this logic
+            //       in other places where we want this behaviour, such
+            //       as the toolbar.
+
+            // Check the general conditions first.
+            // There must be at least 2 layers.
+            // And there must be one and only one layer selected.
+            let layer_count = layers_query.layers.iter().count();
+            if layer_count >= 2
+                && layers_query
+                    .layers
+                    .iter()
+                    .filter(|(_, _, _, _, is_selected)| *is_selected)
+                    .count()
+                    == 1
+            {
+                let selected_layer_idx: usize = layers_query
+                    .layers
+                    .iter()
+                    .sort::<&crate::layer::Layer>()
+                    .enumerate()
+                    .find(|(_, (_, _, _, _, is_selected))| *is_selected)
+                    .map(|(idx, _)| idx)
+                    .unwrap();
+                if selected_layer_idx + 1 < layer_count {
+                    raise_enabled = true;
+                }
+                if selected_layer_idx > 0 {
+                    lower_enabled = true;
+                }
+            }
+
+            ui.add_enabled_ui(raise_enabled, |ui| {
+                ui.button("Raise Layer");
+            });
+
+            ui.add_enabled_ui(lower_enabled, |ui| {
+                ui.button("Lower Layer");
+            })
         });
     });
 }
