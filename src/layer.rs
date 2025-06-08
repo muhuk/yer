@@ -284,6 +284,49 @@ impl Action for DeleteLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
+pub struct HeightMapConstantUpdateHeightAction {
+    layer_id: LayerId,
+    old_height: f32,
+    new_height: f32,
+}
+
+impl HeightMapConstantUpdateHeightAction {
+    pub fn new(layer_id: LayerId, old_height: f32, new_height: f32) -> Self {
+        Self {
+            layer_id,
+            old_height,
+            new_height,
+        }
+    }
+}
+
+impl Action for HeightMapConstantUpdateHeightAction {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<(&Layer, &mut HeightMap)>()
+            .iter_mut(world)
+            .find(|(layer, _)| layer.id() == self.layer_id)
+            .map(|(_, mut height_map)| match *height_map {
+                HeightMap::Constant(ref mut height) => {
+                    debug_assert!((*height - self.old_height).abs() < f32::EPSILON);
+                    *height = self.new_height;
+                }
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_height: self.new_height,
+            new_height: self.old_height,
+        };
+        reverse_action.apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
 pub struct RenameLayerAction {
     layer_id: LayerId,
     old_name: String,
@@ -330,49 +373,6 @@ impl Action for RenameLayerAction {
     fn revert(&self, world: &mut World) {
         let reversed = true;
         self.rename(world, reversed);
-    }
-}
-
-#[derive(Debug, Reflect)]
-#[reflect(Action)]
-pub struct HeightMapConstantUpdateHeightAction {
-    layer_id: LayerId,
-    old_height: f32,
-    new_height: f32,
-}
-
-impl HeightMapConstantUpdateHeightAction {
-    pub fn new(layer_id: LayerId, old_height: f32, new_height: f32) -> Self {
-        Self {
-            layer_id,
-            old_height,
-            new_height,
-        }
-    }
-}
-
-impl Action for HeightMapConstantUpdateHeightAction {
-    fn apply(&self, world: &mut World) {
-        world
-            .query::<(&Layer, &mut HeightMap)>()
-            .iter_mut(world)
-            .find(|(layer, _)| layer.id() == self.layer_id)
-            .map(|(_, mut height_map)| match *height_map {
-                HeightMap::Constant(ref mut height) => {
-                    debug_assert!((*height - self.old_height).abs() < f32::EPSILON);
-                    *height = self.new_height;
-                }
-            })
-            .expect(&format!("Layer with id {} not found.", self.layer_id));
-    }
-
-    fn revert(&self, world: &mut World) {
-        let reverse_action = Self {
-            layer_id: self.layer_id,
-            old_height: self.new_height,
-            new_height: self.old_height,
-        };
-        reverse_action.apply(world);
     }
 }
 
