@@ -20,6 +20,7 @@ use bevy_embedded_assets::{self, EmbeddedAssetPlugin};
 
 mod constants;
 mod layer;
+mod math;
 mod preview;
 mod session;
 mod theme;
