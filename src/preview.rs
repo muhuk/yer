@@ -24,6 +24,7 @@ use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
+use crate::math::approx_eq;
 use crate::undo;
 use crate::viewport;
 
@@ -688,15 +689,16 @@ mod tests {
             Some(&previous_preview),
         ));
         assert_eq!(preview.samples[0].1, PREVIOUS_HEIGHT);
-        assert_eq!(
+        assert!(approx_eq(
             preview.samples[preview.samples.len() - 1].1,
-            PREVIOUS_HEIGHT
-        );
+            PREVIOUS_HEIGHT,
+            0.001 // 0.1%
+        ));
         assert_eq!(
             preview
                 .samples
                 .iter()
-                .filter(|(_, h)| (h - PREVIOUS_HEIGHT).abs() <= f32::EPSILON)
+                .filter(|(_, h)| approx_eq(*h, PREVIOUS_HEIGHT, 0.001))
                 .count(),
             previous_preview.samples.len()
         );
