@@ -24,7 +24,6 @@ use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
-use crate::math::approx_eq;
 use crate::undo;
 use crate::viewport;
 
@@ -580,6 +579,7 @@ mod tests {
 
     use super::*;
     use crate::layer;
+    use crate::math::approx_eq;
 
     #[test]
     fn compute_preview_returns_a_result_and_gets_finished() {
