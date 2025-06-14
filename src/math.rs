@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::f32;
+
 pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
-    let max_difference = f32::max(a.abs(), b.abs()) * ratio;
+    let max_difference = f32::max(f32::max(a.abs(), b.abs()) * ratio, f32::EPSILON);
     (a - b).abs() < max_difference
 }
