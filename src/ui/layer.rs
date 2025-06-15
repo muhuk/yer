@@ -37,6 +37,7 @@ pub struct LayersQuery<'w, 's> {
         (
             Entity,
             &'static layer::Layer,
+            &'static layer::LayerOrder,
             &'static mut LayerUi,
             &'static mut HeightMapUi,
             Has<Selected>,
@@ -303,9 +304,9 @@ pub fn draw_ui_for_layers(
             let top_layer_id: Option<layer::LayerId> = layers_query
                 .layers
                 .iter()
-                .sort::<&layer::Layer>()
+                .sort::<&layer::LayerOrder>()
                 .last()
-                .map(|(_, layer, _, _, _)| layer.id());
+                .map(|(_, layer, _, _, _, _)| layer.id());
             commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
                 top_layer_id,
             )));
@@ -314,8 +315,11 @@ pub fn draw_ui_for_layers(
             let mut parent_layer_id: Option<layer::LayerId> = Option::default();
             // We need to iterate layers in reverse order to place the topmost
             // (last applied) layer on top.
-            for (entity, layer, mut layer_ui, mut height_map_ui, is_selected) in
-                layers_query.layers.iter_mut().sort::<&layer::Layer>().rev()
+            for (entity, layer, _, mut layer_ui, mut height_map_ui, is_selected) in layers_query
+                .layers
+                .iter_mut()
+                .sort::<&layer::LayerOrder>()
+                .rev()
             {
                 draw_ui_for_layer(
                     commands,

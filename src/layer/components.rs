@@ -38,6 +38,7 @@ impl Plugin for LayerComponentsPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMap>()
             .register_type::<Layer>()
+            .register_type::<LayerOrder>()
             .register_type::<LayerId>();
     }
 }
@@ -47,6 +48,7 @@ impl Plugin for LayerComponentsPlugin {
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct LayerBundle {
     pub layer: Layer,
+    pub layer_order: LayerOrder,
     pub name: Name,
     pub height_map: HeightMap,
 }
@@ -54,9 +56,13 @@ pub struct LayerBundle {
 impl LayerBundle {
     pub fn extract_all(world: &mut World) -> Vec<Self> {
         let mut layer_bundles = vec![];
-        for (layer, name, height_map) in world.query::<(&Layer, &Name, &HeightMap)>().iter(world) {
+        for (layer, layer_order, name, height_map) in world
+            .query::<(&Layer, &LayerOrder, &Name, &HeightMap)>()
+            .iter(world)
+        {
             layer_bundles.push(Self {
                 layer: layer.clone(),
+                layer_order: *layer_order,
                 name: name.clone(),
                 height_map: height_map.clone(),
             });
@@ -68,7 +74,6 @@ impl LayerBundle {
 // COMPONENTS
 
 #[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
-#[reflect(Component, Default)]
 #[require(Layer)]
 pub enum HeightMap {
     Constant(f32),
@@ -88,19 +93,15 @@ impl Sample2D for HeightMap {
     }
 }
 
-#[derive(Component, Clone, Debug, Deserialize, Eq, Ord, Reflect, Serialize)]
-#[reflect(Component)]
+#[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
 pub struct Layer {
     pub name: String,
     pub enable_baking: bool,
     pub enable_preview: bool,
     id: LayerId,
-    pub(super) order: u32,
 }
 
 impl Layer {
-    const DEFAULT_ORDER: u32 = 0;
-
     pub fn id(&self) -> LayerId {
         self.id
     }
@@ -109,13 +110,12 @@ impl Layer {
         Name::new(format!("Layer 0x{}", &self.id.simple().to_string()[25..32]))
     }
 
-    pub(super) fn new(id: LayerId, order: u32) -> Self {
+    pub(super) fn new(id: LayerId) -> Self {
         Self {
             name: DEFAULT_LAYER_NAME.to_owned(),
             enable_baking: true,
             enable_preview: true,
             id,
-            order,
         }
     }
 
@@ -126,7 +126,7 @@ impl Layer {
 
 impl Default for Layer {
     fn default() -> Self {
-        Self::new(Self::new_id(), Self::DEFAULT_ORDER)
+        Self::new(Self::new_id())
     }
 }
 
@@ -134,22 +134,26 @@ impl Display for Layer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{}-{}",
-            self.order,
+            "{}",
             // Last 7 digits of uuid.
             &self.id.simple().to_string()[25..32]
         )
     }
 }
 
-impl PartialEq for Layer {
-    fn eq(&self, other: &Self) -> bool {
-        self.order == other.order
-    }
-}
-
-impl PartialOrd for Layer {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.order.partial_cmp(&other.order)
-    }
-}
+#[derive(
+    Component,
+    Copy,
+    Clone,
+    Debug,
+    Deref,
+    Deserialize,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Reflect,
+    Serialize,
+)]
+#[require(Layer)]
+pub struct LayerOrder(#[deref] pub(super) u32);

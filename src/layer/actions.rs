@@ -19,7 +19,7 @@ use bevy::prelude::*;
 use crate::math::approx_eq;
 use crate::undo::{Action, ReflectAction};
 
-use super::components::{HeightMap, Layer, LayerBundle, LayerId, LAYER_SPACING};
+use super::components::{HeightMap, Layer, LayerBundle, LayerId, LayerOrder, LAYER_SPACING};
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
@@ -39,15 +39,16 @@ impl CreateLayerAction {
 
 impl Action for CreateLayerAction {
     fn apply(&self, world: &mut World) {
-        let layer: Layer = {
+        let layer = Layer::default();
+        let layer_order: LayerOrder = {
             let bottom_layer_order = self
                 .parent_id
                 .map(|parent_id| {
                     world
-                        .query::<&Layer>()
+                        .query::<(&Layer, &LayerOrder)>()
                         .iter(world)
-                        .find(|layer| layer.id() == parent_id)
-                        .map(|layer| layer.order)
+                        .find(|(layer, _)| layer.id() == parent_id)
+                        .map(|(_, layer_order)| layer_order.0)
                         .unwrap()
                 })
                 .unwrap_or(0);
@@ -55,17 +56,20 @@ impl Action for CreateLayerAction {
             // above it), we end up with the order of bottom_layer_order +
             // LAYER_SPACING for the new layer, just like Self::OnTop.
             let top_layer_order = world
-                .query::<&Layer>()
+                .query::<&LayerOrder>()
                 .iter(world)
-                .sort::<&Layer>()
-                .filter(|layer| layer.order > bottom_layer_order)
+                .sort::<&LayerOrder>()
+                .filter(|layer_order| layer_order.0 > bottom_layer_order)
                 .next()
-                .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer| layer.order);
-            Layer::new(self.id, (bottom_layer_order + top_layer_order) / 2)
+                .map_or(bottom_layer_order + 2 * LAYER_SPACING, |layer_order| {
+                    layer_order.0
+                });
+            LayerOrder((bottom_layer_order + top_layer_order) / 2)
         };
         world.spawn(LayerBundle {
             name: layer.name_component(),
             layer,
+            layer_order,
             height_map: HeightMap::default(),
         });
     }
@@ -224,20 +228,28 @@ impl Action for SwitchLayerPositions {
     fn apply(&self, world: &mut World) {
         // TODO: Ensure the layers are adjacent.
         let (entity_a, order_a) = world
-            .query::<(Entity, &Layer)>()
+            .query::<(Entity, &Layer, &LayerOrder)>()
             .iter(world)
-            .find(|(_, l)| l.id() == self.0)
-            .map(|(e, l)| (e, l.order))
+            .find(|(_, l, _)| l.id() == self.0)
+            .map(|(e, _, o)| (e, o.0))
             .expect(format!("Unknown layer id: {}", self.0).as_str());
         let (entity_b, order_b) = world
-            .query::<(Entity, &Layer)>()
+            .query::<(Entity, &Layer, &LayerOrder)>()
             .iter(world)
-            .find(|(_, l)| l.id() == self.1)
-            .map(|(e, l)| (e, l.order))
+            .find(|(_, l, _)| l.id() == self.1)
+            .map(|(e, _, o)| (e, o.0))
             .expect(format!("Unknown layer id: {}", self.1).as_str());
         // Set the values in reverse order:
-        world.entity_mut(entity_a).get_mut::<Layer>().unwrap().order = order_b;
-        world.entity_mut(entity_b).get_mut::<Layer>().unwrap().order = order_a;
+        world
+            .entity_mut(entity_a)
+            .get_mut::<LayerOrder>()
+            .unwrap()
+            .0 = order_b;
+        world
+            .entity_mut(entity_b)
+            .get_mut::<LayerOrder>()
+            .unwrap()
+            .0 = order_a;
     }
 
     fn revert(&self, world: &mut World) {
@@ -353,8 +365,8 @@ mod tests {
         app.update();
 
         app.world_mut().commands().spawn_batch([
-            Layer::new(A, FIRST_LAYER_ORDER),
-            Layer::new(B, FIRST_LAYER_ORDER + LAYER_SPACING),
+            (Layer::new(A), LayerOrder(FIRST_LAYER_ORDER)),
+            (Layer::new(B), LayerOrder(FIRST_LAYER_ORDER + LAYER_SPACING)),
         ]);
         app.update();
         assert_layer_count!(app, 2);
@@ -373,15 +385,16 @@ mod tests {
         app.update();
         assert_layer_count!(app, 3);
 
-        let new_layer = app
+        let new_layer_order: u32 = **app
             .world_mut()
-            .query::<&Layer>()
+            .query::<(&Layer, &LayerOrder)>()
             .iter(app.world())
-            .filter(|layer| !initial_ids.contains(&layer.id()))
+            .filter(|(layer, _)| !initial_ids.contains(&layer.id()))
             .next()
-            .unwrap();
-        assert!(new_layer.order > FIRST_LAYER_ORDER);
-        assert!(new_layer.order < FIRST_LAYER_ORDER + LAYER_SPACING);
+            .unwrap()
+            .1;
+        assert!(new_layer_order > FIRST_LAYER_ORDER);
+        assert!(new_layer_order < FIRST_LAYER_ORDER + LAYER_SPACING);
     }
 
     #[test]
@@ -402,10 +415,10 @@ mod tests {
         let layer_id_ordered: Vec<LayerId> = {
             let world = app.world_mut();
             let layer_id_ordered = world
-                .query::<&Layer>()
+                .query::<(&Layer, &LayerOrder)>()
                 .iter(world)
-                .sort::<&Layer>()
-                .map(|l| l.id())
+                .sort::<&LayerOrder>()
+                .map(|(l, _)| l.id())
                 .collect::<Vec<_>>();
             assert_eq!(layer_id_ordered.len(), 2);
             layer_id_ordered
@@ -422,10 +435,10 @@ mod tests {
         {
             let world = app.world_mut();
             let layer_id_ordered_reversed = world
-                .query::<&Layer>()
+                .query::<(&Layer, &LayerOrder)>()
                 .iter(world)
-                .sort::<&Layer>()
-                .map(|l| l.id())
+                .sort::<&LayerOrder>()
+                .map(|(l, _)| l.id())
                 .collect::<Vec<_>>();
             assert_eq!(layer_id_ordered_reversed.len(), 2);
             assert_eq!(layer_id_ordered_reversed[0], layer_id_ordered[1]);
@@ -443,10 +456,10 @@ mod tests {
         {
             let world = app.world_mut();
             let layer_id_ordered_reversed_again = world
-                .query::<&Layer>()
+                .query::<(&Layer, &LayerOrder)>()
                 .iter(world)
-                .sort::<&Layer>()
-                .map(|l| l.id())
+                .sort::<&LayerOrder>()
+                .map(|(l, _)| l.id())
                 .collect::<Vec<_>>();
             assert_eq!(layer_id_ordered_reversed_again, layer_id_ordered);
         };
