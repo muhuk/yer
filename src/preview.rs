@@ -272,11 +272,11 @@ impl Command for CalculatePreview {
             .unwrap();
         // Currently we have only HeightMap's that implement Sample2D.
         let layers: Vec<Box<dyn layer::Sample2D>> = world
-            .query::<(&layer::Layer, &layer::HeightMap)>()
+            .query::<(&layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
             .iter(world)
-            .sort_unstable::<&layer::Layer>()
-            .filter(|(layer, _)| layer.enable_preview)
-            .map(|(_, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
+            .sort_unstable::<&layer::LayerOrder>()
+            .filter(|(layer, _, _)| layer.enable_preview)
+            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
             .collect();
         let task_pool = AsyncComputeTaskPool::get();
         world.resource_mut::<Preview>().start_new_task(

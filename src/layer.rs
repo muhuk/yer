@@ -55,16 +55,16 @@ impl Plugin for LayerPlugin {
 
 // SYSTEMS
 
-fn normalize_layer_ordering_system(mut layers: Query<&mut Layer>) {
+fn normalize_layer_ordering_system(mut layers: Query<&mut LayerOrder>) {
     trace!("Normalizing layer ordering.");
     layers
         .iter_mut()
-        .sort::<&Layer>()
+        .sort::<&LayerOrder>()
         .enumerate()
-        .for_each(|(idx, mut layer)| {
+        .for_each(|(idx, mut layer_order)| {
             // Start from LAYER_SPACING (1-based) and increment for
             // as much as LAYER_SPACING at each layer.
-            layer.order =
+            layer_order.0 =
                 u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
         });
 }
@@ -78,6 +78,7 @@ pub fn create_initial_layer(world: &mut World) {
     world.spawn(LayerBundle {
         name: layer.name_component(),
         layer,
+        layer_order: LayerOrder(0),
         height_map: HeightMap::default(),
     });
 }
