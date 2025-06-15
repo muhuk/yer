@@ -254,7 +254,7 @@ fn draw_ui_for_layer_common(
             ui.separator();
             if ui.button("Delete").clicked() {
                 commands.queue(undo::PushAction::from(layer::DeleteLayerAction::new(
-                    layer.id(),
+                    layer.clone(),
                     parent_layer_id,
                 )))
             }
@@ -312,15 +312,24 @@ pub fn draw_ui_for_layers(
             )));
         }
         {
-            let mut parent_layer_id: Option<layer::LayerId> = Option::default();
-            // We need to iterate layers in reverse order to place the topmost
-            // (last applied) layer on top.
-            for (entity, layer, _, mut layer_ui, mut height_map_ui, is_selected) in layers_query
+            let layer_ids: Vec<layer::LayerId> = layers_query
                 .layers
-                .iter_mut()
+                .iter()
                 .sort::<&layer::LayerOrder>()
                 .rev()
+                .map(|(_, layer, _, _, _, _)| layer.id())
+                .collect();
+            // We need to iterate layers in reverse order to place the topmost
+            // (last applied) layer on top.
+            for (idx, (entity, layer, _, mut layer_ui, mut height_map_ui, is_selected)) in
+                layers_query
+                    .layers
+                    .iter_mut()
+                    .sort::<&layer::LayerOrder>()
+                    .rev()
+                    .enumerate()
             {
+                let parent_layer_id = layer_ids.get(idx + 1).cloned();
                 draw_ui_for_layer(
                     commands,
                     theme_colors,
@@ -332,8 +341,6 @@ pub fn draw_ui_for_layers(
                     height_map_ui.as_mut(),
                     is_selected,
                 );
-                // Set parent's layer_id for the next iteration.
-                parent_layer_id = Some(layer.id());
             }
         }
     });

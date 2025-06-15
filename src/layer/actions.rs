@@ -24,14 +24,14 @@ use super::components::{HeightMap, Layer, LayerBundle, LayerId, LayerOrder, LAYE
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct CreateLayerAction {
-    id: LayerId,
+    layer: Layer,
     parent_id: Option<LayerId>,
 }
 
 impl CreateLayerAction {
     pub fn new(parent_id: Option<LayerId>) -> Self {
         Self {
-            id: Layer::new_id(),
+            layer: Layer::default(),
             parent_id,
         }
     }
@@ -39,7 +39,6 @@ impl CreateLayerAction {
 
 impl Action for CreateLayerAction {
     fn apply(&self, world: &mut World) {
-        let layer = Layer::default();
         let layer_order: LayerOrder = {
             let bottom_layer_order = self
                 .parent_id
@@ -67,8 +66,8 @@ impl Action for CreateLayerAction {
             LayerOrder((bottom_layer_order + top_layer_order) / 2)
         };
         world.spawn(LayerBundle {
-            name: layer.name_component(),
-            layer,
+            name: self.layer.name_component(),
+            layer: self.layer.clone(),
             layer_order,
             height_map: HeightMap::default(),
         });
@@ -76,7 +75,7 @@ impl Action for CreateLayerAction {
 
     fn revert(&self, world: &mut World) {
         DeleteLayerAction {
-            id: self.id,
+            layer: self.layer.clone(),
             parent_id: None,
         }
         .apply(world)
@@ -86,13 +85,13 @@ impl Action for CreateLayerAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct DeleteLayerAction {
-    id: LayerId,
+    layer: Layer,
     parent_id: Option<LayerId>,
 }
 
 impl DeleteLayerAction {
-    pub fn new(id: LayerId, parent_id: Option<LayerId>) -> Self {
-        Self { id, parent_id }
+    pub fn new(layer: Layer, parent_id: Option<LayerId>) -> Self {
+        Self { layer, parent_id }
     }
 }
 
@@ -101,21 +100,21 @@ impl Action for DeleteLayerAction {
         match world
             .query::<(Entity, &Layer)>()
             .iter(world)
-            .find(|(_, layer)| layer.id() == self.id)
+            .find(|(_, layer)| layer.id() == self.layer.id())
         {
             Some((entity, _)) => {
                 world.despawn(entity);
             }
             None => warn!(
                 "Trying to delete non-existent layer with id '{}'",
-                self.id.simple()
+                self.layer.id().simple()
             ),
         }
     }
 
     fn revert(&self, world: &mut World) {
         CreateLayerAction {
-            id: self.id,
+            layer: self.layer.clone(),
             parent_id: self.parent_id,
         }
         .apply(world)
