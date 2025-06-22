@@ -14,10 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::time::Duration;
-
 use bevy::prelude::*;
-use bevy::time::common_conditions::on_timer;
 
 use crate::undo;
 
@@ -29,8 +26,6 @@ pub use actions::*;
 pub use components::*;
 pub use sample::*;
 
-const NORMALIZE_ORDERING_INTERVAL_MS: u64 = 500;
-
 // PLUGIN
 
 pub struct LayerPlugin;
@@ -40,9 +35,7 @@ impl Plugin for LayerPlugin {
         app.add_plugins(components::LayerComponentsPlugin);
         app.add_systems(
             Update,
-            normalize_layer_ordering_system.run_if(on_timer(Duration::from_millis(
-                NORMALIZE_ORDERING_INTERVAL_MS,
-            ))),
+            normalize_layer_ordering_system.run_if(any_match_filter::<Changed<LayerOrder>>),
         );
     }
 
@@ -64,7 +57,7 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut LayerOrder>) {
         .for_each(|(idx, mut layer_order)| {
             // Start from LAYER_SPACING (1-based) and increment for
             // as much as LAYER_SPACING at each layer.
-            layer_order.0 =
+            layer_order.bypass_change_detection().0 =
                 u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
         });
 }

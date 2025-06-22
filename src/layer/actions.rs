@@ -372,9 +372,10 @@ mod tests {
 
         let initial_ids: Vec<Uuid> = app
             .world_mut()
-            .query::<&Layer>()
+            .query::<(&Layer, &LayerOrder)>()
             .iter(app.world())
-            .map(|layer| layer.id())
+            .sort::<&LayerOrder>()
+            .map(|(layer, _)| layer.id())
             .collect();
         app.world_mut()
             .commands()
@@ -384,16 +385,15 @@ mod tests {
         app.update();
         assert_layer_count!(app, 3);
 
-        let new_layer_order: u32 = **app
+        let new_ids: Vec<Uuid> = app
             .world_mut()
             .query::<(&Layer, &LayerOrder)>()
             .iter(app.world())
-            .filter(|(layer, _)| !initial_ids.contains(&layer.id()))
-            .next()
-            .unwrap()
-            .1;
-        assert!(new_layer_order > FIRST_LAYER_ORDER);
-        assert!(new_layer_order < FIRST_LAYER_ORDER + LAYER_SPACING);
+            .sort::<&LayerOrder>()
+            .map(|(layer, _)| layer.id())
+            .collect();
+        assert_eq!(new_ids[0], initial_ids[0]);
+        assert_eq!(new_ids[2], initial_ids[1]);
     }
 
     #[test]
