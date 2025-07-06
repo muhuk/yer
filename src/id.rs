@@ -14,8 +14,14 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::math::Vec2;
+/// A stable id for masks.
+///
+/// We cannot use `Entity` as a stable id because if a mask is deleted and
+/// then the delete is undoed, the new entity will be a different one.
+pub type LayerId = uuid::Uuid;
 
-pub trait Sample2D: Send + Sync {
-    fn sample(&self, position: Vec2, height: f32) -> f32;
-}
+/// A stable id for masks.
+///
+/// We cannot use `Entity` as a stable id because if a mask is deleted and
+/// then the delete is undoed, the new entity will be a different one.
+pub type MaskId = uuid::Uuid;

@@ -19,11 +19,9 @@ use std::ops::RangeInclusive;
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
-use super::sample::Sample2D;
-
-pub type LayerId = uuid::Uuid;
+use crate::id::LayerId;
+use crate::math::Sample2D;
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
@@ -45,6 +43,10 @@ impl Plugin for LayerComponentsPlugin {
 
 // BUNDLES
 
+// TODO: Remove LayerOrder from this bundle.  We want to order layers
+//       according to LayerOrder but we don't want to save it since it
+//       is not stable.  Also LayerBundle's are stored in a sequential
+//       collection so the order will not be lost when they're saved.
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct LayerBundle {
     pub layer: Layer,
@@ -120,7 +122,7 @@ impl Layer {
     }
 
     pub(super) fn new_id() -> LayerId {
-        Uuid::now_v7()
+        LayerId::now_v7()
     }
 }
 

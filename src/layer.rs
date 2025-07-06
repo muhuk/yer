@@ -20,11 +20,9 @@ use crate::undo;
 
 mod actions;
 mod components;
-mod sample;
 
 pub use actions::*;
 pub use components::*;
-pub use sample::*;
 
 // PLUGIN
 

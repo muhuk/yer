@@ -19,7 +19,9 @@ use bevy::prelude::*;
 use bevy_embedded_assets::{self, EmbeddedAssetPlugin};
 
 mod constants;
+mod id;
 mod layer;
+mod mask;
 mod math;
 mod preview;
 mod session;
@@ -46,6 +48,7 @@ fn main() {
     }));
     app.add_plugins((
         layer::LayerPlugin,
+        mask::MaskPlugin,
         preview::PreviewPlugin,
         session::SessionPlugin,
         theme::ThemePlugin,
