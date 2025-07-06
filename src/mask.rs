@@ -172,6 +172,56 @@ impl Action for CreateMaskAction {
     }
 
     fn revert(&self, world: &mut World) {
-        unimplemented!()
+        DeleteMaskAction {
+            mask_bundle: self.mask_bundle.clone(),
+            layer: self.layer,
+            previous_mask: self.previous_mask,
+        }
+        .apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub struct DeleteMaskAction {
+    mask_bundle: MaskBundle,
+    layer: LayerId,
+    previous_mask: Option<MaskId>,
+}
+
+impl DeleteMaskAction {
+    pub fn new(mask_bundle: MaskBundle, layer: LayerId, previous_mask: Option<MaskId>) -> Self {
+        Self {
+            mask_bundle,
+            layer,
+            previous_mask,
+        }
+    }
+}
+
+impl Action for DeleteMaskAction {
+    fn apply(&self, world: &mut World) {
+        match world
+            .query::<(Entity, &Mask)>()
+            .iter(world)
+            .find(|(_, mask)| mask.id() == self.mask_bundle.mask.id())
+        {
+            Some((entity, _)) => {
+                world.despawn(entity);
+            }
+            None => warn!(
+                "Trying to delete non-existent layer with id '{}'",
+                self.mask_bundle.mask.id().simple()
+            ),
+        }
+    }
+
+    fn revert(&self, world: &mut World) {
+        CreateMaskAction {
+            mask_bundle: self.mask_bundle.clone(),
+            layer: self.layer,
+            previous_mask: self.previous_mask,
+        }
+        .apply(world);
     }
 }

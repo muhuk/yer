@@ -200,6 +200,7 @@ fn draw_ui_panels_system(
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
     mut layers_query: layer::LayersQuery,
+    mut masks_query: layer::MasksQuery,
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
@@ -260,6 +261,7 @@ fn draw_ui_panels_system(
                         ui,
                         &children_query,
                         &mut layers_query,
+                        &mut masks_query,
                     );
                 } else {
                     warn!("Cannot read theme colors.");
