@@ -442,20 +442,24 @@ fn draw_ui_menu(
 
             ui.add_enabled_ui(raise_enabled, |ui| {
                 if ui.button("Raise Layer").clicked() {
-                    commands.queue(undo::PushAction::from(crate_layer::SwitchLayerPositions(
-                        layer_ids[selected_layer_idx],
-                        layer_ids[selected_layer_idx + 1],
-                    )));
+                    commands.queue(undo::PushAction::from(
+                        crate_layer::SwitchLayerPositionsAction(
+                            layer_ids[selected_layer_idx],
+                            layer_ids[selected_layer_idx + 1],
+                        ),
+                    ));
                     ui.close_menu();
                 }
             });
 
             ui.add_enabled_ui(lower_enabled, |ui| {
                 if ui.button("Lower Layer").clicked() {
-                    commands.queue(undo::PushAction::from(crate_layer::SwitchLayerPositions(
-                        layer_ids[selected_layer_idx],
-                        layer_ids[selected_layer_idx - 1],
-                    )));
+                    commands.queue(undo::PushAction::from(
+                        crate_layer::SwitchLayerPositionsAction(
+                            layer_ids[selected_layer_idx],
+                            layer_ids[selected_layer_idx - 1],
+                        ),
+                    ));
                     ui.close_menu();
                 }
             })

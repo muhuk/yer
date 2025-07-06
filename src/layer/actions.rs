@@ -227,13 +227,11 @@ impl Action for RenameLayerAction {
     }
 }
 
-// FIXME: Append `Action` to the struct's name.
-//        For consistency.
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
-pub struct SwitchLayerPositions(pub LayerId, pub LayerId);
+pub struct SwitchLayerPositionsAction(pub LayerId, pub LayerId);
 
-impl Action for SwitchLayerPositions {
+impl Action for SwitchLayerPositionsAction {
     fn apply(&self, world: &mut World) {
         // TODO: Ensure the layers are adjacent.
         let (entity_a, order_a) = world
@@ -435,7 +433,7 @@ mod tests {
         {
             app.world_mut()
                 .commands()
-                .queue(undo::PushAction::from(SwitchLayerPositions(
+                .queue(undo::PushAction::from(SwitchLayerPositionsAction(
                     layer_id_ordered[0],
                     layer_id_ordered[1],
                 )));
@@ -456,7 +454,7 @@ mod tests {
         {
             app.world_mut()
                 .commands()
-                .queue(undo::PushAction::from(SwitchLayerPositions(
+                .queue(undo::PushAction::from(SwitchLayerPositionsAction(
                     layer_id_ordered[1],
                     layer_id_ordered[0],
                 )));
