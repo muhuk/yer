@@ -195,6 +195,7 @@ fn draw_ui_dialogs_system(
 
 fn draw_ui_panels_system(
     mut app_exit_events: EventWriter<AppExit>,
+    children_query: Query<&Children>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
@@ -253,7 +254,13 @@ fn draw_ui_panels_system(
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 ui.heading("Side Panel Right");
                 if let Some(colors) = theme_colors.get(&theme.colors) {
-                    layer::draw_ui_for_layers(&mut commands, colors, ui, &mut layers_query);
+                    layer::draw_ui_for_layers(
+                        &mut commands,
+                        colors,
+                        ui,
+                        &children_query,
+                        &mut layers_query,
+                    );
                 } else {
                     warn!("Cannot read theme colors.");
                 }

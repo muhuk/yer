@@ -24,6 +24,7 @@ use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
+use crate::math::Sample2D;
 use crate::undo;
 use crate::viewport;
 
@@ -52,7 +53,7 @@ const SUBDIVISIONS_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     ns
 };
 
-type Layers = Arc<[Box<dyn layer::Sample2D>]>;
+type Layers = Arc<[Box<dyn Sample2D>]>;
 
 pub struct PreviewPlugin;
 
@@ -271,12 +272,12 @@ impl Command for CalculatePreview {
             .next()
             .unwrap();
         // Currently we have only HeightMap's that implement Sample2D.
-        let layers: Vec<Box<dyn layer::Sample2D>> = world
+        let layers: Vec<Box<dyn Sample2D>> = world
             .query::<(&layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
             .iter(world)
             .sort_unstable::<&layer::LayerOrder>()
             .filter(|(layer, _, _)| layer.enable_preview)
-            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn layer::Sample2D>)
+            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn Sample2D>)
             .collect();
         let task_pool = AsyncComputeTaskPool::get();
         world.resource_mut::<Preview>().start_new_task(
@@ -589,7 +590,7 @@ mod tests {
         assert_eq!(preview_region.subdivisions(), MIN_SUBDIVISIONS);
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sample2D>].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
         let mut compute_preview =
             ComputePreview::new(task_pool, target_entity, preview_region, layers);
@@ -609,7 +610,7 @@ mod tests {
 
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn layer::Sample2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sample2D>].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
         let mut compute_preview =
             ComputePreview::new(task_pool, target_entity, preview_region, layers);

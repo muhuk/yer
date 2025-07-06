@@ -16,10 +16,12 @@
 
 use bevy::prelude::*;
 
+use crate::id::LayerId;
 use crate::math::approx_eq;
 use crate::undo::{Action, ReflectAction};
 
-use super::components::{HeightMap, Layer, LayerBundle, LayerId, LayerOrder, LAYER_SPACING};
+// FIXME: Rename components module.
+use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
@@ -28,6 +30,10 @@ pub struct CreateLayerAction {
     parent_id: Option<LayerId>,
 }
 
+// TODO: Store masks and restore them on revert.
+//
+//       Restoring masks should not appear as additional items in undo stack.
+//       So we are not reuisng Crate/DeleteMask actions.
 impl CreateLayerAction {
     pub fn new(parent_id: Option<LayerId>) -> Self {
         Self {
@@ -85,6 +91,8 @@ impl Action for CreateLayerAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct DeleteLayerAction {
+    // FIXME: This needs to cache the heightmap too.  If you delete a layer
+    //        then undo, you get a layer with defaul heightmap, changes lost.
     layer: Layer,
     parent_id: Option<LayerId>,
 }
@@ -219,6 +227,8 @@ impl Action for RenameLayerAction {
     }
 }
 
+// FIXME: Append `Action` to the struct's name.
+//        For consistency.
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct SwitchLayerPositions(pub LayerId, pub LayerId);

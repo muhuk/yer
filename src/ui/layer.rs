@@ -20,7 +20,9 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::egui;
 
+use crate::id::{LayerId, MaskId};
 use crate::layer;
+use crate::mask;
 use crate::theme;
 use crate::undo;
 
@@ -198,12 +200,40 @@ fn reset_height_map_ui_system(
 
 // LIB
 
-fn draw_ui_for_layer_common(
+fn draw_ui_for_layer_common_bottom(
+    commands: &mut Commands,
+    children_query: &Query<&Children>,
+    entity: Entity,
+    layer: &layer::Layer,
+    ui: &mut egui::Ui,
+) {
+    ui.heading("Masks");
+
+    if ui.button("Add mask").clicked() {
+        let mask_bundle: mask::MaskBundle = mask::MaskBundle::default();
+        let layer_id: LayerId = layer.id();
+        // FIXME: Find out the topmost mask instead of just passing None.
+        let previous_mask_id: Option<MaskId> = None;
+        commands.queue(undo::PushAction::from(mask::CreateMaskAction::new(
+            mask_bundle,
+            layer_id,
+            previous_mask_id,
+        )));
+    }
+
+    if let Ok(children) = children_query.get(entity) {
+        for child in children.iter() {
+            ui.label(format!("Mask: {:?}", child));
+        }
+    }
+}
+
+fn draw_ui_for_layer_common_top(
     commands: &mut Commands,
     ui: &mut egui::Ui,
     layer: &layer::Layer,
     layer_ui: &mut LayerUi,
-    parent_layer_id: Option<layer::LayerId>,
+    parent_layer_id: Option<LayerId>,
 ) {
     const LAYER_NAME_CHAR_LIMIT: usize = 20;
     {
@@ -296,12 +326,13 @@ pub fn draw_ui_for_layers(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
+    children_query: &Query<&Children>,
     layers_query: &mut LayersQuery,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
         if ui.button("New Layer").clicked() {
-            let top_layer_id: Option<layer::LayerId> = layers_query
+            let top_layer_id: Option<LayerId> = layers_query
                 .layers
                 .iter()
                 .sort::<&layer::LayerOrder>()
@@ -312,7 +343,7 @@ pub fn draw_ui_for_layers(
             )));
         }
         {
-            let layer_ids: Vec<layer::LayerId> = layers_query
+            let layer_ids: Vec<LayerId> = layers_query
                 .layers
                 .iter()
                 .sort::<&layer::LayerOrder>()
@@ -334,6 +365,7 @@ pub fn draw_ui_for_layers(
                     commands,
                     theme_colors,
                     ui,
+                    children_query,
                     parent_layer_id,
                     entity,
                     layer,
@@ -350,7 +382,8 @@ fn draw_ui_for_layer(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    parent_layer_id: Option<layer::LayerId>,
+    children_query: &Query<&Children>,
+    parent_layer_id: Option<LayerId>,
     entity: Entity,
     layer: &layer::Layer,
     layer_ui: &mut LayerUi,
@@ -388,7 +421,7 @@ fn draw_ui_for_layer(
                 .vertical_centered_justified(|ui| {
                     match *height_map_ui {
                         HeightMapUi::Constant { .. } => {
-                            draw_ui_for_layer_common(
+                            draw_ui_for_layer_common_top(
                                 commands,
                                 ui,
                                 layer,
@@ -396,13 +429,22 @@ fn draw_ui_for_layer(
                                 parent_layer_id,
                             );
                             ui.separator();
-                            draw_ui_for_constant_layer(ui, height_map_ui)
+                            draw_ui_for_constant_layer(ui, height_map_ui);
+                            ui.separator();
+                            draw_ui_for_layer_common_bottom(
+                                commands,
+                                children_query,
+                                entity,
+                                layer,
+                                ui,
+                            );
                         }
                     };
                 })
                 .response
                 .rect
                 .height();
+
             // Save the actual height for the next frame.
             ui.data_mut(|map| map.insert_temp(height_id, actual_height));
         });

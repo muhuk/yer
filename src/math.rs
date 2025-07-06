@@ -16,6 +16,12 @@
 
 use std::f32;
 
+use bevy::math::Vec2;
+
+pub trait Sample2D: Send + Sync {
+    fn sample(&self, position: Vec2, height: f32) -> f32;
+}
+
 pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
     let max_difference = f32::max(f32::max(a.abs(), b.abs()) * ratio, f32::EPSILON);
     (a - b).abs() < max_difference
