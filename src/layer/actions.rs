@@ -92,7 +92,7 @@ impl Action for CreateLayerAction {
 #[reflect(Action)]
 pub struct DeleteLayerAction {
     // FIXME: This needs to cache the heightmap too.  If you delete a layer
-    //        then undo, you get a layer with defaul heightmap, changes lost.
+    //        then undo, you get a layer with default heightmap, changes lost.
     layer: Layer,
     parent_id: Option<LayerId>,
 }
@@ -111,6 +111,8 @@ impl Action for DeleteLayerAction {
             .find(|(_, layer)| layer.id() == self.layer.id())
         {
             Some((entity, _)) => {
+                // TODO: This will delete all masks too, so we need to
+                //       store masks in the undo queue.
                 world.despawn(entity);
             }
             None => warn!(
@@ -125,7 +127,7 @@ impl Action for DeleteLayerAction {
             layer: self.layer.clone(),
             parent_id: self.parent_id,
         }
-        .apply(world)
+        .apply(world);
     }
 }
 
