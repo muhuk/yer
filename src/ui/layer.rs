@@ -47,6 +47,20 @@ pub struct LayersQuery<'w, 's> {
     >,
 }
 
+#[derive(SystemParam)]
+pub struct MasksQuery<'w, 's> {
+    pub masks: Query<
+        'w,
+        's,
+        (
+            Entity,
+            &'static mask::Mask,
+            &'static mask::MaskOrder,
+            &'static mask::SdfMask,
+        ),
+    >,
+}
+
 // PLUGIN
 
 pub struct LayerUiPlugin;
@@ -203,29 +217,56 @@ fn reset_height_map_ui_system(
 fn draw_ui_for_layer_common_bottom(
     commands: &mut Commands,
     children_query: &Query<&Children>,
+    masks_query: &mut MasksQuery,
     entity: Entity,
     layer: &layer::Layer,
     ui: &mut egui::Ui,
 ) {
-    ui.heading("Masks");
+    let frame = egui::containers::Frame::group(ui.style());
+    frame.show(ui, |ui| {
+        ui.heading("Masks");
 
-    if ui.button("Add mask").clicked() {
-        let mask_bundle: mask::MaskBundle = mask::MaskBundle::default();
-        let layer_id: LayerId = layer.id();
-        // FIXME: Find out the topmost mask instead of just passing None.
-        let previous_mask_id: Option<MaskId> = None;
-        commands.queue(undo::PushAction::from(mask::CreateMaskAction::new(
-            mask_bundle,
-            layer_id,
-            previous_mask_id,
-        )));
-    }
-
-    if let Ok(children) = children_query.get(entity) {
-        for child in children.iter() {
-            ui.label(format!("Mask: {:?}", child));
+        if ui.button("Add mask").clicked() {
+            let mask_bundle: mask::MaskBundle = mask::MaskBundle::default();
+            let layer_id: LayerId = layer.id();
+            // FIXME: Find out the topmost mask instead of just passing None.
+            let previous_mask_id: Option<MaskId> = None;
+            commands.queue(undo::PushAction::from(mask::CreateMaskAction::new(
+                mask_bundle,
+                layer_id,
+                previous_mask_id,
+            )));
         }
-    }
+
+        if let Ok(children) = children_query.get(entity) {
+            // FIXME: We are not ordering masks using MaskOrder.
+            for mask_entity in children.iter() {
+                frame.show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("Mask: {:?}", mask_entity));
+                        if ui.button("Delete").clicked() {
+                            let mask_bundle: mask::MaskBundle = {
+                                let (_, mask, _, sdf_mask) =
+                                    masks_query.masks.get(mask_entity).unwrap();
+                                mask::MaskBundle {
+                                    mask: mask.clone(),
+                                    sdf_mask: sdf_mask.clone(),
+                                }
+                            };
+                            let layer_id: LayerId = layer.id();
+                            // FIXME: Use actual previous mask id instead of None.
+                            let previous_mask_id: Option<MaskId> = None;
+                            commands.queue(undo::PushAction::from(mask::DeleteMaskAction::new(
+                                mask_bundle,
+                                layer_id,
+                                previous_mask_id,
+                            )));
+                        }
+                    });
+                });
+            }
+        }
+    });
 }
 
 fn draw_ui_for_layer_common_top(
@@ -328,6 +369,7 @@ pub fn draw_ui_for_layers(
     ui: &mut egui::Ui,
     children_query: &Query<&Children>,
     layers_query: &mut LayersQuery,
+    masks_query: &mut MasksQuery,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
@@ -366,6 +408,7 @@ pub fn draw_ui_for_layers(
                     theme_colors,
                     ui,
                     children_query,
+                    masks_query,
                     parent_layer_id,
                     entity,
                     layer,
@@ -383,6 +426,7 @@ fn draw_ui_for_layer(
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
     children_query: &Query<&Children>,
+    masks_query: &mut MasksQuery,
     parent_layer_id: Option<LayerId>,
     entity: Entity,
     layer: &layer::Layer,
@@ -434,6 +478,7 @@ fn draw_ui_for_layer(
                             draw_ui_for_layer_common_bottom(
                                 commands,
                                 children_query,
+                                masks_query,
                                 entity,
                                 layer,
                                 ui,
