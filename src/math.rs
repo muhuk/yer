@@ -38,12 +38,16 @@ impl Alpha {
         *self == Self::Opaque
     }
 
-    pub fn transparent(factor: f32) -> Self {
+    pub fn from_factor(factor: f32) -> Self {
         assert!(
             factor >= 0.0 && factor <= 1.0,
             "factor must be between 0.0 and 1.0."
         );
-        Self::Transparent(factor)
+        if approx_eq(factor, 1.0, ONE_IN_TEN_THOUSAND) {
+            Self::Opaque
+        } else {
+            Self::Transparent(factor)
+        }
     }
 }
 
@@ -72,9 +76,15 @@ impl Sample {
         result
     }
 
+    /// Mix `other` above `self`.
+    ///
+    /// See [reference](https://en.wikipedia.org/wiki/Alpha_compositing#Description).
     pub fn mix_mut(&mut self, other: &Self) {
         let mix_factor = other.alpha.factor();
-        self.height = other.height * mix_factor + self.height * (1.0 - mix_factor);
+        let new_alpha = Alpha::from_factor(mix_factor + self.alpha().factor() * (1.0 - mix_factor));
+        self.height =
+            other.height * mix_factor + self.height * self.alpha().factor() * (1.0 - mix_factor);
+        self.alpha = new_alpha;
     }
 }
 
@@ -117,15 +127,15 @@ mod tests {
         };
         let c = Sample {
             height: 10.5,
-            alpha: Alpha::transparent(0.5),
+            alpha: Alpha::from_factor(0.5),
         };
         let d = Sample {
             height: 4.5,
-            alpha: Alpha::transparent(0.4),
+            alpha: Alpha::from_factor(0.4),
         };
 
         // If the 2nd operand is opaque, then the result is equal to 2nd
-        // operand's value.  Final alpha is not changed.
+        // operand's value.  Final alpha is mixed.
         assert!(approx_eq(
             a.mix(&b).height(),
             b.height(),
@@ -137,7 +147,7 @@ mod tests {
             b.height(),
             ONE_IN_TEN_THOUSAND
         ));
-        assert_eq!(c.mix(&b).alpha(), c.alpha());
+        assert!(c.mix(&b).alpha().is_opaque());
 
         // If the 2nd operand is not opaque, but the 1st operand is opaque
         // then the result is mixed.  Final alpha is not changed.
@@ -150,11 +160,7 @@ mod tests {
 
         // If the 1st operand is not opaque, 2nd operand's values is mixed but
         // the final alpha still equals to the 1st operand's.
-        assert!(approx_eq(
-            d.mix(&c).height(),
-            (d.height() + c.height()) / 2.0,
-            ONE_IN_TEN_THOUSAND
-        ));
-        assert_eq!(d.mix(&c).alpha(), d.alpha());
+        assert!(approx_eq(d.mix(&c).height(), 6.15, ONE_IN_TEN_THOUSAND));
+        assert_eq!(d.mix(&c).alpha(), Alpha::from_factor(0.7));
     }
 }
