@@ -20,9 +20,11 @@ use crate::undo;
 
 mod actions;
 mod components;
+mod mask;
 
 pub use actions::*;
 pub use components::*;
+pub use mask::{CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskOrder, SdfMask};
 
 // PLUGIN
 
@@ -30,7 +32,7 @@ pub struct LayerPlugin;
 
 impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(components::LayerComponentsPlugin);
+        app.add_plugins((components::LayerComponentsPlugin, mask::MaskPlugin));
         app.add_systems(
             Update,
             normalize_layer_ordering_system.run_if(any_match_filter::<Changed<LayerOrder>>),

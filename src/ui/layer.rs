@@ -22,7 +22,6 @@ use bevy_egui::egui;
 
 use crate::id::{LayerId, MaskId};
 use crate::layer;
-use crate::mask;
 use crate::theme;
 use crate::undo;
 
@@ -54,9 +53,9 @@ pub struct MasksQuery<'w, 's> {
         's,
         (
             Entity,
-            &'static mask::Mask,
-            &'static mask::MaskOrder,
-            &'static mask::SdfMask,
+            &'static layer::Mask,
+            &'static layer::MaskOrder,
+            &'static layer::SdfMask,
         ),
     >,
 }
@@ -227,11 +226,11 @@ fn draw_ui_for_layer_common_bottom(
         ui.heading("Masks");
 
         if ui.button("Add mask").clicked() {
-            let mask_bundle: mask::MaskBundle = mask::MaskBundle::default();
+            let mask_bundle: layer::MaskBundle = layer::MaskBundle::default();
             let layer_id: LayerId = layer.id();
             // FIXME: Find out the topmost mask instead of just passing None.
             let previous_mask_id: Option<MaskId> = None;
-            commands.queue(undo::PushAction::from(mask::CreateMaskAction::new(
+            commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
                 layer_id,
                 previous_mask_id,
@@ -245,10 +244,10 @@ fn draw_ui_for_layer_common_bottom(
                     ui.horizontal(|ui| {
                         ui.label(format!("Mask: {:?}", mask_entity));
                         if ui.button("Delete").clicked() {
-                            let mask_bundle: mask::MaskBundle = {
+                            let mask_bundle: layer::MaskBundle = {
                                 let (_, mask, _, sdf_mask) =
                                     masks_query.masks.get(mask_entity).unwrap();
-                                mask::MaskBundle {
+                                layer::MaskBundle {
                                     mask: mask.clone(),
                                     sdf_mask: sdf_mask.clone(),
                                 }
@@ -256,7 +255,7 @@ fn draw_ui_for_layer_common_bottom(
                             let layer_id: LayerId = layer.id();
                             // FIXME: Use actual previous mask id instead of None.
                             let previous_mask_id: Option<MaskId> = None;
-                            commands.queue(undo::PushAction::from(mask::DeleteMaskAction::new(
+                            commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
                                 mask_bundle,
                                 layer_id,
                                 previous_mask_id,
