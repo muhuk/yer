@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::id::{LayerId, MaskId};
 use crate::layer::Layer;
-use crate::math::Sample2D;
 use crate::undo::{Action, ReflectAction};
 
 pub const LAYER_SPACING: u32 = 100;
@@ -92,8 +91,8 @@ pub struct MaskOrder(#[deref] u32);
 #[require(Mask)]
 pub struct SdfMask;
 
-impl Sample2D for SdfMask {
-    fn sample(&self, position: Vec2, _height: f32) -> f32 {
+impl SdfMask {
+    fn sample(&self, position: Vec2) -> f32 {
         // FIXME: use actual mask data.
         //
         // Inside the circle on origin, with r=10.

@@ -18,11 +18,143 @@ use std::f32;
 
 use bevy::math::Vec2;
 
-pub trait Sample2D: Send + Sync {
-    fn sample(&self, position: Vec2, height: f32) -> f32;
+const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Alpha {
+    Opaque,
+    Transparent(f32),
+}
+
+impl Alpha {
+    pub fn factor(&self) -> f32 {
+        match self {
+            Self::Opaque => 1.0,
+            Self::Transparent(factor) => *factor,
+        }
+    }
+
+    pub fn is_opaque(&self) -> bool {
+        *self == Self::Opaque
+    }
+
+    pub fn transparent(factor: f32) -> Self {
+        assert!(
+            factor >= 0.0 && factor <= 1.0,
+            "factor must be between 0.0 and 1.0."
+        );
+        Self::Transparent(factor)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Sample {
+    height: f32,
+    alpha: Alpha,
+}
+
+impl Sample {
+    pub fn new(height: f32, alpha: Alpha) -> Self {
+        Self { height, alpha }
+    }
+
+    pub fn alpha(&self) -> Alpha {
+        self.alpha
+    }
+
+    pub fn height(&self) -> f32 {
+        self.height
+    }
+
+    pub fn mix(&self, other: &Self) -> Self {
+        let mut result = self.clone();
+        result.mix_mut(other);
+        result
+    }
+
+    pub fn mix_mut(&mut self, other: &Self) {
+        let mix_factor = other.alpha.factor();
+        self.height = other.height * mix_factor + self.height * (1.0 - mix_factor);
+    }
+}
+
+impl Default for Sample {
+    fn default() -> Self {
+        Self {
+            height: 0.0,
+            alpha: Alpha::Opaque,
+        }
+    }
+}
+
+// We cannot just return a single f32.
+//
+// Minimum; we need an alpha value.
+//
+// Design this in a way we can return additional channels.
+pub trait Sampler2D: Send + Sync {
+    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample;
 }
 
 pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
     let max_difference = f32::max(f32::max(a.abs(), b.abs()) * ratio, f32::EPSILON);
     (a - b).abs() < max_difference
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mix_samples() {
+        let a = Sample {
+            height: 8.5,
+            alpha: Alpha::Opaque,
+        };
+        let b = Sample {
+            height: 7.5,
+            alpha: Alpha::Opaque,
+        };
+        let c = Sample {
+            height: 10.5,
+            alpha: Alpha::transparent(0.5),
+        };
+        let d = Sample {
+            height: 4.5,
+            alpha: Alpha::transparent(0.4),
+        };
+
+        // If the 2nd operand is opaque, then the result is equal to 2nd
+        // operand's value.  Final alpha is not changed.
+        assert!(approx_eq(
+            a.mix(&b).height(),
+            b.height(),
+            ONE_IN_TEN_THOUSAND
+        ));
+        assert!(a.mix(&b).alpha().is_opaque());
+        assert!(approx_eq(
+            c.mix(&b).height(),
+            b.height(),
+            ONE_IN_TEN_THOUSAND
+        ));
+        assert_eq!(c.mix(&b).alpha(), c.alpha());
+
+        // If the 2nd operand is not opaque, but the 1st operand is opaque
+        // then the result is mixed.  Final alpha is not changed.
+        assert!(approx_eq(
+            a.mix(&c).height(),
+            (a.height() + c.height()) / 2.0,
+            ONE_IN_TEN_THOUSAND
+        ));
+        assert!(a.mix(&c).alpha().is_opaque());
+
+        // If the 1st operand is not opaque, 2nd operand's values is mixed but
+        // the final alpha still equals to the 1st operand's.
+        assert!(approx_eq(
+            d.mix(&c).height(),
+            (d.height() + c.height()) / 2.0,
+            ONE_IN_TEN_THOUSAND
+        ));
+        assert_eq!(d.mix(&c).alpha(), d.alpha());
+    }
 }
