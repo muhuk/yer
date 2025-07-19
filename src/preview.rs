@@ -24,7 +24,7 @@ use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
 use crate::layer;
-use crate::math::Sample2D;
+use crate::math::{Sample, Sampler2D};
 use crate::undo;
 use crate::viewport;
 
@@ -53,7 +53,10 @@ const SUBDIVISIONS_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     ns
 };
 
-type Layers = Arc<[Box<dyn Sample2D>]>;
+// TODO: We need the masks too.
+//
+//       Each layer can have zero or more masks.
+type Layers = Arc<[Box<dyn Sampler2D>]>;
 
 pub struct PreviewPlugin;
 
@@ -271,13 +274,16 @@ impl Command for CalculatePreview {
             .map(|(e, p)| (e, p.clone()))
             .next()
             .unwrap();
-        // Currently we have only HeightMap's that implement Sample2D.
-        let layers: Vec<Box<dyn Sample2D>> = world
+        // TODO: Don't just convert heightmap to Sampler2D.
+        //
+        //       If it has masks use a container that also takes the
+        //       mask data and applies it to the layer's results.
+        let layers: Vec<Box<dyn Sampler2D>> = world
             .query::<(&layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
             .iter(world)
             .sort_unstable::<&layer::LayerOrder>()
             .filter(|(layer, _, _)| layer.enable_preview)
-            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn Sample2D>)
+            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn Sampler2D>)
             .collect();
         let task_pool = AsyncComputeTaskPool::get();
         world.resource_mut::<Preview>().start_new_task(
@@ -558,11 +564,12 @@ async fn sample_layers(
                     unreachable!()
                 }
             } else {
-                let mut h: f32 = 0.0;
+                let mut sample = Sample::default();
                 for layer in layers.iter() {
-                    h = layer.sample(p, h);
+                    sample.mix_mut(&layer.sample(p, &sample));
                 }
-                samples.push((p, h));
+
+                samples.push((p, sample.height()));
                 // Yield control at every calculated sample.
                 future::yield_now().await;
             }
@@ -590,7 +597,7 @@ mod tests {
         assert_eq!(preview_region.subdivisions(), MIN_SUBDIVISIONS);
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sample2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sampler2D>].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
         let mut compute_preview =
             ComputePreview::new(task_pool, target_entity, preview_region, layers);
@@ -610,7 +617,7 @@ mod tests {
 
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sample2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sampler2D>].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
         let mut compute_preview =
             ComputePreview::new(task_pool, target_entity, preview_region, layers);

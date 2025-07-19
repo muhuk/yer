@@ -21,7 +21,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
-use crate::math::Sample2D;
+use crate::math::{Alpha, Sample, Sampler2D};
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
@@ -87,10 +87,10 @@ impl Default for HeightMap {
     }
 }
 
-impl Sample2D for HeightMap {
-    fn sample(&self, _position: Vec2, _height: f32) -> f32 {
+impl Sampler2D for HeightMap {
+    fn sample(&self, _position: Vec2, base: &Sample) -> Sample {
         match self {
-            Self::Constant(value) => *value,
+            Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
     }
 }
