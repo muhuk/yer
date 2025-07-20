@@ -274,17 +274,33 @@ impl Command for CalculatePreview {
             .map(|(e, p)| (e, p.clone()))
             .next()
             .unwrap();
-        // TODO: Don't just convert heightmap to Sampler2D.
-        //
-        //       If it has masks use a container that also takes the
-        //       mask data and applies it to the layer's results.
-        let layers: Vec<Box<dyn Sampler2D>> = world
-            .query::<(&layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
-            .iter(world)
-            .sort_unstable::<&layer::LayerOrder>()
-            .filter(|(layer, _, _)| layer.enable_preview)
-            .map(|(_, _, height_map)| Box::new(height_map.clone()) as Box<dyn Sampler2D>)
-            .collect();
+        let layers: Vec<Box<dyn Sampler2D>> = {
+            let entities_and_height_maps: Vec<(Entity, layer::HeightMap)> = world
+                .query::<(Entity, &layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
+                .iter(world)
+                .sort_unstable::<&layer::LayerOrder>()
+                .filter(|(_, layer, _, _)| layer.enable_preview)
+                .map(|(entity, _, _, height_map)| (entity, height_map.clone()))
+                .collect();
+            entities_and_height_maps
+                .into_iter()
+                .map(|(entity, height_map)| {
+                    let children: Vec<Entity> = world
+                        .entity(entity)
+                        .get::<Children>()
+                        .map(|children| children.to_vec())
+                        .unwrap_or_default();
+                    let masks: Vec<layer::SdfMask> = world
+                        .entity(children.as_slice())
+                        .iter()
+                        .map(|entity_ref| entity_ref.get::<layer::SdfMask>())
+                        .filter(|a| a.is_some())
+                        .map(|a| a.unwrap().clone())
+                        .collect();
+                    Box::new(layer::LayerSampler { height_map, masks }) as Box<dyn Sampler2D>
+                })
+                .collect()
+        };
         let task_pool = AsyncComputeTaskPool::get();
         world.resource_mut::<Preview>().start_new_task(
             task_pool,
