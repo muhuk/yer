@@ -119,6 +119,12 @@ pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
     (a - b).abs() < max_difference
 }
 
+pub fn clamp(x: f32, min: f32, max: f32) -> f32 {
+    debug_assert!(min < max);
+    // Poetry
+    max.min(min.max(x))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
