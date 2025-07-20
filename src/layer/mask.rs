@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::id::{LayerId, MaskId};
 use crate::layer::Layer;
+use crate::math::clamp;
 use crate::undo::{Action, ReflectAction};
 
 pub const LAYER_SPACING: u32 = 100;
@@ -87,19 +88,37 @@ impl Mask {
 #[require(Mask)]
 pub struct MaskOrder(#[deref] u32);
 
-#[derive(Clone, Component, Debug, Default, Reflect)]
+#[derive(Clone, Component, Debug, Reflect)]
 #[require(Mask)]
-pub struct SdfMask;
+pub enum SdfMask {
+    Circle {
+        center: Vec2,
+        radius: f32,
+        falloff_radius: f32,
+    },
+}
+
+impl Default for SdfMask {
+    fn default() -> Self {
+        Self::Circle {
+            center: Vec2::ZERO,
+            radius: 1.5,
+            falloff_radius: 0.5,
+        }
+    }
+}
 
 impl SdfMask {
     pub fn sample(&self, position: Vec2) -> f32 {
-        // FIXME: use actual mask data.
-        //
-        // Inside the circle on origin, with r=10.
-        if (position - Vec2::ZERO).length() < 10.0 {
-            1.0
-        } else {
-            0.0
+        match self {
+            Self::Circle {
+                center,
+                radius,
+                falloff_radius,
+            } => {
+                let distance: f32 = (position - center).length();
+                1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
+            }
         }
     }
 }
