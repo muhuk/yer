@@ -16,6 +16,7 @@
 
 use bevy::prelude::*;
 
+use crate::math::{Sample, Sampler2D};
 use crate::undo;
 
 mod actions;
@@ -63,6 +64,26 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut LayerOrder>) {
 }
 
 // LIB
+
+pub struct LayerSampler {
+    pub height_map: HeightMap,
+    pub masks: Vec<SdfMask>,
+}
+
+impl Sampler2D for LayerSampler {
+    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample {
+        let mut sample = self.height_map.sample(position, base_sample);
+        // TODO: Remove this restriction when mask combinin is implemented.
+        assert!(
+            self.masks.len() <= 1,
+            "Only one mask per layer is permitted for now."
+        );
+        if !self.masks.is_empty() {
+            sample.multiply_alpha_mut(self.masks[0].sample(position));
+        }
+        sample
+    }
+}
 
 /// This is intended to be called to create the initial layer only.  It does
 /// not emit LayerChange::Added event.

@@ -86,6 +86,14 @@ impl Sample {
             other.height * mix_factor + self.height * self.alpha().factor() * (1.0 - mix_factor);
         self.alpha = new_alpha;
     }
+
+    pub fn multiply_alpha_mut(&mut self, factor: f32) {
+        assert!(
+            factor >= 0.0 && factor <= 1.0,
+            "factor must be between 0.0 and 1.0."
+        );
+        self.alpha = Alpha::from_factor(self.alpha.factor() * factor);
+    }
 }
 
 impl Default for Sample {

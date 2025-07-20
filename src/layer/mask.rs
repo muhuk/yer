@@ -92,7 +92,7 @@ pub struct MaskOrder(#[deref] u32);
 pub struct SdfMask;
 
 impl SdfMask {
-    fn sample(&self, position: Vec2) -> f32 {
+    pub fn sample(&self, position: Vec2) -> f32 {
         // FIXME: use actual mask data.
         //
         // Inside the circle on origin, with r=10.
