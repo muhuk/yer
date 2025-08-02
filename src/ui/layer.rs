@@ -22,6 +22,7 @@ use bevy_egui::egui;
 
 use crate::id::{LayerId, MaskId};
 use crate::layer;
+use crate::math::{approx_eq, ONE_IN_TEN_THOUSAND};
 use crate::theme;
 use crate::undo;
 
@@ -68,21 +69,25 @@ impl Plugin for LayerUiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMapUi>()
             .register_type::<LayerUi>()
-            .add_systems(
-                Update,
-                (
-                    add_layer_ui_system,
-                    update_height_map_ui_system,
-                    reset_height_map_ui_system,
-                ),
-            );
+            .register_type::<Selected>()
+            .register_type::<SdfMaskUi>();
+        app.add_systems(
+            Update,
+            (
+                add_layer_ui_system,
+                add_mask_ui_system,
+                update_height_map_ui_system,
+                update_mask_ui_system,
+                reset_height_map_ui_system,
+                reset_mask_ui_system,
+            ),
+        );
     }
 }
 
 // COMPONENTS
 
 #[derive(Component, Debug, Reflect)]
-#[reflect(Component)]
 pub(super) enum HeightMapUi {
     Constant { height: f32, timer: Timer },
 }
@@ -99,7 +104,6 @@ impl From<&layer::HeightMap> for HeightMapUi {
 }
 
 #[derive(Component, Debug, Reflect)]
-#[reflect(Component)]
 pub(super) struct LayerUi {
     name: String,
 }
@@ -108,6 +112,33 @@ impl From<&layer::Layer> for LayerUi {
     fn from(layer: &layer::Layer) -> Self {
         Self {
             name: layer.name.clone(),
+        }
+    }
+}
+
+#[derive(Component, Debug, Reflect)]
+pub(super) enum SdfMaskUi {
+    Circle {
+        center: Vec2,
+        radius: f32,
+        falloff_radius: f32,
+        timer: Timer,
+    },
+}
+
+impl From<&layer::SdfMask> for SdfMaskUi {
+    fn from(value: &layer::SdfMask) -> Self {
+        match value {
+            layer::SdfMask::Circle {
+                center,
+                radius,
+                falloff_radius,
+            } => Self::Circle {
+                center: *center,
+                radius: *radius,
+                falloff_radius: *falloff_radius,
+                timer: Timer::new(LATENCY, TimerMode::Once),
+            },
         }
     }
 }
@@ -136,7 +167,7 @@ impl Command for SelectLayer {
 
 // SYSTEMS
 
-/// Add a LayerUi & a HeightMapUi component to each entity that got Layer component added.
+/// Add a LayerUi & a HeightMapUi component to each entity with a Layer component added.
 fn add_layer_ui_system(
     mut commands: Commands,
     layers: Query<(Entity, &layer::Layer, Option<&layer::HeightMap>), Added<layer::Layer>>,
@@ -155,7 +186,17 @@ fn add_layer_ui_system(
     }
 }
 
-/// Update HeightMap based on Ui changes.
+/// Add an SdfMaskUi component to each entity with a SdfMask added.
+fn add_mask_ui_system(
+    mut commands: Commands,
+    masks: Query<(Entity, &layer::SdfMask), Added<layer::SdfMask>>,
+) {
+    for (entity, sdf_mask) in masks.iter() {
+        commands.entity(entity).insert(SdfMaskUi::from(sdf_mask));
+    }
+}
+
+/// Update HeightMap based on UI changes.
 ///
 /// This [HeightMapUi] to [HeightMap](layer::HeightMap) update is triggered only after a short
 /// duration.  When there are frequent updates to HeightMapUi (such as
@@ -170,18 +211,78 @@ fn update_height_map_ui_system(
     for (layer, height_map, mut height_map_ui) in layers.iter_mut() {
         match *height_map_ui {
             HeightMapUi::Constant {
-                ref mut height,
+                height,
                 ref mut timer,
             } => {
                 if !timer.finished() {
                     timer.tick(time.delta());
                     let layer::HeightMap::Constant(original_height) = height_map;
-                    if timer.just_finished() && *original_height != *height {
+                    if timer.just_finished()
+                        && !approx_eq(*original_height, height, ONE_IN_TEN_THOUSAND)
+                    {
                         commands.queue(undo::PushAction::from(
                             layer::HeightMapConstantUpdateHeightAction::new(
                                 layer.id(),
                                 *original_height,
-                                *height,
+                                height,
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Update SdfMask based on UI changes.
+fn update_mask_ui_system(
+    mut commands: Commands,
+    time: Res<Time<Real>>,
+    mut masks: Query<(&layer::Mask, &layer::SdfMask, &mut SdfMaskUi)>,
+) {
+    for (mask, sdf_mask, mut sdf_mask_ui) in masks.iter_mut() {
+        match *sdf_mask_ui {
+            SdfMaskUi::Circle {
+                center,
+                radius,
+                falloff_radius,
+                ref mut timer,
+            } => {
+                if !timer.finished() {
+                    timer.tick(time.delta());
+                    let layer::SdfMask::Circle {
+                        center: original_center,
+                        radius: original_radius,
+                        falloff_radius: original_falloff_radius,
+                    } = *sdf_mask;
+                    if timer.just_finished() && original_center.distance(center) <= f32::EPSILON {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_center(
+                                mask.id(),
+                                original_center,
+                                center,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(original_falloff_radius, falloff_radius, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_falloff_radius(
+                                mask.id(),
+                                original_falloff_radius,
+                                falloff_radius,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(original_radius, radius, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_radius(
+                                mask.id(),
+                                original_radius,
+                                radius,
                             ),
                         ));
                     }
@@ -205,6 +306,34 @@ fn reset_height_map_ui_system(
                     ref mut timer,
                 } = *height_map_ui;
                 *height = *original_height;
+                timer.pause();
+            }
+        }
+    }
+}
+
+/// Update SdfMaskUi based on changes to SdfMask.
+///
+/// This gets triggered when undo/redo changes [SdfMask](layer::SdfMask).
+fn reset_mask_ui_system(
+    mut masks: Query<(&layer::SdfMask, &mut SdfMaskUi), Changed<layer::SdfMask>>,
+) {
+    for (sdf_mask, mut sdf_mask_ui) in masks.iter_mut() {
+        match sdf_mask {
+            layer::SdfMask::Circle {
+                center: original_center,
+                radius: original_radius,
+                falloff_radius: original_falloff_radius,
+            } => {
+                let SdfMaskUi::Circle {
+                    ref mut center,
+                    ref mut radius,
+                    ref mut falloff_radius,
+                    ref mut timer,
+                } = *sdf_mask_ui;
+                *center = *original_center;
+                *radius = *original_radius;
+                *falloff_radius = *original_falloff_radius;
                 timer.pause();
             }
         }

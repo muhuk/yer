@@ -18,7 +18,7 @@ use std::f32;
 
 use bevy::math::Vec2;
 
-const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
+pub const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Alpha {

@@ -98,16 +98,6 @@ pub enum SdfMask {
     },
 }
 
-impl Default for SdfMask {
-    fn default() -> Self {
-        Self::Circle {
-            center: Vec2::ZERO,
-            radius: 1.5,
-            falloff_radius: 0.5,
-        }
-    }
-}
-
 impl SdfMask {
     pub fn sample(&self, position: Vec2) -> f32 {
         match self {
@@ -119,6 +109,34 @@ impl SdfMask {
                 let distance: f32 = (position - center).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
+        }
+    }
+
+    fn set_center(&mut self, new_center: Vec2) {
+        match self {
+            Self::Circle { center, .. } => *center = new_center,
+        }
+    }
+
+    fn set_falloff_radius(&mut self, new_radius: f32) {
+        match self {
+            Self::Circle { falloff_radius, .. } => *falloff_radius = new_radius,
+        }
+    }
+
+    fn set_radius(&mut self, new_radius: f32) {
+        match self {
+            Self::Circle { radius, .. } => *radius = new_radius,
+        }
+    }
+}
+
+impl Default for SdfMask {
+    fn default() -> Self {
+        Self::Circle {
+            center: Vec2::ZERO,
+            radius: 1.5,
+            falloff_radius: 0.5,
         }
     }
 }
@@ -241,5 +259,109 @@ impl Action for DeleteMaskAction {
             previous_mask: self.previous_mask,
         }
         .apply(world);
+    }
+}
+
+// TODO: Rename this as UpdateSdfMaskAction
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub enum UpdateMaskAction {
+    UpdateCenter {
+        mask_id: MaskId,
+        old_value: Vec2,
+        new_value: Vec2,
+    },
+    UpdateFalloffRadius {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
+    UpdateRadius {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
+}
+
+impl UpdateMaskAction {
+    pub fn update_center(mask_id: MaskId, old_value: Vec2, new_value: Vec2) -> Self {
+        Self::UpdateCenter {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
+    pub fn update_falloff_radius(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateFalloffRadius {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
+    pub fn update_radius(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateRadius {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
+    fn mask_id(&self) -> &MaskId {
+        match self {
+            Self::UpdateCenter { mask_id, .. } => mask_id,
+            Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
+            Self::UpdateRadius { mask_id, .. } => mask_id,
+        }
+    }
+}
+
+impl Action for UpdateMaskAction {
+    fn apply(&self, world: &mut World) {
+        let mut sdf_mask = world
+            .query::<(&Mask, &mut SdfMask)>()
+            .iter_mut(world)
+            .find(|(mask, _)| mask.id == *self.mask_id())
+            .map(|(_, sdf_mask)| sdf_mask)
+            .expect(&format!("Mask with id {} not found.", self.mask_id()));
+        match self {
+            Self::UpdateCenter { new_value, .. } => sdf_mask.set_center(*new_value),
+            Self::UpdateFalloffRadius { new_value, .. } => sdf_mask.set_falloff_radius(*new_value),
+            Self::UpdateRadius { new_value, .. } => sdf_mask.set_radius(*new_value),
+        };
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action: Self = match *self {
+            Self::UpdateCenter {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateCenter {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateFalloffRadius {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateFalloffRadius {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateRadius {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateRadius {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+        };
+        reverse_action.apply(world);
     }
 }
