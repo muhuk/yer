@@ -17,6 +17,7 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
+use bevy::ecs::{component::HookContext, world::DeferredWorld};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +39,7 @@ impl Plugin for LayerComponentsPlugin {
             .register_type::<Layer>()
             .register_type::<LayerOrder>()
             .register_type::<LayerId>();
+        app.register_type::<NeedsLayerOrderNormalization>();
     }
 }
 
@@ -157,5 +159,15 @@ impl Display for Layer {
     Reflect,
     Serialize,
 )]
+#[component(on_remove = layer_order_on_remove_hook)]
 #[require(Layer)]
 pub struct LayerOrder(#[deref] pub(super) u32);
+
+#[derive(Clone, Component, Debug, Reflect)]
+pub struct NeedsLayerOrderNormalization;
+
+// LIB
+
+fn layer_order_on_remove_hook(mut world: DeferredWorld, HookContext { .. }: HookContext) {
+    world.commands().spawn(NeedsLayerOrderNormalization);
+}

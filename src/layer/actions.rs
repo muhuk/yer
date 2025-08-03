@@ -82,7 +82,7 @@ impl Action for CreateLayerAction {
     fn revert(&self, world: &mut World) {
         DeleteLayerAction {
             layer: self.layer.clone(),
-            parent_id: None,
+            parent_id: self.parent_id,
         }
         .apply(world)
     }

@@ -255,7 +255,9 @@ fn update_mask_ui_system(
                         radius: original_radius,
                         falloff_radius: original_falloff_radius,
                     } = *sdf_mask;
-                    if timer.just_finished() && original_center.distance(center) <= f32::EPSILON {
+                    if timer.just_finished()
+                        && !approx_eq(original_center.distance(center), 0.0, ONE_IN_TEN_THOUSAND)
+                    {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskAction::update_center(
                                 mask.id(),
@@ -357,8 +359,13 @@ fn draw_ui_for_layer_common_bottom(
         if ui.button("Add mask").clicked() {
             let mask_bundle: layer::MaskBundle = layer::MaskBundle::default();
             let layer_id: LayerId = layer.id();
-            // FIXME: Find out the topmost mask instead of just passing None.
-            let previous_mask_id: Option<MaskId> = None;
+            let previous_mask_id: Option<MaskId> = masks_query
+                .masks
+                .iter()
+                .sort::<&layer::MaskOrder>()
+                .last()
+                .map(|(_, mask, _, _)| mask.id());
+            info!("previous_mask_id = {:?}", &previous_mask_id);
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
                 layer_id,
@@ -366,24 +373,34 @@ fn draw_ui_for_layer_common_bottom(
             )));
         }
 
-        if let Ok(children) = children_query.get(entity) {
-            // FIXME: We are not ordering masks using MaskOrder.
-            for mask_entity in children.iter() {
+        if let Ok(children) = children_query.get(entity).map(|children| children.to_vec()) {
+            let mask_ids: Vec<MaskId> = masks_query
+                .masks
+                .iter()
+                .sort::<&layer::MaskOrder>()
+                .rev()
+                .map(|(_, mask, _, _)| mask.id())
+                .collect();
+            for (idx, (mask_entity, mask, _, sdf_mask)) in masks_query
+                .masks
+                .iter()
+                .sort::<&layer::MaskOrder>()
+                .rev()
+                .filter(|(entity, _, _, _)| children.contains(entity))
+                .enumerate()
+            {
                 frame.show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(format!("Mask: {:?}", mask_entity));
                         if ui.button("Delete").clicked() {
                             let mask_bundle: layer::MaskBundle = {
-                                let (_, mask, _, sdf_mask) =
-                                    masks_query.masks.get(mask_entity).unwrap();
                                 layer::MaskBundle {
                                     mask: mask.clone(),
                                     sdf_mask: sdf_mask.clone(),
                                 }
                             };
                             let layer_id: LayerId = layer.id();
-                            // FIXME: Use actual previous mask id instead of None.
-                            let previous_mask_id: Option<MaskId> = None;
+                            let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
                             commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
                                 mask_bundle,
                                 layer_id,
