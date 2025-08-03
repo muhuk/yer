@@ -37,8 +37,11 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((components::LayerComponentsPlugin, mask::MaskPlugin));
         app.add_systems(
-            Update,
-            normalize_layer_ordering_system.run_if(any_match_filter::<Changed<LayerOrder>>),
+            PreUpdate,
+            normalize_layer_ordering_system.run_if(
+                any_match_filter::<Changed<LayerOrder>>
+                    .or(any_with_component::<NeedsLayerOrderNormalization>),
+            ),
         );
     }
 
@@ -51,7 +54,11 @@ impl Plugin for LayerPlugin {
 
 // SYSTEMS
 
-fn normalize_layer_ordering_system(mut layers: Query<&mut LayerOrder>) {
+fn normalize_layer_ordering_system(
+    mut commands: Commands,
+    mut layers: Query<&mut LayerOrder>,
+    needs_layer_order_normalization_query: Query<Entity, With<NeedsLayerOrderNormalization>>,
+) {
     trace!("Normalizing layer ordering.");
     layers
         .iter_mut()
@@ -63,6 +70,9 @@ fn normalize_layer_ordering_system(mut layers: Query<&mut LayerOrder>) {
             layer_order.bypass_change_detection().0 =
                 u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
         });
+    needs_layer_order_normalization_query
+        .iter()
+        .for_each(|entity| commands.entity(entity).despawn());
 }
 
 // LIB

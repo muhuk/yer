@@ -14,15 +14,17 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use bevy::ecs::{component::HookContext, world::DeferredWorld};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::id::{LayerId, MaskId};
+// FIXME: Circular dependency
 use crate::layer::Layer;
 use crate::math::clamp;
 use crate::undo::{Action, ReflectAction};
 
-pub const LAYER_SPACING: u32 = 100;
+pub const MASK_SPACING: u32 = 100;
 
 // PLUGIN
 
@@ -33,6 +35,16 @@ impl Plugin for MaskPlugin {
         app.register_type::<Mask>()
             .register_type::<MaskOrder>()
             .register_type::<SdfMask>();
+        app.register_type::<NeedsMaskOrderNormalization>();
+        app.add_systems(
+            PreUpdate,
+            (
+                mark_for_mask_order_normalization_system,
+                normalize_mask_ordering_system
+                    .run_if(any_with_component::<NeedsMaskOrderNormalization>),
+            )
+                .chain(),
+        );
     }
 }
 
@@ -85,8 +97,14 @@ impl Mask {
     Reflect,
     Serialize,
 )]
+#[component(on_remove = mask_order_on_remove_hook)]
 #[require(Mask)]
 pub struct MaskOrder(#[deref] u32);
+
+/// This is added to a layer entity when its masks' order need to be
+/// normalized.
+#[derive(Clone, Component, Debug, Reflect)]
+struct NeedsMaskOrderNormalization;
 
 #[derive(Clone, Component, Debug, Reflect)]
 #[require(Mask)]
@@ -201,7 +219,7 @@ impl Action for CreateMaskAction {
                 .map(|entity| entity.get::<MaskOrder>().unwrap().0)
                 .filter(|order| *order > bottom_mask_order)
                 .max()
-                .unwrap_or(bottom_mask_order + 2 * LAYER_SPACING);
+                .unwrap_or(bottom_mask_order + 2 * MASK_SPACING);
             MaskOrder((bottom_mask_order + top_mask_order) / 2)
         };
         world.spawn((self.mask_bundle.clone(), mask_order, ChildOf(parent)));
@@ -363,5 +381,59 @@ impl Action for UpdateMaskAction {
             },
         };
         reverse_action.apply(world);
+    }
+}
+
+// SYSTEMS
+
+fn mark_for_mask_order_normalization_system(
+    changed_masks_query: Query<&ChildOf, Changed<MaskOrder>>,
+    mut commands: Commands,
+) {
+    for ChildOf(parent) in changed_masks_query.iter() {
+        commands.entity(*parent).insert(NeedsMaskOrderNormalization);
+    }
+}
+
+fn normalize_mask_ordering_system(
+    mut commands: Commands,
+    layers_query: Query<Entity, With<NeedsMaskOrderNormalization>>,
+    mut masks_query: Query<(&mut MaskOrder, &ChildOf)>,
+) {
+    trace!("Normalizing mask ordering.");
+    for layer_entity in layers_query.iter() {
+        masks_query
+            .iter_mut()
+            // Ideally `sort` should come after `filter`, but this should work too.
+            .sort::<&MaskOrder>()
+            .filter(|(_, ChildOf(parent))| *parent == layer_entity)
+            .enumerate()
+            .for_each(|(idx, (mut mask_order, _))| {
+                // Start from MASK_SPACING (1-based) and increment for
+                // as much as MASK_SPACING at each layer.
+                mask_order.bypass_change_detection().0 =
+                    u32::try_from(idx + 1).expect("There are too many masks.") * MASK_SPACING;
+            });
+        commands
+            .entity(layer_entity)
+            .remove::<NeedsMaskOrderNormalization>();
+    }
+}
+
+// LIB
+
+fn mask_order_on_remove_hook(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
+    if let Some(ChildOf(parent)) = world.entity(entity).get::<ChildOf>().cloned() {
+        // The layer might be deleted, so we cannot assume the parent entity exists
+        // when the new command we're adding here gets executed.
+        world
+            .commands()
+            .get_entity(parent)
+            .iter_mut()
+            .for_each(|entity| {
+                entity.insert(NeedsMaskOrderNormalization);
+            });
+    } else {
+        error!("Mask {} has no parent.", entity);
     }
 }
