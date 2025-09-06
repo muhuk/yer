@@ -195,7 +195,6 @@ fn draw_ui_dialogs_system(
 
 fn draw_ui_panels_system(
     mut app_exit_events: EventWriter<AppExit>,
-    children_query: Query<&Children>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
@@ -259,7 +258,6 @@ fn draw_ui_panels_system(
                         &mut commands,
                         colors,
                         ui,
-                        &children_query,
                         &mut layers_query,
                         &mut masks_query,
                     );
