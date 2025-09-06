@@ -54,11 +54,33 @@ pub struct MasksQuery<'w, 's> {
         's,
         (
             Entity,
+            &'static ChildOf,
             &'static layer::Mask,
             &'static layer::MaskOrder,
             &'static layer::SdfMask,
         ),
     >,
+}
+
+impl<'w, 's> MasksQuery<'w, 's> {
+    pub fn masks_for_layer(
+        &self,
+        layer: Entity,
+    ) -> impl Iterator<
+        Item = (
+            Entity,
+            &ChildOf,
+            &layer::Mask,
+            &layer::MaskOrder,
+            &layer::SdfMask,
+        ),
+    > {
+        self.masks
+            .iter()
+            .sort::<&layer::MaskOrder>()
+            .rev()
+            .filter(move |(_, parent, _, _, _)| parent.0 == layer)
+    }
 }
 
 // PLUGIN
@@ -346,7 +368,6 @@ fn reset_mask_ui_system(
 
 fn draw_ui_for_layer_common_bottom(
     commands: &mut Commands,
-    children_query: &Query<&Children>,
     masks_query: &mut MasksQuery,
     entity: Entity,
     layer: &layer::Layer,
@@ -356,16 +377,15 @@ fn draw_ui_for_layer_common_bottom(
     frame.show(ui, |ui| {
         ui.heading("Masks");
 
+        let mask_ids: Vec<MaskId> = masks_query
+            .masks_for_layer(entity)
+            .map(|(_, _, mask, _, _)| mask.id())
+            .collect();
+
         if ui.button("Add mask").clicked() {
             let mask_bundle: layer::MaskBundle = layer::MaskBundle::default();
             let layer_id: LayerId = layer.id();
-            let previous_mask_id: Option<MaskId> = masks_query
-                .masks
-                .iter()
-                .sort::<&layer::MaskOrder>()
-                .last()
-                .map(|(_, mask, _, _)| mask.id());
-            info!("previous_mask_id = {:?}", &previous_mask_id);
+            let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
                 layer_id,
@@ -373,43 +393,29 @@ fn draw_ui_for_layer_common_bottom(
             )));
         }
 
-        if let Ok(children) = children_query.get(entity).map(|children| children.to_vec()) {
-            let mask_ids: Vec<MaskId> = masks_query
-                .masks
-                .iter()
-                .sort::<&layer::MaskOrder>()
-                .rev()
-                .map(|(_, mask, _, _)| mask.id())
-                .collect();
-            for (idx, (mask_entity, mask, _, sdf_mask)) in masks_query
-                .masks
-                .iter()
-                .sort::<&layer::MaskOrder>()
-                .rev()
-                .filter(|(entity, _, _, _)| children.contains(entity))
-                .enumerate()
-            {
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(format!("Mask: {:?}", mask_entity));
-                        if ui.button("Delete").clicked() {
-                            let mask_bundle: layer::MaskBundle = {
-                                layer::MaskBundle {
-                                    mask: mask.clone(),
-                                    sdf_mask: sdf_mask.clone(),
-                                }
-                            };
-                            let layer_id: LayerId = layer.id();
-                            let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
-                            commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
-                                mask_bundle,
-                                layer_id,
-                                previous_mask_id,
-                            )));
-                        }
-                    });
+        for (idx, (mask_entity, _, mask, _, sdf_mask)) in
+            masks_query.masks_for_layer(entity).enumerate()
+        {
+            frame.show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Mask: {:?}", mask_entity));
+                    if ui.button("Delete").clicked() {
+                        let mask_bundle: layer::MaskBundle = {
+                            layer::MaskBundle {
+                                mask: mask.clone(),
+                                sdf_mask: sdf_mask.clone(),
+                            }
+                        };
+                        let layer_id: LayerId = layer.id();
+                        let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
+                        commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
+                            mask_bundle,
+                            layer_id,
+                            previous_mask_id,
+                        )));
+                    }
                 });
-            }
+            });
         }
     });
 }
@@ -512,7 +518,6 @@ pub fn draw_ui_for_layers(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    children_query: &Query<&Children>,
     layers_query: &mut LayersQuery,
     masks_query: &mut MasksQuery,
 ) {
@@ -552,7 +557,6 @@ pub fn draw_ui_for_layers(
                     commands,
                     theme_colors,
                     ui,
-                    children_query,
                     masks_query,
                     parent_layer_id,
                     entity,
@@ -570,7 +574,6 @@ fn draw_ui_for_layer(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    children_query: &Query<&Children>,
     masks_query: &mut MasksQuery,
     parent_layer_id: Option<LayerId>,
     entity: Entity,
@@ -622,7 +625,6 @@ fn draw_ui_for_layer(
                             ui.separator();
                             draw_ui_for_layer_common_bottom(
                                 commands,
-                                children_query,
                                 masks_query,
                                 entity,
                                 layer,
