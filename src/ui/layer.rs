@@ -588,7 +588,7 @@ fn draw_ui_for_layer(
     }
     frame.show(ui, |ui| {
         ui.horizontal(|ui| {
-            let height_id = ui.id().with("height");
+            let height_id = ui.id().with("height").with(layer.id());
             {
                 let height: f32 = ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
                 let (response, painter) = ui.allocate_painter(
