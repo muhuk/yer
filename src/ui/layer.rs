@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use bevy::ecs::system::SystemParam;
+use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::prelude::*;
 use bevy_egui::egui;
 
@@ -74,39 +74,27 @@ pub(super) struct Layers<'w, 's> {
     >,
 }
 
+#[derive(QueryData)]
+pub(super) struct MaskQuery {
+    pub entity: Entity,
+    pub child_of: &'static ChildOf,
+    pub mask: &'static layer::Mask,
+    pub mask_order: &'static layer::MaskOrder,
+    pub sdf_mask: &'static layer::SdfMask,
+}
+
 #[derive(SystemParam)]
 pub(super) struct Masks<'w, 's> {
-    masks: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static ChildOf,
-            &'static layer::Mask,
-            &'static layer::MaskOrder,
-            &'static layer::SdfMask,
-        ),
-    >,
+    masks: Query<'w, 's, MaskQuery>,
 }
 
 impl<'w, 's> Masks<'w, 's> {
-    pub fn masks_for_layer(
-        &self,
-        layer: Entity,
-    ) -> impl Iterator<
-        Item = (
-            Entity,
-            &ChildOf,
-            &layer::Mask,
-            &layer::MaskOrder,
-            &layer::SdfMask,
-        ),
-    > {
+    pub fn masks_for_layer(&self, layer: Entity) -> impl Iterator<Item = MaskQueryItem> {
         self.masks
             .iter()
             .sort::<&layer::MaskOrder>()
             .rev()
-            .filter(move |(_, parent, _, _, _)| parent.0 == layer)
+            .filter(move |m| m.child_of.0 == layer)
     }
 }
 
@@ -382,7 +370,7 @@ fn draw_ui_for_layer_common_bottom(
 
         let mask_ids: Vec<MaskId> = masks_query
             .masks_for_layer(entity)
-            .map(|(_, _, mask, _, _)| mask.id())
+            .map(|m| m.mask.id())
             .collect();
 
         if ui.button("Add mask").clicked() {
@@ -396,17 +384,15 @@ fn draw_ui_for_layer_common_bottom(
             )));
         }
 
-        for (idx, (mask_entity, _, mask, _, sdf_mask)) in
-            masks_query.masks_for_layer(entity).enumerate()
-        {
+        for (idx, m) in masks_query.masks_for_layer(entity).enumerate() {
             frame.show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(format!("Mask: {:?}", mask_entity));
+                    ui.label(format!("Mask: {:?}", m.entity));
                     if ui.button("Delete").clicked() {
                         let mask_bundle: layer::MaskBundle = {
                             layer::MaskBundle {
-                                mask: mask.clone(),
-                                sdf_mask: sdf_mask.clone(),
+                                mask: m.mask.clone(),
+                                sdf_mask: m.sdf_mask.clone(),
                             }
                         };
                         let layer_id: LayerId = layer.id();
