@@ -198,8 +198,8 @@ fn draw_ui_panels_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
-    mut layers_query: layer::LayersQuery,
-    mut masks_query: layer::MasksQuery,
+    mut layers_query: layer::Layers,
+    mut masks_query: layer::Masks,
     preview_query: preview::PreviewQuery,
     primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
@@ -343,7 +343,7 @@ fn draw_ui_menu(
     ui: &mut egui::Ui,
     app_exit_events: &mut EventWriter<AppExit>,
     commands: &mut Commands,
-    layers_query: &layer::LayersQuery,
+    layers_query: &layer::Layers,
     session: &session::Session,
     undo_stack: &undo::UndoStack,
     ui_state_next: &mut ResMut<NextState<UiState>>,
@@ -411,21 +411,18 @@ fn draw_ui_menu(
             // There must be at least 2 layers.
             // And there must be one and only one layer selected.
             let layer_ids = layers_query
-                .layers
                 .iter()
                 .sort::<&crate_layer::LayerOrder>()
                 .map(|(_, layer, _, _, _, _)| layer.id())
                 .collect::<Vec<_>>();
             if layer_ids.len() >= 2
                 && layers_query
-                    .layers
                     .iter()
                     .filter(|(_, _, _, _, _, is_selected)| *is_selected)
                     .count()
                     == 1
             {
                 selected_layer_idx = layers_query
-                    .layers
                     .iter()
                     .sort::<&crate_layer::LayerOrder>()
                     .enumerate()

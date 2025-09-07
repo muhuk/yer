@@ -57,9 +57,10 @@ impl Plugin for LayerUiPlugin {
 
 // SYSTEM PARAM & QUERY DATA
 
-#[derive(SystemParam)]
-pub struct LayersQuery<'w, 's> {
-    pub layers: Query<
+#[derive(Deref, DerefMut, SystemParam)]
+pub(super) struct Layers<'w, 's> {
+    #[deref]
+    layers: Query<
         'w,
         's,
         (
@@ -74,8 +75,8 @@ pub struct LayersQuery<'w, 's> {
 }
 
 #[derive(SystemParam)]
-pub struct MasksQuery<'w, 's> {
-    pub masks: Query<
+pub(super) struct Masks<'w, 's> {
+    masks: Query<
         'w,
         's,
         (
@@ -88,7 +89,7 @@ pub struct MasksQuery<'w, 's> {
     >,
 }
 
-impl<'w, 's> MasksQuery<'w, 's> {
+impl<'w, 's> Masks<'w, 's> {
     pub fn masks_for_layer(
         &self,
         layer: Entity,
@@ -370,7 +371,7 @@ fn reset_mask_ui_system(
 
 fn draw_ui_for_layer_common_bottom(
     commands: &mut Commands,
-    masks_query: &mut MasksQuery,
+    masks_query: &mut Masks,
     entity: Entity,
     layer: &layer::Layer,
     ui: &mut egui::Ui,
@@ -520,8 +521,8 @@ pub fn draw_ui_for_layers(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    layers_query: &mut LayersQuery,
-    masks_query: &mut MasksQuery,
+    layers_query: &mut Layers,
+    masks_query: &mut Masks,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
@@ -538,7 +539,6 @@ pub fn draw_ui_for_layers(
         }
         {
             let layer_ids: Vec<LayerId> = layers_query
-                .layers
                 .iter()
                 .sort::<&layer::LayerOrder>()
                 .rev()
@@ -548,7 +548,6 @@ pub fn draw_ui_for_layers(
             // (last applied) layer on top.
             for (idx, (entity, layer, _, mut layer_ui, mut height_map_ui, is_selected)) in
                 layers_query
-                    .layers
                     .iter_mut()
                     .sort::<&layer::LayerOrder>()
                     .rev()
@@ -576,7 +575,7 @@ fn draw_ui_for_layer(
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
-    masks_query: &mut MasksQuery,
+    masks_query: &mut Masks,
     parent_layer_id: Option<LayerId>,
     entity: Entity,
     layer: &layer::Layer,
