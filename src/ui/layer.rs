@@ -31,6 +31,32 @@ use super::egui_ext::ToColor32;
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 
+// PLUGIN
+
+pub struct LayerUiPlugin;
+
+impl Plugin for LayerUiPlugin {
+    fn build(&self, app: &mut App) {
+        app.register_type::<HeightMapUi>()
+            .register_type::<LayerUi>()
+            .register_type::<Selected>()
+            .register_type::<SdfMaskUi>();
+        app.add_systems(
+            Update,
+            (
+                add_layer_ui_system,
+                add_mask_ui_system,
+                update_height_map_ui_system,
+                update_mask_ui_system,
+                reset_height_map_ui_system,
+                reset_mask_ui_system,
+            ),
+        );
+    }
+}
+
+// SYSTEM PARAM & QUERY DATA
+
 #[derive(SystemParam)]
 pub struct LayersQuery<'w, 's> {
     pub layers: Query<
@@ -80,30 +106,6 @@ impl<'w, 's> MasksQuery<'w, 's> {
             .sort::<&layer::MaskOrder>()
             .rev()
             .filter(move |(_, parent, _, _, _)| parent.0 == layer)
-    }
-}
-
-// PLUGIN
-
-pub struct LayerUiPlugin;
-
-impl Plugin for LayerUiPlugin {
-    fn build(&self, app: &mut App) {
-        app.register_type::<HeightMapUi>()
-            .register_type::<LayerUi>()
-            .register_type::<Selected>()
-            .register_type::<SdfMaskUi>();
-        app.add_systems(
-            Update,
-            (
-                add_layer_ui_system,
-                add_mask_ui_system,
-                update_height_map_ui_system,
-                update_mask_ui_system,
-                reset_height_map_ui_system,
-                reset_mask_ui_system,
-            ),
-        );
     }
 }
 
