@@ -385,26 +385,16 @@ fn draw_ui_for_layer_common_bottom(
         }
 
         for (idx, m) in masks_query.masks_for_layer(entity).enumerate() {
-            frame.show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(format!("Mask: {:?}", m.entity));
-                    if ui.button("Delete").clicked() {
-                        let mask_bundle: layer::MaskBundle = {
-                            layer::MaskBundle {
-                                mask: m.mask.clone(),
-                                sdf_mask: m.sdf_mask.clone(),
-                            }
-                        };
-                        let layer_id: LayerId = layer.id();
-                        let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
-                        commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
-                            mask_bundle,
-                            layer_id,
-                            previous_mask_id,
-                        )));
-                    }
-                });
-            });
+            let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
+            draw_ui_for_mask(
+                commands,
+                layer.id(),
+                m.mask,
+                m.entity,
+                previous_mask_id,
+                m.sdf_mask,
+                ui,
+            );
         }
     });
 }
@@ -626,6 +616,34 @@ fn draw_ui_for_layer(
 
             // Save the actual height for the next frame.
             ui.data_mut(|map| map.insert_temp(height_id, actual_height));
+        });
+    });
+}
+
+fn draw_ui_for_mask(
+    commands: &mut Commands,
+    layer_id: LayerId,
+    mask: &layer::Mask,
+    mask_entity: Entity,
+    previous_mask_id: Option<MaskId>,
+    sdf_mask: &layer::SdfMask,
+    ui: &mut egui::Ui,
+) {
+    let frame = egui::containers::Frame::group(ui.style());
+    frame.show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(format!("Mask: {:?}", mask_entity));
+            if ui.button("Delete").clicked() {
+                let mask_bundle = layer::MaskBundle {
+                    mask: mask.clone(),
+                    sdf_mask: sdf_mask.clone(),
+                };
+                commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
+                    mask_bundle,
+                    layer_id,
+                    previous_mask_id,
+                )));
+            }
         });
     });
 }
