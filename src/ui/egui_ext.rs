@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
+use std::ops::RangeInclusive;
 
 use bevy::prelude::*;
 use bevy_egui::{
@@ -152,5 +153,23 @@ impl ToColor32 for Color {
     fn to_color32(self) -> Color32 {
         let [r, g, b] = self.to_srgba().to_u8_array_no_alpha();
         Color32::from_rgb(r, g, b)
+    }
+}
+
+pub fn draw_ui_editable_f32(
+    range: Option<RangeInclusive<f32>>,
+    ui: &mut egui::Ui,
+    value: f32,
+) -> Option<f32> {
+    let mut value_edited: f32 = value;
+    let mut widget = egui::widgets::DragValue::new(&mut value_edited).update_while_editing(false);
+    if let Some(range) = range {
+        widget = widget.range(range);
+    }
+    let response = ui.add(widget);
+    if response.changed() && value_edited != value {
+        Some(value_edited)
+    } else {
+        None
     }
 }

@@ -26,7 +26,7 @@ use crate::math::{approx_eq, ONE_IN_TEN_THOUSAND};
 use crate::theme;
 use crate::undo;
 
-use super::egui_ext::ToColor32;
+use super::egui_ext::{draw_ui_editable_f32, ToColor32};
 
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
@@ -75,12 +75,14 @@ pub(super) struct Layers<'w, 's> {
 }
 
 #[derive(QueryData)]
+#[query_data(mutable)]
 pub(super) struct MaskQuery {
     pub entity: Entity,
     pub child_of: &'static ChildOf,
     pub mask: &'static layer::Mask,
     pub mask_order: &'static layer::MaskOrder,
     pub sdf_mask: &'static layer::SdfMask,
+    pub sdf_mask_ui: &'static mut SdfMaskUi,
 }
 
 #[derive(SystemParam)]
@@ -89,9 +91,9 @@ pub(super) struct Masks<'w, 's> {
 }
 
 impl<'w, 's> Masks<'w, 's> {
-    pub fn masks_for_layer(&self, layer: Entity) -> impl Iterator<Item = MaskQueryItem> {
+    pub fn masks_for_layer(&mut self, layer: Entity) -> impl Iterator<Item = MaskQueryItem> {
         self.masks
-            .iter()
+            .iter_mut()
             .sort::<&layer::MaskOrder>()
             .rev()
             .filter(move |m| m.child_of.0 == layer)
@@ -384,17 +386,9 @@ fn draw_ui_for_layer_common_bottom(
             )));
         }
 
-        for (idx, m) in masks_query.masks_for_layer(entity).enumerate() {
+        for (idx, mut m) in masks_query.masks_for_layer(entity).enumerate() {
             let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
-            draw_ui_for_mask(
-                commands,
-                layer.id(),
-                m.mask,
-                m.entity,
-                previous_mask_id,
-                m.sdf_mask,
-                ui,
-            );
+            draw_ui_for_mask(commands, layer.id(), &mut m, previous_mask_id, ui);
         }
     });
 }
@@ -466,27 +460,20 @@ fn draw_ui_for_layer_common_top(
 fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
     ui.horizontal(|ui| {
         ui.label("Height:");
-        let original_height: f32 = {
-            let HeightMapUi::Constant { height, .. } = height_map_ui;
-            *height
-        };
-        let mut height_edited: f32 = original_height;
-        let widget = egui::widgets::DragValue::new(&mut height_edited)
-            .range(layer::HEIGHT_RANGE)
-            .update_while_editing(false);
-        let response = ui
-            .with_layout(
-                egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
-                |ui| ui.add(widget),
-            )
-            .inner;
-        if response.changed() && height_edited != original_height {
-            match height_map_ui {
-                HeightMapUi::Constant { height, timer } => {
-                    *height = height_edited;
-                    timer.unpause();
-                    timer.reset();
-                }
+        match height_map_ui {
+            HeightMapUi::Constant { height, timer } => {
+                ui.with_layout(
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    |ui| {
+                        if let Some(new_height) =
+                            draw_ui_editable_f32(Some(layer::HEIGHT_RANGE), ui, *height)
+                        {
+                            *height = new_height;
+                            timer.unpause();
+                            timer.reset();
+                        }
+                    },
+                );
             }
         }
     });
@@ -623,20 +610,18 @@ fn draw_ui_for_layer(
 fn draw_ui_for_mask(
     commands: &mut Commands,
     layer_id: LayerId,
-    mask: &layer::Mask,
-    mask_entity: Entity,
+    mask: &mut <MaskQuery as QueryData>::Item<'_>,
     previous_mask_id: Option<MaskId>,
-    sdf_mask: &layer::SdfMask,
     ui: &mut egui::Ui,
 ) {
     let frame = egui::containers::Frame::group(ui.style());
     frame.show(ui, |ui| {
         ui.horizontal(|ui| {
-            ui.label(format!("Mask: {:?}", mask_entity));
+            ui.label(format!("Mask: {:?}", mask.entity));
             if ui.button("Delete").clicked() {
                 let mask_bundle = layer::MaskBundle {
-                    mask: mask.clone(),
-                    sdf_mask: sdf_mask.clone(),
+                    mask: mask.mask.clone(),
+                    sdf_mask: mask.sdf_mask.clone(),
                 };
                 commands.queue(undo::PushAction::from(layer::DeleteMaskAction::new(
                     mask_bundle,
@@ -645,5 +630,46 @@ fn draw_ui_for_mask(
                 )));
             }
         });
+        match *mask.sdf_mask_ui {
+            SdfMaskUi::Circle {
+                ref mut center,
+                ref mut radius,
+                ref mut falloff_radius,
+                ref mut timer,
+                ..
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Center");
+                    if let Some(new_x) = draw_ui_editable_f32(None, ui, center.x) {
+                        center.x = new_x;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                    if let Some(new_y) = draw_ui_editable_f32(None, ui, center.y) {
+                        center.y = new_y;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Radius");
+                    if let Some(new_radius) = draw_ui_editable_f32(None, ui, *radius) {
+                        *radius = new_radius;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Radius");
+                    if let Some(new_falloff_radius) =
+                        draw_ui_editable_f32(None, ui, *falloff_radius)
+                    {
+                        *falloff_radius = new_falloff_radius;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+            }
+        }
     });
 }
