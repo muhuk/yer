@@ -57,21 +57,21 @@ impl Plugin for LayerUiPlugin {
 
 // SYSTEM PARAM & QUERY DATA
 
+#[derive(QueryData)]
+#[query_data(mutable)]
+pub(super) struct LayerQuery {
+    pub entity: Entity,
+    pub layer: &'static layer::Layer,
+    pub layer_order: &'static layer::LayerOrder,
+    pub layer_ui: &'static mut LayerUi,
+    pub height_map_ui: &'static mut HeightMapUi,
+    pub is_selected: Has<Selected>,
+}
+
 #[derive(Deref, DerefMut, SystemParam)]
 pub(super) struct Layers<'w, 's> {
     #[deref]
-    layers: Query<
-        'w,
-        's,
-        (
-            Entity,
-            &'static layer::Layer,
-            &'static layer::LayerOrder,
-            &'static mut LayerUi,
-            &'static mut HeightMapUi,
-            Has<Selected>,
-        ),
-    >,
+    layers: Query<'w, 's, LayerQuery>,
 }
 
 #[derive(QueryData)]
@@ -495,7 +495,7 @@ pub fn draw_ui_for_layers(
                 .iter()
                 .sort::<&layer::LayerOrder>()
                 .last()
-                .map(|(_, layer, _, _, _, _)| layer.id());
+                .map(|l| l.layer.id());
             commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
                 top_layer_id,
             )));
@@ -505,16 +505,15 @@ pub fn draw_ui_for_layers(
                 .iter()
                 .sort::<&layer::LayerOrder>()
                 .rev()
-                .map(|(_, layer, _, _, _, _)| layer.id())
+                .map(|l| l.layer.id())
                 .collect();
             // We need to iterate layers in reverse order to place the topmost
             // (last applied) layer on top.
-            for (idx, (entity, layer, _, mut layer_ui, mut height_map_ui, is_selected)) in
-                layers_query
-                    .iter_mut()
-                    .sort::<&layer::LayerOrder>()
-                    .rev()
-                    .enumerate()
+            for (idx, mut l) in layers_query
+                .iter_mut()
+                .sort::<&layer::LayerOrder>()
+                .rev()
+                .enumerate()
             {
                 let parent_layer_id = layer_ids.get(idx + 1).cloned();
                 draw_ui_for_layer(
@@ -523,11 +522,11 @@ pub fn draw_ui_for_layers(
                     ui,
                     masks_query,
                     parent_layer_id,
-                    entity,
-                    layer,
-                    layer_ui.as_mut(),
-                    height_map_ui.as_mut(),
-                    is_selected,
+                    l.entity,
+                    l.layer,
+                    l.layer_ui.as_mut(),
+                    l.height_map_ui.as_mut(),
+                    l.is_selected,
                 );
             }
         }
