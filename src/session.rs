@@ -55,7 +55,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn get_file_path(&self) -> Option<Cow<Path>> {
+    pub fn get_file_path(&self) -> Option<Cow<'_, Path>> {
         self.loaded_from.as_ref().map(|p| Cow::from(p.as_path()))
     }
 
