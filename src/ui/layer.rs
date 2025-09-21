@@ -91,7 +91,7 @@ pub(super) struct Masks<'w, 's> {
 }
 
 impl<'w, 's> Masks<'w, 's> {
-    pub fn masks_for_layer(&mut self, layer: Entity) -> impl Iterator<Item = MaskQueryItem> {
+    pub fn masks_for_layer(&mut self, layer: Entity) -> impl Iterator<Item = MaskQueryItem<'_>> {
         self.masks
             .iter_mut()
             .sort::<&layer::MaskOrder>()
