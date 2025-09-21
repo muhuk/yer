@@ -413,20 +413,14 @@ fn draw_ui_menu(
             let layer_ids = layers_query
                 .iter()
                 .sort::<&crate_layer::LayerOrder>()
-                .map(|(_, layer, _, _, _, _)| layer.id())
+                .map(|l| l.layer.id())
                 .collect::<Vec<_>>();
-            if layer_ids.len() >= 2
-                && layers_query
-                    .iter()
-                    .filter(|(_, _, _, _, _, is_selected)| *is_selected)
-                    .count()
-                    == 1
-            {
+            if layer_ids.len() >= 2 && layers_query.iter().filter(|l| l.is_selected).count() == 1 {
                 selected_layer_idx = layers_query
                     .iter()
                     .sort::<&crate_layer::LayerOrder>()
                     .enumerate()
-                    .find(|(_, (_, _, _, _, _, is_selected))| *is_selected)
+                    .find(|(_, l)| l.is_selected)
                     .map(|(idx, _)| idx)
                     .unwrap();
                 if selected_layer_idx + 1 < layer_ids.len() {
