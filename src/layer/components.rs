@@ -90,7 +90,7 @@ impl Default for HeightMap {
 }
 
 impl Sampler2D for HeightMap {
-    fn sample(&self, _position: Vec2, base: &Sample) -> Sample {
+    fn sample(&self, _position: Vec2, _base: &Sample) -> Sample {
         match self {
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
