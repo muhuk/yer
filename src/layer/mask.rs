@@ -120,6 +120,12 @@ pub enum SdfMask {
     },
 }
 
+// FIXME: This is called SDF but it is not an SDF.
+//
+//        SdfMask::sample needs to return a signed distance.
+//
+//        falloff_radius needs to be applied on the final composited mask,
+//        not as part of each mask.
 impl SdfMask {
     pub fn sample(&self, position: Vec2) -> f32 {
         match self {
