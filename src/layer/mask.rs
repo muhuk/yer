@@ -60,12 +60,16 @@ pub struct MaskBundle {
 
 #[derive(Clone, Component, Debug, Reflect)]
 pub struct Mask {
+    pub is_enabled: bool,
     id: MaskId,
 }
 
 impl Default for Mask {
     fn default() -> Self {
-        Self { id: Self::new_id() }
+        Self {
+            is_enabled: true,
+            id: Self::new_id(),
+        }
     }
 }
 
@@ -75,7 +79,7 @@ impl Mask {
     }
 
     pub(super) fn new(id: MaskId) -> Self {
-        Self { id }
+        Self { id, ..default() }
     }
 
     pub(super) fn new_id() -> MaskId {
@@ -284,6 +288,10 @@ impl Action for DeleteMaskAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub enum UpdateMaskAction {
+    ToggleEnabled {
+        mask_id: MaskId,
+        new_value: bool,
+    },
     UpdateCenter {
         mask_id: MaskId,
         old_value: Vec2,
@@ -302,6 +310,10 @@ pub enum UpdateMaskAction {
 }
 
 impl UpdateMaskAction {
+    pub fn toggle_enabled(mask_id: MaskId, new_value: bool) -> Self {
+        Self::ToggleEnabled { mask_id, new_value }
+    }
+
     pub fn update_center(mask_id: MaskId, old_value: Vec2, new_value: Vec2) -> Self {
         Self::UpdateCenter {
             mask_id,
@@ -328,6 +340,7 @@ impl UpdateMaskAction {
 
     fn mask_id(&self) -> &MaskId {
         match self {
+            Self::ToggleEnabled { mask_id, .. } => mask_id,
             Self::UpdateCenter { mask_id, .. } => mask_id,
             Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
             Self::UpdateRadius { mask_id, .. } => mask_id,
@@ -337,13 +350,13 @@ impl UpdateMaskAction {
 
 impl Action for UpdateMaskAction {
     fn apply(&self, world: &mut World) {
-        let mut sdf_mask = world
-            .query::<(&Mask, &mut SdfMask)>()
+        let (mut mask, mut sdf_mask) = world
+            .query::<(&mut Mask, &mut SdfMask)>()
             .iter_mut(world)
             .find(|(mask, _)| mask.id == *self.mask_id())
-            .map(|(_, sdf_mask)| sdf_mask)
             .expect(&format!("Mask with id {} not found.", self.mask_id()));
         match self {
+            Self::ToggleEnabled { new_value, .. } => mask.is_enabled = *new_value,
             Self::UpdateCenter { new_value, .. } => sdf_mask.set_center(*new_value),
             Self::UpdateFalloffRadius { new_value, .. } => sdf_mask.set_falloff_radius(*new_value),
             Self::UpdateRadius { new_value, .. } => sdf_mask.set_radius(*new_value),
@@ -352,6 +365,10 @@ impl Action for UpdateMaskAction {
 
     fn revert(&self, world: &mut World) {
         let reverse_action: Self = match *self {
+            Self::ToggleEnabled { mask_id, new_value } => Self::ToggleEnabled {
+                mask_id,
+                new_value: !new_value,
+            },
             Self::UpdateCenter {
                 mask_id,
                 old_value,

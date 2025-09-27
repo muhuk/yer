@@ -619,6 +619,14 @@ fn draw_ui_for_mask(
     frame.show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(format!("Mask: {:?}", mask.entity));
+            let mut is_enabled: bool = mask.mask.is_enabled;
+            if ui.toggle_value(&mut is_enabled, "Enabled").changed()
+                && is_enabled != mask.mask.is_enabled
+            {
+                commands.queue(undo::PushAction::from(
+                    layer::UpdateMaskAction::toggle_enabled(mask.mask.id(), is_enabled),
+                ));
+            }
             if ui.button("Delete").clicked() {
                 let mask_bundle = layer::MaskBundle {
                     mask: mask.mask.clone(),
