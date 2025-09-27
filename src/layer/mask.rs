@@ -118,6 +118,11 @@ pub enum SdfMask {
         radius: f32,
         falloff_radius: f32,
     },
+    Square {
+        center: Vec2,
+        size: f32,
+        falloff_radius: f32,
+    },
 }
 
 // FIXME: This is called SDF but it is not an SDF.
@@ -137,24 +142,45 @@ impl SdfMask {
                 let distance: f32 = (position - center).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
+            Self::Square {
+                center,
+                size,
+                falloff_radius,
+            } => {
+                let Vec2 { x: dx, y: dy } = (position - center).abs();
+                let half_size: f32 = size * 0.5;
+                let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
+                let ky = 1.0 - clamp((dy - half_size) / falloff_radius, 0.0, 1.0);
+                kx * ky
+            }
         }
     }
 
     fn set_center(&mut self, new_center: Vec2) {
         match self {
             Self::Circle { center, .. } => *center = new_center,
+            Self::Square { center, .. } => *center = new_center,
         }
     }
 
     fn set_falloff_radius(&mut self, new_radius: f32) {
         match self {
             Self::Circle { falloff_radius, .. } => *falloff_radius = new_radius,
+            Self::Square { falloff_radius, .. } => *falloff_radius = new_radius,
         }
     }
 
     fn set_radius(&mut self, new_radius: f32) {
         match self {
             Self::Circle { radius, .. } => *radius = new_radius,
+            Self::Square { .. } => unreachable!(),
+        }
+    }
+
+    fn set_size(&mut self, new_size: f32) {
+        match self {
+            Self::Circle { .. } => unreachable!(),
+            Self::Square { size, .. } => *size = new_size,
         }
     }
 }
@@ -313,6 +339,11 @@ pub enum UpdateMaskAction {
         old_value: f32,
         new_value: f32,
     },
+    UpdateSize {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
 }
 
 impl UpdateMaskAction {
@@ -344,12 +375,21 @@ impl UpdateMaskAction {
         }
     }
 
+    pub fn update_size(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateSize {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
     fn mask_id(&self) -> &MaskId {
         match self {
             Self::ToggleEnabled { mask_id, .. } => mask_id,
             Self::UpdateCenter { mask_id, .. } => mask_id,
             Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
             Self::UpdateRadius { mask_id, .. } => mask_id,
+            Self::UpdateSize { mask_id, .. } => mask_id,
         }
     }
 }
@@ -366,6 +406,11 @@ impl Action for UpdateMaskAction {
             Self::UpdateCenter { new_value, .. } => sdf_mask.set_center(*new_value),
             Self::UpdateFalloffRadius { new_value, .. } => sdf_mask.set_falloff_radius(*new_value),
             Self::UpdateRadius { new_value, .. } => sdf_mask.set_radius(*new_value),
+            Self::UpdateSize {
+                mask_id,
+                old_value,
+                new_value,
+            } => sdf_mask.set_size(*new_value),
         };
     }
 
@@ -398,6 +443,15 @@ impl Action for UpdateMaskAction {
                 old_value,
                 new_value,
             } => Self::UpdateRadius {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateSize {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateSize {
                 mask_id,
                 old_value: new_value,
                 new_value: old_value,
