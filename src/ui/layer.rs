@@ -141,6 +141,12 @@ pub(super) enum SdfMaskUi {
         falloff_radius: f32,
         timer: Timer,
     },
+    Square {
+        center: Vec2,
+        size: f32,
+        falloff_radius: f32,
+        timer: Timer,
+    },
 }
 
 impl From<&layer::SdfMask> for SdfMaskUi {
@@ -153,6 +159,16 @@ impl From<&layer::SdfMask> for SdfMaskUi {
             } => Self::Circle {
                 center: *center,
                 radius: *radius,
+                falloff_radius: *falloff_radius,
+                timer: Timer::new(LATENCY, TimerMode::Once),
+            },
+            layer::SdfMask::Square {
+                center,
+                size,
+                falloff_radius,
+            } => Self::Square {
+                center: *center,
+                size: *size,
                 falloff_radius: *falloff_radius,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
@@ -267,46 +283,57 @@ fn update_mask_ui_system(
             } => {
                 if !timer.finished() {
                     timer.tick(time.delta());
-                    let layer::SdfMask::Circle {
+                    if let layer::SdfMask::Circle {
                         center: original_center,
                         radius: original_radius,
                         falloff_radius: original_falloff_radius,
-                    } = *sdf_mask;
-                    if timer.just_finished()
-                        && !approx_eq(original_center.distance(center), 0.0, ONE_IN_TEN_THOUSAND)
+                    } = *sdf_mask
                     {
-                        commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_center(
-                                mask.id(),
-                                original_center,
-                                center,
-                            ),
-                        ));
-                    }
-                    if timer.just_finished()
-                        && !approx_eq(original_falloff_radius, falloff_radius, ONE_IN_TEN_THOUSAND)
-                    {
-                        commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_falloff_radius(
-                                mask.id(),
+                        if timer.just_finished()
+                            && !approx_eq(
+                                original_center.distance(center),
+                                0.0,
+                                ONE_IN_TEN_THOUSAND,
+                            )
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_center(
+                                    mask.id(),
+                                    original_center,
+                                    center,
+                                ),
+                            ));
+                        }
+                        if timer.just_finished()
+                            && !approx_eq(
                                 original_falloff_radius,
                                 falloff_radius,
-                            ),
-                        ));
-                    }
-                    if timer.just_finished()
-                        && !approx_eq(original_radius, radius, ONE_IN_TEN_THOUSAND)
-                    {
-                        commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_radius(
-                                mask.id(),
-                                original_radius,
-                                radius,
-                            ),
-                        ));
+                                ONE_IN_TEN_THOUSAND,
+                            )
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_falloff_radius(
+                                    mask.id(),
+                                    original_falloff_radius,
+                                    falloff_radius,
+                                ),
+                            ));
+                        }
+                        if timer.just_finished()
+                            && !approx_eq(original_radius, radius, ONE_IN_TEN_THOUSAND)
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_radius(
+                                    mask.id(),
+                                    original_radius,
+                                    radius,
+                                ),
+                            ));
+                        }
                     }
                 }
             }
+            SdfMaskUi::Square { .. } => unimplemented!(),
         }
     }
 }
@@ -344,16 +371,40 @@ fn reset_mask_ui_system(
                 radius: original_radius,
                 falloff_radius: original_falloff_radius,
             } => {
-                let SdfMaskUi::Circle {
+                if let SdfMaskUi::Circle {
                     ref mut center,
                     ref mut radius,
                     ref mut falloff_radius,
                     ref mut timer,
-                } = *sdf_mask_ui;
-                *center = *original_center;
-                *radius = *original_radius;
-                *falloff_radius = *original_falloff_radius;
-                timer.pause();
+                } = *sdf_mask_ui
+                {
+                    *center = *original_center;
+                    *radius = *original_radius;
+                    *falloff_radius = *original_falloff_radius;
+                    timer.pause();
+                } else {
+                    unreachable!();
+                }
+            }
+            layer::SdfMask::Square {
+                center: original_center,
+                size: original_size,
+                falloff_radius: original_falloff_radius,
+            } => {
+                if let SdfMaskUi::Square {
+                    ref mut center,
+                    ref mut size,
+                    ref mut falloff_radius,
+                    ref mut timer,
+                } = *sdf_mask_ui
+                {
+                    *center = *original_center;
+                    *size = *original_size;
+                    *falloff_radius = *original_falloff_radius;
+                    timer.pause();
+                } else {
+                    unreachable!();
+                }
             }
         }
     }
@@ -681,6 +732,7 @@ fn draw_ui_for_mask(
                     }
                 });
             }
+            SdfMaskUi::Square { .. } => unimplemented!(),
         }
     });
 }
