@@ -638,7 +638,7 @@ fn draw_ui_for_mask(
                 ..
             } => {
                 ui.horizontal(|ui| {
-                    ui.label("Center");
+                    ui.label("Center:");
                     if let Some(new_x) = draw_ui_editable_f32(None, ui, center.x) {
                         center.x = new_x;
                         timer.unpause();
@@ -651,7 +651,7 @@ fn draw_ui_for_mask(
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Radius");
+                    ui.label("Radius:");
                     if let Some(new_radius) = draw_ui_editable_f32(None, ui, *radius) {
                         *radius = new_radius;
                         timer.unpause();
@@ -659,7 +659,7 @@ fn draw_ui_for_mask(
                     }
                 });
                 ui.horizontal(|ui| {
-                    ui.label("Radius");
+                    ui.label("Falloff Radius:");
                     if let Some(new_falloff_radius) =
                         draw_ui_editable_f32(None, ui, *falloff_radius)
                     {
