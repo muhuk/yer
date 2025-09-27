@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::ops::RangeInclusive;
 use std::time::Duration;
 
 use bevy::ecs::{query::QueryData, system::SystemParam};
@@ -30,6 +31,7 @@ use super::egui_ext::{draw_ui_editable_f32, ToColor32};
 
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
+const ZERO_TO_POSITIVE_INFINITY: RangeInclusive<f32> = 0.0..=f32::INFINITY;
 
 // PLUGIN
 
@@ -652,7 +654,9 @@ fn draw_ui_for_mask(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Radius:");
-                    if let Some(new_radius) = draw_ui_editable_f32(None, ui, *radius) {
+                    if let Some(new_radius) =
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *radius)
+                    {
                         *radius = new_radius;
                         timer.unpause();
                         timer.reset();
@@ -661,7 +665,7 @@ fn draw_ui_for_mask(
                 ui.horizontal(|ui| {
                     ui.label("Falloff Radius:");
                     if let Some(new_falloff_radius) =
-                        draw_ui_editable_f32(None, ui, *falloff_radius)
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *falloff_radius)
                     {
                         *falloff_radius = new_falloff_radius;
                         timer.unpause();
