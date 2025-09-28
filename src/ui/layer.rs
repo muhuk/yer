@@ -276,123 +276,114 @@ fn update_mask_ui_system(
     mut mask_query: Query<(&layer::Mask, &layer::MaskSource, &mut MaskSourceUi)>,
 ) {
     for (mask, mask_source, mut mask_source_ui) in mask_query.iter_mut() {
-        match *mask_source_ui {
-            MaskSourceUi::Circle {
-                center,
-                radius,
-                falloff_radius,
-                ref mut timer,
-            } => {
+        match (mask_source, mask_source_ui.as_mut()) {
+            (
+                layer::MaskSource::Circle {
+                    center: original_center,
+                    radius: original_radius,
+                    falloff_radius: original_falloff_radius,
+                },
+                &mut MaskSourceUi::Circle {
+                    ref center,
+                    ref radius,
+                    ref falloff_radius,
+                    ref mut timer,
+                },
+            ) => {
                 if !timer.finished() {
                     timer.tick(time.delta());
-                    if let layer::MaskSource::Circle {
-                        center: original_center,
-                        radius: original_radius,
-                        falloff_radius: original_falloff_radius,
-                    } = *mask_source
+                    if timer.just_finished()
+                        && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
                     {
-                        if timer.just_finished()
-                            && !approx_eq(
-                                original_center.distance(center),
-                                0.0,
-                                ONE_IN_TEN_THOUSAND,
-                            )
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_center(
-                                    mask.id(),
-                                    original_center,
-                                    center,
-                                ),
-                            ));
-                        }
-                        if timer.just_finished()
-                            && !approx_eq(
-                                original_falloff_radius,
-                                falloff_radius,
-                                ONE_IN_TEN_THOUSAND,
-                            )
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_falloff_radius(
-                                    mask.id(),
-                                    original_falloff_radius,
-                                    falloff_radius,
-                                ),
-                            ));
-                        }
-                        if timer.just_finished()
-                            && !approx_eq(original_radius, radius, ONE_IN_TEN_THOUSAND)
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_radius(
-                                    mask.id(),
-                                    original_radius,
-                                    radius,
-                                ),
-                            ));
-                        }
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_center(
+                                mask.id(),
+                                *original_center,
+                                *center,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(
+                            *original_falloff_radius,
+                            *falloff_radius,
+                            ONE_IN_TEN_THOUSAND,
+                        )
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_falloff_radius(
+                                mask.id(),
+                                *original_falloff_radius,
+                                *falloff_radius,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(*original_radius, *radius, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_radius(
+                                mask.id(),
+                                *original_radius,
+                                *radius,
+                            ),
+                        ));
                     }
                 }
             }
-            MaskSourceUi::Square {
-                center,
-                size,
-                falloff_radius,
-                ref mut timer,
-            } => {
+            (layer::MaskSource::Circle { .. }, _) => unreachable!(),
+            (
+                layer::MaskSource::Square {
+                    center: original_center,
+                    size: original_size,
+                    falloff_radius: original_falloff_radius,
+                },
+                &mut MaskSourceUi::Square {
+                    ref center,
+                    ref size,
+                    ref falloff_radius,
+                    ref mut timer,
+                },
+            ) => {
                 if !timer.finished() {
                     timer.tick(time.delta());
-                    if let layer::MaskSource::Square {
-                        center: original_center,
-                        size: original_size,
-                        falloff_radius: original_falloff_radius,
-                    } = *mask_source
+
+                    if timer.just_finished()
+                        && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
                     {
-                        if timer.just_finished()
-                            && !approx_eq(
-                                original_center.distance(center),
-                                0.0,
-                                ONE_IN_TEN_THOUSAND,
-                            )
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_center(
-                                    mask.id(),
-                                    original_center,
-                                    center,
-                                ),
-                            ));
-                        }
-                        if timer.just_finished()
-                            && !approx_eq(
-                                original_falloff_radius,
-                                falloff_radius,
-                                ONE_IN_TEN_THOUSAND,
-                            )
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_falloff_radius(
-                                    mask.id(),
-                                    original_falloff_radius,
-                                    falloff_radius,
-                                ),
-                            ));
-                        }
-                        if timer.just_finished()
-                            && !approx_eq(original_size, size, ONE_IN_TEN_THOUSAND)
-                        {
-                            commands.queue(undo::PushAction::from(
-                                layer::UpdateMaskAction::update_size(
-                                    mask.id(),
-                                    original_size,
-                                    size,
-                                ),
-                            ));
-                        }
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_center(
+                                mask.id(),
+                                *original_center,
+                                *center,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(
+                            *original_falloff_radius,
+                            *falloff_radius,
+                            ONE_IN_TEN_THOUSAND,
+                        )
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_falloff_radius(
+                                mask.id(),
+                                *original_falloff_radius,
+                                *falloff_radius,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(*original_size, *size, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskAction::update_size(mask.id(), *original_size, *size),
+                        ));
                     }
                 }
             }
+            (layer::MaskSource::Square { .. }, _) => unreachable!(),
         }
     }
 }
@@ -424,47 +415,45 @@ fn reset_mask_ui_system(
     mut mask_query: Query<(&layer::MaskSource, &mut MaskSourceUi), Changed<layer::MaskSource>>,
 ) {
     for (mask_source, mut mask_source_ui) in mask_query.iter_mut() {
-        match mask_source {
-            layer::MaskSource::Circle {
-                center: original_center,
-                radius: original_radius,
-                falloff_radius: original_falloff_radius,
-            } => {
-                if let MaskSourceUi::Circle {
-                    ref mut center,
-                    ref mut radius,
-                    ref mut falloff_radius,
-                    ref mut timer,
-                } = *mask_source_ui
-                {
-                    *center = *original_center;
-                    *radius = *original_radius;
-                    *falloff_radius = *original_falloff_radius;
-                    timer.pause();
-                } else {
-                    unreachable!();
-                }
+        match (mask_source, mask_source_ui.as_mut()) {
+            (
+                layer::MaskSource::Circle {
+                    center: original_center,
+                    radius: original_radius,
+                    falloff_radius: original_falloff_radius,
+                },
+                MaskSourceUi::Circle {
+                    center,
+                    radius,
+                    falloff_radius,
+                    timer,
+                },
+            ) => {
+                *center = *original_center;
+                *radius = *original_radius;
+                *falloff_radius = *original_falloff_radius;
+                timer.pause();
             }
-            layer::MaskSource::Square {
-                center: original_center,
-                size: original_size,
-                falloff_radius: original_falloff_radius,
-            } => {
-                if let MaskSourceUi::Square {
-                    ref mut center,
-                    ref mut size,
-                    ref mut falloff_radius,
-                    ref mut timer,
-                } = *mask_source_ui
-                {
-                    *center = *original_center;
-                    *size = *original_size;
-                    *falloff_radius = *original_falloff_radius;
-                    timer.pause();
-                } else {
-                    unreachable!();
-                }
+            (layer::MaskSource::Circle { .. }, _) => unreachable!(),
+            (
+                layer::MaskSource::Square {
+                    center: original_center,
+                    size: original_size,
+                    falloff_radius: original_falloff_radius,
+                },
+                MaskSourceUi::Square {
+                    center,
+                    size,
+                    falloff_radius,
+                    timer,
+                },
+            ) => {
+                *center = *original_center;
+                *size = *original_size;
+                *falloff_radius = *original_falloff_radius;
+                timer.pause();
             }
+            (layer::MaskSource::Square { .. }, _) => unreachable!(),
         }
     }
 }
