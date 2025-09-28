@@ -41,8 +41,8 @@ impl Plugin for LayerUiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMapUi>()
             .register_type::<LayerUi>()
-            .register_type::<Selected>()
-            .register_type::<SdfMaskUi>();
+            .register_type::<MaskSourceUi>()
+            .register_type::<Selected>();
         app.add_systems(
             Update,
             (
@@ -84,7 +84,7 @@ pub(super) struct MaskQuery {
     pub mask: &'static layer::Mask,
     pub mask_order: &'static layer::MaskOrder,
     pub mask_source: &'static layer::MaskSource,
-    pub sdf_mask_ui: &'static mut SdfMaskUi,
+    pub mask_source_ui: &'static mut MaskSourceUi,
 }
 
 #[derive(SystemParam)]
@@ -134,7 +134,7 @@ impl From<&layer::Layer> for LayerUi {
 }
 
 #[derive(Component, Debug, Reflect)]
-pub(super) enum SdfMaskUi {
+pub(super) enum MaskSourceUi {
     Circle {
         center: Vec2,
         radius: f32,
@@ -149,7 +149,7 @@ pub(super) enum SdfMaskUi {
     },
 }
 
-impl From<&layer::MaskSource> for SdfMaskUi {
+impl From<&layer::MaskSource> for MaskSourceUi {
     fn from(value: &layer::MaskSource) -> Self {
         match value {
             layer::MaskSource::Circle {
@@ -219,13 +219,15 @@ fn add_layer_ui_system(
     }
 }
 
-/// Add an SdfMaskUi component to each entity with a SdfMask added.
+/// Add an MaskSourceUi component to each entity with a MaskSource added.
 fn add_mask_ui_system(
     mut commands: Commands,
     mask_query: Query<(Entity, &layer::MaskSource), Added<layer::MaskSource>>,
 ) {
     for (entity, mask_source) in mask_query.iter() {
-        commands.entity(entity).insert(SdfMaskUi::from(mask_source));
+        commands
+            .entity(entity)
+            .insert(MaskSourceUi::from(mask_source));
     }
 }
 
@@ -267,15 +269,15 @@ fn update_height_map_ui_system(
     }
 }
 
-/// Update SdfMask based on UI changes.
+/// Update MaskSource based on UI changes.
 fn update_mask_ui_system(
     mut commands: Commands,
     time: Res<Time<Real>>,
-    mut mask_query: Query<(&layer::Mask, &layer::MaskSource, &mut SdfMaskUi)>,
+    mut mask_query: Query<(&layer::Mask, &layer::MaskSource, &mut MaskSourceUi)>,
 ) {
-    for (mask, mask_source, mut sdf_mask_ui) in mask_query.iter_mut() {
-        match *sdf_mask_ui {
-            SdfMaskUi::Circle {
+    for (mask, mask_source, mut mask_source_ui) in mask_query.iter_mut() {
+        match *mask_source_ui {
+            MaskSourceUi::Circle {
                 center,
                 radius,
                 falloff_radius,
@@ -333,7 +335,7 @@ fn update_mask_ui_system(
                     }
                 }
             }
-            SdfMaskUi::Square {
+            MaskSourceUi::Square {
                 center,
                 size,
                 falloff_radius,
@@ -415,25 +417,25 @@ fn reset_height_map_ui_system(
     }
 }
 
-/// Update SdfMaskUi based on changes to SdfMask.
+/// Update MaskSourceUi based on changes to MaskSource.
 ///
-/// This gets triggered when undo/redo changes [SdfMask](layer::SdfMask).
+/// This gets triggered when undo/redo changes [MaskSource](layer::MaskSource).
 fn reset_mask_ui_system(
-    mut mask_query: Query<(&layer::MaskSource, &mut SdfMaskUi), Changed<layer::MaskSource>>,
+    mut mask_query: Query<(&layer::MaskSource, &mut MaskSourceUi), Changed<layer::MaskSource>>,
 ) {
-    for (mask_source, mut sdf_mask_ui) in mask_query.iter_mut() {
+    for (mask_source, mut mask_source_ui) in mask_query.iter_mut() {
         match mask_source {
             layer::MaskSource::Circle {
                 center: original_center,
                 radius: original_radius,
                 falloff_radius: original_falloff_radius,
             } => {
-                if let SdfMaskUi::Circle {
+                if let MaskSourceUi::Circle {
                     ref mut center,
                     ref mut radius,
                     ref mut falloff_radius,
                     ref mut timer,
-                } = *sdf_mask_ui
+                } = *mask_source_ui
                 {
                     *center = *original_center;
                     *radius = *original_radius;
@@ -448,12 +450,12 @@ fn reset_mask_ui_system(
                 size: original_size,
                 falloff_radius: original_falloff_radius,
             } => {
-                if let SdfMaskUi::Square {
+                if let MaskSourceUi::Square {
                     ref mut center,
                     ref mut size,
                     ref mut falloff_radius,
                     ref mut timer,
-                } = *sdf_mask_ui
+                } = *mask_source_ui
                 {
                     *center = *original_center;
                     *size = *original_size;
@@ -764,8 +766,8 @@ fn draw_ui_for_mask(
                 )));
             }
         });
-        match *mask.sdf_mask_ui {
-            SdfMaskUi::Circle {
+        match *mask.mask_source_ui {
+            MaskSourceUi::Circle {
                 ref mut center,
                 ref mut radius,
                 ref mut falloff_radius,
@@ -805,7 +807,7 @@ fn draw_ui_for_mask(
                     }
                 });
             }
-            SdfMaskUi::Square {
+            MaskSourceUi::Square {
                 ref mut center,
                 ref mut size,
                 ref mut falloff_radius,
