@@ -34,7 +34,7 @@ impl Plugin for MaskPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Mask>()
             .register_type::<MaskOrder>()
-            .register_type::<SdfMask>();
+            .register_type::<MaskSource>();
         app.register_type::<NeedsMaskOrderNormalization>();
         app.add_systems(
             PreUpdate,
@@ -53,7 +53,7 @@ impl Plugin for MaskPlugin {
 #[derive(Bundle, Clone, Debug, Reflect)]
 pub struct MaskBundle {
     pub mask: Mask,
-    pub sdf_mask: SdfMask,
+    pub mask_source: MaskSource,
 }
 
 // COMPONENTS
@@ -112,7 +112,7 @@ struct NeedsMaskOrderNormalization;
 
 #[derive(Clone, Component, Debug, Reflect)]
 #[require(Mask)]
-pub enum SdfMask {
+pub enum MaskSource {
     Circle {
         center: Vec2,
         radius: f32,
@@ -125,7 +125,7 @@ pub enum SdfMask {
     },
 }
 
-impl SdfMask {
+impl MaskSource {
     pub fn circle() -> Self {
         Self::Circle {
             center: Vec2::ZERO,
@@ -143,13 +143,7 @@ impl SdfMask {
     }
 }
 
-// FIXME: This is called SDF but it is not an SDF.
-//
-//        SdfMask::sample needs to return a signed distance.
-//
-//        falloff_radius needs to be applied on the final composited mask,
-//        not as part of each mask.
-impl SdfMask {
+impl MaskSource {
     pub fn sample(&self, position: Vec2) -> f32 {
         match self {
             Self::Circle {
@@ -324,7 +318,6 @@ impl Action for DeleteMaskAction {
     }
 }
 
-// TODO: Rename this as UpdateSdfMaskAction
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub enum UpdateMaskAction {
@@ -404,21 +397,23 @@ impl UpdateMaskAction {
 
 impl Action for UpdateMaskAction {
     fn apply(&self, world: &mut World) {
-        let (mut mask, mut sdf_mask) = world
-            .query::<(&mut Mask, &mut SdfMask)>()
+        let (mut mask, mut mask_source) = world
+            .query::<(&mut Mask, &mut MaskSource)>()
             .iter_mut(world)
             .find(|(mask, _)| mask.id == *self.mask_id())
             .expect(&format!("Mask with id {} not found.", self.mask_id()));
         match self {
             Self::ToggleEnabled { new_value, .. } => mask.is_enabled = *new_value,
-            Self::UpdateCenter { new_value, .. } => sdf_mask.set_center(*new_value),
-            Self::UpdateFalloffRadius { new_value, .. } => sdf_mask.set_falloff_radius(*new_value),
-            Self::UpdateRadius { new_value, .. } => sdf_mask.set_radius(*new_value),
+            Self::UpdateCenter { new_value, .. } => mask_source.set_center(*new_value),
+            Self::UpdateFalloffRadius { new_value, .. } => {
+                mask_source.set_falloff_radius(*new_value)
+            }
+            Self::UpdateRadius { new_value, .. } => mask_source.set_radius(*new_value),
             Self::UpdateSize {
                 mask_id,
                 old_value,
                 new_value,
-            } => sdf_mask.set_size(*new_value),
+            } => mask_source.set_size(*new_value),
         };
     }
 

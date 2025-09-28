@@ -290,19 +290,19 @@ impl Command for CalculatePreview {
                         .get::<Children>()
                         .map(|children| children.to_vec())
                         .unwrap_or_default();
-                    let masks: Vec<layer::SdfMask> = world
+                    let masks: Vec<layer::MaskSource> = world
                         .entity(children.as_slice())
                         .iter()
                         .map(|entity_ref| {
                             (
                                 entity_ref.get::<layer::Mask>(),
-                                entity_ref.get::<layer::SdfMask>(),
+                                entity_ref.get::<layer::MaskSource>(),
                             )
                         })
-                        .filter(|(mask, sdf_mask)| {
-                            mask.map(|m| m.is_enabled).unwrap_or(false) && sdf_mask.is_some()
+                        .filter(|(mask, mask_source)| {
+                            mask.map(|m| m.is_enabled).unwrap_or(false) && mask_source.is_some()
                         })
-                        .map(|(_, sdf_mask)| sdf_mask.unwrap().clone())
+                        .map(|(_, mask_source)| mask_source.unwrap().clone())
                         .collect();
                     Box::new(layer::LayerSampler { height_map, masks }) as Box<dyn Sampler2D>
                 })
