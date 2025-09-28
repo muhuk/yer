@@ -333,7 +333,64 @@ fn update_mask_ui_system(
                     }
                 }
             }
-            SdfMaskUi::Square { .. } => unimplemented!(),
+            SdfMaskUi::Square {
+                center,
+                size,
+                falloff_radius,
+                ref mut timer,
+            } => {
+                if !timer.finished() {
+                    timer.tick(time.delta());
+                    if let layer::SdfMask::Square {
+                        center: original_center,
+                        size: original_size,
+                        falloff_radius: original_falloff_radius,
+                    } = *sdf_mask
+                    {
+                        if timer.just_finished()
+                            && !approx_eq(
+                                original_center.distance(center),
+                                0.0,
+                                ONE_IN_TEN_THOUSAND,
+                            )
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_center(
+                                    mask.id(),
+                                    original_center,
+                                    center,
+                                ),
+                            ));
+                        }
+                        if timer.just_finished()
+                            && !approx_eq(
+                                original_falloff_radius,
+                                falloff_radius,
+                                ONE_IN_TEN_THOUSAND,
+                            )
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_falloff_radius(
+                                    mask.id(),
+                                    original_falloff_radius,
+                                    falloff_radius,
+                                ),
+                            ));
+                        }
+                        if timer.just_finished()
+                            && !approx_eq(original_size, size, ONE_IN_TEN_THOUSAND)
+                        {
+                            commands.queue(undo::PushAction::from(
+                                layer::UpdateMaskAction::update_size(
+                                    mask.id(),
+                                    original_size,
+                                    size,
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -428,8 +485,25 @@ fn draw_ui_for_layer_common_bottom(
             .map(|m| m.mask.id())
             .collect();
 
-        if ui.button("Add mask").clicked() {
-            let mask_bundle: layer::MaskBundle = layer::MaskBundle::default();
+        if ui.button("Add circle mask").clicked() {
+            let mask_bundle: layer::MaskBundle = layer::MaskBundle {
+                mask: layer::Mask::default(),
+                sdf_mask: layer::SdfMask::circle(),
+            };
+            let layer_id: LayerId = layer.id();
+            let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
+            commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
+                mask_bundle,
+                layer_id,
+                previous_mask_id,
+            )));
+        }
+
+        if ui.button("Add square mask").clicked() {
+            let mask_bundle: layer::MaskBundle = layer::MaskBundle {
+                mask: layer::Mask::default(),
+                sdf_mask: layer::SdfMask::square(),
+            };
             let layer_id: LayerId = layer.id();
             let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
@@ -696,7 +770,6 @@ fn draw_ui_for_mask(
                 ref mut radius,
                 ref mut falloff_radius,
                 ref mut timer,
-                ..
             } => {
                 ui.horizontal(|ui| {
                     ui.label("Center:");
@@ -732,7 +805,46 @@ fn draw_ui_for_mask(
                     }
                 });
             }
-            SdfMaskUi::Square { .. } => unimplemented!(),
+            SdfMaskUi::Square {
+                ref mut center,
+                ref mut size,
+                ref mut falloff_radius,
+                ref mut timer,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label("Center:");
+                    if let Some(new_x) = draw_ui_editable_f32(None, ui, center.x) {
+                        center.x = new_x;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                    if let Some(new_y) = draw_ui_editable_f32(None, ui, center.y) {
+                        center.y = new_y;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Size:");
+                    if let Some(new_size) =
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *size)
+                    {
+                        *size = new_size;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Falloff Radius:");
+                    if let Some(new_falloff_radius) =
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *falloff_radius)
+                    {
+                        *falloff_radius = new_falloff_radius;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+            }
         }
     });
 }
