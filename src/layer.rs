@@ -26,7 +26,7 @@ mod mask;
 pub use actions::*;
 pub use components::*;
 pub use mask::{
-    CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskOrder, SdfMask, UpdateMaskAction,
+    CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskOrder, MaskSource, UpdateMaskAction,
 };
 
 // PLUGIN
@@ -79,13 +79,13 @@ fn normalize_layer_ordering_system(
 
 pub struct LayerSampler {
     pub height_map: HeightMap,
-    pub masks: Vec<SdfMask>,
+    pub masks: Vec<MaskSource>,
 }
 
 impl Sampler2D for LayerSampler {
     fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample {
         let mut sample = self.height_map.sample(position, base_sample);
-        // TODO: Remove this restriction when mask combinin is implemented.
+        // TODO: Remove this restriction when mask combining is implemented.
         assert!(
             self.masks.len() <= 1,
             "Only one mask per layer is permitted for now."
