@@ -50,7 +50,7 @@ impl Plugin for MaskPlugin {
 
 // BUNDLES
 
-#[derive(Bundle, Clone, Debug, Default, Reflect)]
+#[derive(Bundle, Clone, Debug, Reflect)]
 pub struct MaskBundle {
     pub mask: Mask,
     pub sdf_mask: SdfMask,
@@ -125,6 +125,24 @@ pub enum SdfMask {
     },
 }
 
+impl SdfMask {
+    pub fn circle() -> Self {
+        Self::Circle {
+            center: Vec2::ZERO,
+            radius: 1.5,
+            falloff_radius: 0.5,
+        }
+    }
+
+    pub fn square() -> Self {
+        Self::Square {
+            center: Vec2::ZERO,
+            size: 2.0,
+            falloff_radius: 0.5,
+        }
+    }
+}
+
 // FIXME: This is called SDF but it is not an SDF.
 //
 //        SdfMask::sample needs to return a signed distance.
@@ -181,16 +199,6 @@ impl SdfMask {
         match self {
             Self::Circle { .. } => unreachable!(),
             Self::Square { size, .. } => *size = new_size,
-        }
-    }
-}
-
-impl Default for SdfMask {
-    fn default() -> Self {
-        Self::Circle {
-            center: Vec2::ZERO,
-            radius: 1.5,
-            falloff_radius: 0.5,
         }
     }
 }
