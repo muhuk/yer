@@ -158,11 +158,14 @@ impl ToColor32 for Color {
 
 pub fn draw_ui_editable_f32(
     range: Option<RangeInclusive<f32>>,
+    speed: Option<f32>,
     ui: &mut egui::Ui,
     value: f32,
 ) -> Option<f32> {
     let mut value_edited: f32 = value;
-    let mut widget = egui::widgets::DragValue::new(&mut value_edited).update_while_editing(false);
+    let mut widget = egui::widgets::DragValue::new(&mut value_edited)
+        .update_while_editing(false)
+        .speed(speed.unwrap_or(0.25));
     if let Some(range) = range {
         widget = widget.range(range);
     }
