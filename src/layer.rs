@@ -80,20 +80,24 @@ fn normalize_layer_ordering_system(
 
 pub struct LayerSampler {
     pub height_map: HeightMap,
-    pub masks: Vec<MaskSource>,
+    pub masks: Vec<(Mask, MaskSource)>,
 }
 
 impl Sampler2D for LayerSampler {
     fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample {
         let mut sample = self.height_map.sample(position, base_sample);
-        // TODO: Remove this restriction when mask combining is implemented.
-        assert!(
-            self.masks.len() <= 1,
-            "Only one mask per layer is permitted for now."
-        );
-        if !self.masks.is_empty() {
-            sample.multiply_alpha_mut(self.masks[0].sample(position));
+        let mut mask_multiplier: f32 = 1.0;
+        for (idx, (mask, mask_source)) in self.masks.iter().enumerate() {
+            if idx == 0 {
+                // First mask processed should always use the
+                // default composition mode, which should be `min`.
+                mask_multiplier = MaskCompositionMode::default()
+                    .combine(mask_multiplier, mask_source.sample(position));
+            } else {
+                mask_multiplier = mask.combine(mask_multiplier, mask_source.sample(position));
+            }
         }
+        sample.multiply_alpha_mut(mask_multiplier);
         sample
     }
 }

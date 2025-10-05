@@ -66,6 +66,21 @@ pub struct Mask {
     id: MaskId,
 }
 
+impl Mask {
+    pub fn combine(&self, baseline: f32, sample: f32) -> f32 {
+        self.composition_mode
+            .combine(baseline, sample * self.strength)
+    }
+
+    pub fn id(&self) -> MaskId {
+        self.id
+    }
+
+    pub(super) fn new_id() -> MaskId {
+        MaskId::now_v7()
+    }
+}
+
 impl Default for Mask {
     fn default() -> Self {
         Self {
@@ -74,16 +89,6 @@ impl Default for Mask {
             strength: 1.0,
             id: Self::new_id(),
         }
-    }
-}
-
-impl Mask {
-    pub fn id(&self) -> MaskId {
-        self.id
-    }
-
-    pub(super) fn new_id() -> MaskId {
-        MaskId::now_v7()
     }
 }
 
@@ -596,6 +601,15 @@ pub enum MaskCompositionMode {
 
 impl MaskCompositionMode {
     pub const ITEMS: [Self; 4] = [Self::Add, Self::Sub, Self::Min, Self::Max];
+
+    pub fn combine(&self, baseline: f32, sample: f32) -> f32 {
+        match self {
+            Self::Add => clamp(baseline + sample, 0.0, 1.0),
+            Self::Sub => clamp(baseline - sample, 0.0, 1.0),
+            Self::Min => clamp(baseline.min(sample), 0.0, 1.0),
+            Self::Max => clamp(baseline.max(sample), 0.0, 1.0),
+        }
+    }
 }
 
 impl ToString for MaskCompositionMode {
