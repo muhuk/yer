@@ -53,9 +53,6 @@ const SUBDIVISIONS_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     ns
 };
 
-// TODO: We need the masks too.
-//
-//       Each layer can have zero or more masks.
 type Layers = Arc<[Box<dyn Sampler2D>]>;
 
 pub struct PreviewPlugin;
@@ -290,7 +287,7 @@ impl Command for CalculatePreview {
                         .get::<Children>()
                         .map(|children| children.to_vec())
                         .unwrap_or_default();
-                    let masks: Vec<layer::MaskSource> = world
+                    let masks: Vec<(layer::Mask, layer::MaskSource)> = world
                         .entity(children.as_slice())
                         .iter()
                         .map(|entity_ref| {
@@ -302,7 +299,9 @@ impl Command for CalculatePreview {
                         .filter(|(mask, mask_source)| {
                             mask.map(|m| m.is_enabled).unwrap_or(false) && mask_source.is_some()
                         })
-                        .map(|(_, mask_source)| mask_source.unwrap().clone())
+                        .map(|(mask, mask_source)| {
+                            (mask.unwrap().clone(), mask_source.unwrap().clone())
+                        })
                         .collect();
                     Box::new(layer::LayerSampler { height_map, masks }) as Box<dyn Sampler2D>
                 })
