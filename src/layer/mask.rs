@@ -60,14 +60,18 @@ pub struct MaskBundle {
 
 #[derive(Clone, Component, Debug, Reflect)]
 pub struct Mask {
+    pub composition_mode: MaskCompositionMode,
     pub is_enabled: bool,
+    pub strength: f32,
     id: MaskId,
 }
 
 impl Default for Mask {
     fn default() -> Self {
         Self {
+            composition_mode: MaskCompositionMode::default(),
             is_enabled: true,
+            strength: 1.0,
             id: Self::new_id(),
         }
     }
@@ -76,10 +80,6 @@ impl Default for Mask {
 impl Mask {
     pub fn id(&self) -> MaskId {
         self.id
-    }
-
-    pub(super) fn new(id: MaskId) -> Self {
-        Self { id, ..default() }
     }
 
     pub(super) fn new_id() -> MaskId {
@@ -321,10 +321,103 @@ impl Action for DeleteMaskAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub enum UpdateMaskAction {
+    ChangeCompositionMode {
+        mask_id: MaskId,
+        old_value: MaskCompositionMode,
+        new_value: MaskCompositionMode,
+    },
     ToggleEnabled {
         mask_id: MaskId,
         new_value: bool,
     },
+    UpdateStrength {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
+}
+
+impl UpdateMaskAction {
+    pub fn change_composition_mode(
+        mask_id: MaskId,
+        old_value: MaskCompositionMode,
+        new_value: MaskCompositionMode,
+    ) -> Self {
+        debug_assert!(old_value != new_value);
+        Self::ChangeCompositionMode {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
+    pub fn toggle_enabled(mask_id: MaskId, new_value: bool) -> Self {
+        Self::ToggleEnabled { mask_id, new_value }
+    }
+
+    pub fn update_strength(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateStrength {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
+    fn mask_id(&self) -> &MaskId {
+        match self {
+            Self::ChangeCompositionMode { mask_id, .. } => mask_id,
+            Self::ToggleEnabled { mask_id, .. } => mask_id,
+            Self::UpdateStrength { mask_id, .. } => mask_id,
+        }
+    }
+}
+
+impl Action for UpdateMaskAction {
+    fn apply(&self, world: &mut World) {
+        let mut mask = world
+            .query::<&mut Mask>()
+            .iter_mut(world)
+            .find(|mask| mask.id == *self.mask_id())
+            .expect(&format!("Mask with id {} not found.", self.mask_id()));
+        match self {
+            Self::ChangeCompositionMode { new_value, .. } => mask.composition_mode = *new_value,
+            Self::ToggleEnabled { new_value, .. } => mask.is_enabled = *new_value,
+            Self::UpdateStrength { new_value, .. } => mask.strength = *new_value,
+        };
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action: Self = match *self {
+            Self::ChangeCompositionMode {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::ChangeCompositionMode {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::ToggleEnabled { mask_id, new_value } => Self::ToggleEnabled {
+                mask_id,
+                new_value: !new_value,
+            },
+            Self::UpdateStrength {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateStrength {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+        };
+        reverse_action.apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub enum UpdateMaskSourceAction {
     UpdateCenter {
         mask_id: MaskId,
         old_value: Vec2,
@@ -347,11 +440,7 @@ pub enum UpdateMaskAction {
     },
 }
 
-impl UpdateMaskAction {
-    pub fn toggle_enabled(mask_id: MaskId, new_value: bool) -> Self {
-        Self::ToggleEnabled { mask_id, new_value }
-    }
-
+impl UpdateMaskSourceAction {
     pub fn update_center(mask_id: MaskId, old_value: Vec2, new_value: Vec2) -> Self {
         Self::UpdateCenter {
             mask_id,
@@ -386,7 +475,6 @@ impl UpdateMaskAction {
 
     fn mask_id(&self) -> &MaskId {
         match self {
-            Self::ToggleEnabled { mask_id, .. } => mask_id,
             Self::UpdateCenter { mask_id, .. } => mask_id,
             Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
             Self::UpdateRadius { mask_id, .. } => mask_id,
@@ -395,7 +483,7 @@ impl UpdateMaskAction {
     }
 }
 
-impl Action for UpdateMaskAction {
+impl Action for UpdateMaskSourceAction {
     fn apply(&self, world: &mut World) {
         let (mut mask, mut mask_source) = world
             .query::<(&mut Mask, &mut MaskSource)>()
@@ -403,7 +491,6 @@ impl Action for UpdateMaskAction {
             .find(|(mask, _)| mask.id == *self.mask_id())
             .expect(&format!("Mask with id {} not found.", self.mask_id()));
         match self {
-            Self::ToggleEnabled { new_value, .. } => mask.is_enabled = *new_value,
             Self::UpdateCenter { new_value, .. } => mask_source.set_center(*new_value),
             Self::UpdateFalloffRadius { new_value, .. } => {
                 mask_source.set_falloff_radius(*new_value)
@@ -419,10 +506,6 @@ impl Action for UpdateMaskAction {
 
     fn revert(&self, world: &mut World) {
         let reverse_action: Self = match *self {
-            Self::ToggleEnabled { mask_id, new_value } => Self::ToggleEnabled {
-                mask_id,
-                new_value: !new_value,
-            },
             Self::UpdateCenter {
                 mask_id,
                 old_value,
@@ -501,6 +584,31 @@ fn normalize_mask_ordering_system(
 }
 
 // LIB
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
+pub enum MaskCompositionMode {
+    Add,
+    Sub,
+    #[default]
+    Min,
+    Max,
+}
+
+impl MaskCompositionMode {
+    pub const ITEMS: [Self; 4] = [Self::Add, Self::Sub, Self::Min, Self::Max];
+}
+
+impl ToString for MaskCompositionMode {
+    fn to_string(&self) -> String {
+        (match self {
+            Self::Add => "Add",
+            Self::Sub => "Sub",
+            Self::Min => "Min",
+            Self::Max => "Max",
+        })
+        .into()
+    }
+}
 
 fn mask_order_on_remove_hook(mut world: DeferredWorld, HookContext { entity, .. }: HookContext) {
     if let Some(ChildOf(parent)) = world.entity(entity).get::<ChildOf>().cloned() {

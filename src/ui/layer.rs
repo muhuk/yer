@@ -32,6 +32,8 @@ use super::egui_ext::{draw_ui_editable_f32, ToColor32};
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 const ZERO_TO_POSITIVE_INFINITY: RangeInclusive<f32> = 0.0..=f32::INFINITY;
+const ZERO_TO_ONE: RangeInclusive<f32> = 0.0..=1.0;
+const ZERO_TO_ONE_INCREMENT: f32 = 0.025;
 
 // PLUGIN
 
@@ -41,6 +43,7 @@ impl Plugin for LayerUiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<HeightMapUi>()
             .register_type::<LayerUi>()
+            .register_type::<MaskUi>()
             .register_type::<MaskSourceUi>()
             .register_type::<Selected>();
         app.add_systems(
@@ -82,6 +85,7 @@ pub(super) struct MaskQuery {
     pub entity: Entity,
     pub child_of: &'static ChildOf,
     pub mask: &'static layer::Mask,
+    pub mask_ui: &'static mut MaskUi,
     pub mask_order: &'static layer::MaskOrder,
     pub mask_source: &'static layer::MaskSource,
     pub mask_source_ui: &'static mut MaskSourceUi,
@@ -129,6 +133,21 @@ impl From<&layer::Layer> for LayerUi {
     fn from(layer: &layer::Layer) -> Self {
         Self {
             name: layer.name.clone(),
+        }
+    }
+}
+
+#[derive(Component, Debug, Reflect)]
+pub(super) struct MaskUi {
+    strength: f32,
+    timer: Timer,
+}
+
+impl From<&layer::Mask> for MaskUi {
+    fn from(mask: &layer::Mask) -> Self {
+        Self {
+            strength: mask.strength,
+            timer: Timer::new(LATENCY, TimerMode::Once),
         }
     }
 }
@@ -222,12 +241,12 @@ fn add_layer_ui_system(
 /// Add an MaskSourceUi component to each entity with a MaskSource added.
 fn add_mask_ui_system(
     mut commands: Commands,
-    mask_query: Query<(Entity, &layer::MaskSource), Added<layer::MaskSource>>,
+    mask_query: Query<(Entity, &layer::Mask, &layer::MaskSource), Added<layer::MaskSource>>,
 ) {
-    for (entity, mask_source) in mask_query.iter() {
+    for (entity, mask, mask_source) in mask_query.iter() {
         commands
             .entity(entity)
-            .insert(MaskSourceUi::from(mask_source));
+            .insert((MaskUi::from(mask), MaskSourceUi::from(mask_source)));
     }
 }
 
@@ -273,9 +292,29 @@ fn update_height_map_ui_system(
 fn update_mask_ui_system(
     mut commands: Commands,
     time: Res<Time<Real>>,
-    mut mask_query: Query<(&layer::Mask, &layer::MaskSource, &mut MaskSourceUi)>,
+    mut mask_query: Query<(
+        &layer::Mask,
+        &layer::MaskSource,
+        &mut MaskUi,
+        &mut MaskSourceUi,
+    )>,
 ) {
-    for (mask, mask_source, mut mask_source_ui) in mask_query.iter_mut() {
+    for (mask, mask_source, mut mask_ui, mut mask_source_ui) in mask_query.iter_mut() {
+        if !mask_ui.timer.finished() {
+            mask_ui.timer.tick(time.delta());
+            if mask_ui.timer.just_finished()
+                && !approx_eq(mask.strength, mask_ui.strength, ONE_IN_TEN_THOUSAND)
+            {
+                commands.queue(undo::PushAction::from(
+                    layer::UpdateMaskAction::update_strength(
+                        mask.id(),
+                        mask.strength,
+                        mask_ui.strength,
+                    ),
+                ));
+            }
+        }
+
         match (mask_source, mask_source_ui.as_mut()) {
             (
                 layer::MaskSource::Circle {
@@ -296,7 +335,7 @@ fn update_mask_ui_system(
                         && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_center(
+                            layer::UpdateMaskSourceAction::update_center(
                                 mask.id(),
                                 *original_center,
                                 *center,
@@ -311,7 +350,7 @@ fn update_mask_ui_system(
                         )
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_falloff_radius(
+                            layer::UpdateMaskSourceAction::update_falloff_radius(
                                 mask.id(),
                                 *original_falloff_radius,
                                 *falloff_radius,
@@ -322,7 +361,7 @@ fn update_mask_ui_system(
                         && !approx_eq(*original_radius, *radius, ONE_IN_TEN_THOUSAND)
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_radius(
+                            layer::UpdateMaskSourceAction::update_radius(
                                 mask.id(),
                                 *original_radius,
                                 *radius,
@@ -352,7 +391,7 @@ fn update_mask_ui_system(
                         && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_center(
+                            layer::UpdateMaskSourceAction::update_center(
                                 mask.id(),
                                 *original_center,
                                 *center,
@@ -367,7 +406,7 @@ fn update_mask_ui_system(
                         )
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_falloff_radius(
+                            layer::UpdateMaskSourceAction::update_falloff_radius(
                                 mask.id(),
                                 *original_falloff_radius,
                                 *falloff_radius,
@@ -378,7 +417,11 @@ fn update_mask_ui_system(
                         && !approx_eq(*original_size, *size, ONE_IN_TEN_THOUSAND)
                     {
                         commands.queue(undo::PushAction::from(
-                            layer::UpdateMaskAction::update_size(mask.id(), *original_size, *size),
+                            layer::UpdateMaskSourceAction::update_size(
+                                mask.id(),
+                                *original_size,
+                                *size,
+                            ),
                         ));
                     }
                 }
@@ -584,7 +627,7 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
                     egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
                     |ui| {
                         if let Some(new_height) =
-                            draw_ui_editable_f32(Some(layer::HEIGHT_RANGE), ui, *height)
+                            draw_ui_editable_f32(Some(layer::HEIGHT_RANGE), None, ui, *height)
                         {
                             *height = new_height;
                             timer.unpause();
@@ -755,6 +798,28 @@ fn draw_ui_for_mask(
                 )));
             }
         });
+
+        ui.horizontal(|ui| {
+            let MaskUi {
+                ref mut strength,
+                ref mut timer,
+            } = *mask.mask_ui;
+            ui.label("Strength:");
+            if let Some(new_strength) = draw_ui_editable_f32(
+                Some(ZERO_TO_ONE),
+                Some(ZERO_TO_ONE_INCREMENT),
+                ui,
+                mask.mask.strength,
+            ) {
+                debug!("Opacity changed to {}.", new_strength);
+                *strength = new_strength;
+                timer.unpause();
+                timer.reset();
+            }
+        });
+
+        ui.separator();
+
         match *mask.mask_source_ui {
             MaskSourceUi::Circle {
                 ref mut center,
@@ -764,12 +829,12 @@ fn draw_ui_for_mask(
             } => {
                 ui.horizontal(|ui| {
                     ui.label("Center:");
-                    if let Some(new_x) = draw_ui_editable_f32(None, ui, center.x) {
+                    if let Some(new_x) = draw_ui_editable_f32(None, None, ui, center.x) {
                         center.x = new_x;
                         timer.unpause();
                         timer.reset();
                     }
-                    if let Some(new_y) = draw_ui_editable_f32(None, ui, center.y) {
+                    if let Some(new_y) = draw_ui_editable_f32(None, None, ui, center.y) {
                         center.y = new_y;
                         timer.unpause();
                         timer.reset();
@@ -778,7 +843,7 @@ fn draw_ui_for_mask(
                 ui.horizontal(|ui| {
                     ui.label("Radius:");
                     if let Some(new_radius) =
-                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *radius)
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), None, ui, *radius)
                     {
                         *radius = new_radius;
                         timer.unpause();
@@ -787,9 +852,12 @@ fn draw_ui_for_mask(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Falloff Radius:");
-                    if let Some(new_falloff_radius) =
-                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *falloff_radius)
-                    {
+                    if let Some(new_falloff_radius) = draw_ui_editable_f32(
+                        Some(ZERO_TO_POSITIVE_INFINITY),
+                        None,
+                        ui,
+                        *falloff_radius,
+                    ) {
                         *falloff_radius = new_falloff_radius;
                         timer.unpause();
                         timer.reset();
@@ -804,12 +872,12 @@ fn draw_ui_for_mask(
             } => {
                 ui.horizontal(|ui| {
                     ui.label("Center:");
-                    if let Some(new_x) = draw_ui_editable_f32(None, ui, center.x) {
+                    if let Some(new_x) = draw_ui_editable_f32(None, None, ui, center.x) {
                         center.x = new_x;
                         timer.unpause();
                         timer.reset();
                     }
-                    if let Some(new_y) = draw_ui_editable_f32(None, ui, center.y) {
+                    if let Some(new_y) = draw_ui_editable_f32(None, None, ui, center.y) {
                         center.y = new_y;
                         timer.unpause();
                         timer.reset();
@@ -818,7 +886,7 @@ fn draw_ui_for_mask(
                 ui.horizontal(|ui| {
                     ui.label("Size:");
                     if let Some(new_size) =
-                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *size)
+                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), None, ui, *size)
                     {
                         *size = new_size;
                         timer.unpause();
@@ -827,15 +895,39 @@ fn draw_ui_for_mask(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Falloff Radius:");
-                    if let Some(new_falloff_radius) =
-                        draw_ui_editable_f32(Some(ZERO_TO_POSITIVE_INFINITY), ui, *falloff_radius)
-                    {
+                    if let Some(new_falloff_radius) = draw_ui_editable_f32(
+                        Some(ZERO_TO_POSITIVE_INFINITY),
+                        None,
+                        ui,
+                        *falloff_radius,
+                    ) {
                         *falloff_radius = new_falloff_radius;
                         timer.unpause();
                         timer.reset();
                     }
                 });
             }
+        }
+
+        if previous_mask_id.is_some() {
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("Composition Mode:");
+
+                let mut mode_edited = mask.mask.composition_mode;
+                for mode in layer::MaskCompositionMode::ITEMS.into_iter() {
+                    ui.selectable_value(&mut mode_edited, mode, mode.to_string());
+                }
+                if mode_edited != mask.mask.composition_mode {
+                    commands.queue(undo::PushAction::from(
+                        layer::UpdateMaskAction::change_composition_mode(
+                            mask.mask.id(),
+                            mask.mask.composition_mode,
+                            mode_edited,
+                        ),
+                    ));
+                }
+            });
         }
     });
 }

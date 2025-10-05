@@ -26,7 +26,8 @@ mod mask;
 pub use actions::*;
 pub use components::*;
 pub use mask::{
-    CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskOrder, MaskSource, UpdateMaskAction,
+    CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskCompositionMode, MaskOrder,
+    MaskSource, UpdateMaskAction, UpdateMaskSourceAction,
 };
 
 // PLUGIN
