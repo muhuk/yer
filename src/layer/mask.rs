@@ -124,12 +124,14 @@ pub enum MaskSource {
     Circle {
         center: Vec2,
         falloff_radius: f32,
+        irregularity: f32,
         radius: f32,
         rotation: f32,
     },
     Square {
         center: Vec2,
         falloff_radius: f32,
+        irregularity: f32,
         rotation: f32,
         size: f32,
     },
@@ -140,6 +142,7 @@ impl MaskSource {
         Self::Circle {
             center: Vec2::ZERO,
             falloff_radius: 0.5,
+            irregularity: 0.0,
             radius: 1.5,
             rotation: 0.0,
         }
@@ -149,6 +152,7 @@ impl MaskSource {
         Self::Square {
             center: Vec2::ZERO,
             falloff_radius: 0.5,
+            irregularity: 0.0,
             rotation: 0.0,
             size: 2.0,
         }
@@ -160,23 +164,35 @@ impl MaskSource {
         match self {
             Self::Circle {
                 center,
+                falloff_radius,
+                irregularity,
                 radius,
                 rotation,
-                falloff_radius,
             } => {
+                let scale = {
+                    const BASE: f32 = 10.0;
+                    let f = BASE.powf(*irregularity);
+                    Vec2::new(1.0 / f, f)
+                };
                 let transform =
-                    Affine2::from_scale_angle_translation(Vec2::ONE, -*rotation * TAU, -center);
+                    Affine2::from_scale_angle_translation(-scale, -*rotation * TAU, -center);
                 let distance: f32 = transform.transform_point2(position).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
             Self::Square {
                 center,
                 falloff_radius,
+                irregularity,
                 rotation,
                 size,
             } => {
+                let scale = {
+                    const BASE: f32 = 10.0;
+                    let f = BASE.powf(*irregularity);
+                    Vec2::new(1.0 / f, f)
+                };
                 let transform =
-                    Affine2::from_scale_angle_translation(Vec2::ONE, -*rotation * TAU, -center);
+                    Affine2::from_scale_angle_translation(-scale, -*rotation * TAU, -center);
                 let Vec2 { x: dx, y: dy } = transform.transform_point2(position).abs();
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
@@ -197,6 +213,14 @@ impl MaskSource {
         match self {
             Self::Circle { falloff_radius, .. } => *falloff_radius = new_radius,
             Self::Square { falloff_radius, .. } => *falloff_radius = new_radius,
+        }
+    }
+
+    fn set_irregularity(&mut self, mut new_irregularity: f32) {
+        new_irregularity = new_irregularity.max(-1.0).min(1.0);
+        match self {
+            Self::Circle { irregularity, .. } => *irregularity = new_irregularity,
+            Self::Square { irregularity, .. } => *irregularity = new_irregularity,
         }
     }
 
@@ -455,6 +479,11 @@ pub enum UpdateMaskSourceAction {
         old_value: f32,
         new_value: f32,
     },
+    UpdateIrregularity {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
     UpdateRadius {
         mask_id: MaskId,
         old_value: f32,
@@ -489,6 +518,14 @@ impl UpdateMaskSourceAction {
         }
     }
 
+    pub fn update_irregularity(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateIrregularity {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
     pub fn update_radius(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
         Self::UpdateRadius {
             mask_id,
@@ -517,6 +554,7 @@ impl UpdateMaskSourceAction {
         match self {
             Self::UpdateCenter { mask_id, .. } => mask_id,
             Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
+            Self::UpdateIrregularity { mask_id, .. } => mask_id,
             Self::UpdateRadius { mask_id, .. } => mask_id,
             Self::UpdateRotation { mask_id, .. } => mask_id,
             Self::UpdateSize { mask_id, .. } => mask_id,
@@ -526,23 +564,21 @@ impl UpdateMaskSourceAction {
 
 impl Action for UpdateMaskSourceAction {
     fn apply(&self, world: &mut World) {
-        let (mut mask, mut mask_source) = world
+        let mut mask_source = world
             .query::<(&mut Mask, &mut MaskSource)>()
             .iter_mut(world)
             .find(|(mask, _)| mask.id == *self.mask_id())
+            .map(|(_, mask_source)| mask_source)
             .expect(&format!("Mask with id {} not found.", self.mask_id()));
         match self {
             Self::UpdateCenter { new_value, .. } => mask_source.set_center(*new_value),
             Self::UpdateFalloffRadius { new_value, .. } => {
                 mask_source.set_falloff_radius(*new_value)
             }
+            Self::UpdateIrregularity { new_value, .. } => mask_source.set_irregularity(*new_value),
             Self::UpdateRadius { new_value, .. } => mask_source.set_radius(*new_value),
             Self::UpdateRotation { new_value, .. } => mask_source.set_rotation(*new_value),
-            Self::UpdateSize {
-                mask_id,
-                old_value,
-                new_value,
-            } => mask_source.set_size(*new_value),
+            Self::UpdateSize { new_value, .. } => mask_source.set_size(*new_value),
         };
     }
 
@@ -562,6 +598,15 @@ impl Action for UpdateMaskSourceAction {
                 old_value,
                 new_value,
             } => Self::UpdateFalloffRadius {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateIrregularity {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateIrregularity {
                 mask_id,
                 old_value: new_value,
                 new_value: old_value,

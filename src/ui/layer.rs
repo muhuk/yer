@@ -31,6 +31,7 @@ use super::egui_ext::{draw_ui_editable_f32, ToColor32};
 
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
+const MINUS_ONE_TO_ONE: RangeInclusive<f32> = -1.0..=1.0;
 const ZERO_TO_POSITIVE_INFINITY: RangeInclusive<f32> = 0.0..=f32::INFINITY;
 const ZERO_TO_ONE: RangeInclusive<f32> = 0.0..=1.0;
 const ZERO_TO_ONE_INCREMENT: f32 = 0.025;
@@ -157,6 +158,7 @@ pub(super) enum MaskSourceUi {
     Circle {
         center: Vec2,
         falloff_radius: f32,
+        irregularity: f32,
         radius: f32,
         rotation: f32,
         timer: Timer,
@@ -164,6 +166,7 @@ pub(super) enum MaskSourceUi {
     Square {
         center: Vec2,
         falloff_radius: f32,
+        irregularity: f32,
         rotation: f32,
         size: f32,
         timer: Timer,
@@ -176,11 +179,13 @@ impl From<&layer::MaskSource> for MaskSourceUi {
             layer::MaskSource::Circle {
                 center,
                 falloff_radius,
+                irregularity,
                 radius,
                 rotation,
             } => Self::Circle {
                 center: *center,
                 falloff_radius: *falloff_radius,
+                irregularity: *irregularity,
                 radius: *radius,
                 rotation: *rotation,
                 timer: Timer::new(LATENCY, TimerMode::Once),
@@ -188,11 +193,13 @@ impl From<&layer::MaskSource> for MaskSourceUi {
             layer::MaskSource::Square {
                 center,
                 falloff_radius,
+                irregularity,
                 rotation,
                 size,
             } => Self::Square {
                 center: *center,
                 falloff_radius: *falloff_radius,
+                irregularity: *irregularity,
                 rotation: *rotation,
                 size: *size,
                 timer: Timer::new(LATENCY, TimerMode::Once),
@@ -326,12 +333,14 @@ fn update_mask_ui_system(
                 layer::MaskSource::Circle {
                     center: original_center,
                     falloff_radius: original_falloff_radius,
+                    irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
                 },
                 &mut MaskSourceUi::Circle {
                     ref center,
                     ref falloff_radius,
+                    ref irregularity,
                     ref radius,
                     ref rotation,
                     ref mut timer,
@@ -366,6 +375,17 @@ fn update_mask_ui_system(
                         ));
                     }
                     if timer.just_finished()
+                        && !approx_eq(*original_irregularity, *irregularity, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_irregularity(
+                                mask.id(),
+                                *original_irregularity,
+                                *irregularity,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
                         && !approx_eq(*original_radius, *radius, ONE_IN_TEN_THOUSAND)
                     {
                         commands.queue(undo::PushAction::from(
@@ -394,12 +414,14 @@ fn update_mask_ui_system(
                 layer::MaskSource::Square {
                     center: original_center,
                     falloff_radius: original_falloff_radius,
+                    irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
                 },
                 &mut MaskSourceUi::Square {
                     ref center,
                     ref falloff_radius,
+                    ref irregularity,
                     ref rotation,
                     ref size,
                     ref mut timer,
@@ -431,6 +453,17 @@ fn update_mask_ui_system(
                                 mask.id(),
                                 *original_falloff_radius,
                                 *falloff_radius,
+                            ),
+                        ));
+                    }
+                    if timer.just_finished()
+                        && !approx_eq(*original_irregularity, *irregularity, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_irregularity(
+                                mask.id(),
+                                *original_irregularity,
+                                *irregularity,
                             ),
                         ));
                     }
@@ -495,12 +528,14 @@ fn reset_mask_ui_system(
                 layer::MaskSource::Circle {
                     center: original_center,
                     falloff_radius: original_falloff_radius,
+                    irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
                 },
                 MaskSourceUi::Circle {
                     center,
                     falloff_radius,
+                    irregularity,
                     radius,
                     rotation,
                     timer,
@@ -508,6 +543,7 @@ fn reset_mask_ui_system(
             ) => {
                 *center = *original_center;
                 *falloff_radius = *original_falloff_radius;
+                *irregularity = *original_irregularity;
                 *radius = *original_radius;
                 *rotation = *original_rotation;
                 timer.pause();
@@ -517,12 +553,14 @@ fn reset_mask_ui_system(
                 layer::MaskSource::Square {
                     center: original_center,
                     falloff_radius: original_falloff_radius,
+                    irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
                 },
                 MaskSourceUi::Square {
                     center,
                     falloff_radius,
+                    irregularity,
                     rotation,
                     size,
                     timer,
@@ -530,6 +568,7 @@ fn reset_mask_ui_system(
             ) => {
                 *center = *original_center;
                 *falloff_radius = *original_falloff_radius;
+                *irregularity = *original_irregularity;
                 *rotation = *original_rotation;
                 *size = *original_size;
                 timer.pause();
@@ -862,6 +901,7 @@ fn draw_ui_for_mask(
             MaskSourceUi::Circle {
                 ref mut center,
                 ref mut falloff_radius,
+                ref mut irregularity,
                 ref mut radius,
                 ref mut rotation,
                 ref mut timer,
@@ -915,10 +955,24 @@ fn draw_ui_for_mask(
                         timer.reset();
                     }
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Irregularity:");
+                    if let Some(new_irregularity) = draw_ui_editable_f32(
+                        Some(MINUS_ONE_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *irregularity,
+                    ) {
+                        *irregularity = new_irregularity;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
             }
             MaskSourceUi::Square {
                 ref mut center,
                 ref mut falloff_radius,
+                ref mut irregularity,
                 ref mut rotation,
                 ref mut size,
                 ref mut timer,
@@ -968,6 +1022,19 @@ fn draw_ui_for_mask(
                         *rotation,
                     ) {
                         *rotation = new_rotation;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Irregularity:");
+                    if let Some(new_irregularity) = draw_ui_editable_f32(
+                        Some(MINUS_ONE_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *irregularity,
+                    ) {
+                        *irregularity = new_irregularity;
                         timer.unpause();
                         timer.reset();
                     }
