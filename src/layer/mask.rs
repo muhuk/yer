@@ -592,9 +592,9 @@ fn normalize_mask_ordering_system(
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
 pub enum MaskCompositionMode {
+    #[default]
     Add,
     Sub,
-    #[default]
     Min,
     Max,
 }
