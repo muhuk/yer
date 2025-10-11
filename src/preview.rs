@@ -208,6 +208,13 @@ impl PreviewGrid2D {
             }
             _ => unreachable!(),
         }
+        // TODO: Implement proper flat shaded quads.
+        //
+        //       This renders triangles as flat shaded,
+        //       it looks ugly this way, but proper quad
+        //       shading turned out to be too much work.
+        mesh.duplicate_vertices();
+        mesh.compute_flat_normals();
         mesh
     }
 }
@@ -341,6 +348,8 @@ impl Command for UpdatePreviewMesh {
             .query_filtered::<Entity, With<viewport::PreviewMesh>>()
             .single(world)
             .unwrap();
+        // We can keep adding mesh assets.  Previous asset will be dropped
+        // because it will no longer have any references.
         let mesh_handle: Handle<Mesh> = world.resource_mut::<Assets<Mesh>>().add(mesh);
         world
             .commands()
