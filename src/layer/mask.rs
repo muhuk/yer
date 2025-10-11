@@ -174,9 +174,16 @@ impl MaskSource {
                     let f = BASE.powf(*irregularity);
                     Vec2::new(1.0 / f, f)
                 };
-                let transform =
-                    Affine2::from_scale_angle_translation(-scale, -*rotation * TAU, -center);
-                let distance: f32 = transform.transform_point2(position).length();
+                let transform_translation = Affine2::from_translation(-center);
+                let transform_rotation = Affine2::from_angle(-*rotation * TAU);
+                let transform_scale = Affine2::from_scale(-scale);
+                // Apply scale first, then rotation, then translation.
+                let distance: f32 = transform_scale
+                    .transform_point2(
+                        transform_rotation
+                            .transform_point2(transform_translation.transform_point2(position)),
+                    )
+                    .length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
             Self::Square {
@@ -191,9 +198,16 @@ impl MaskSource {
                     let f = BASE.powf(*irregularity);
                     Vec2::new(1.0 / f, f)
                 };
-                let transform =
-                    Affine2::from_scale_angle_translation(-scale, -*rotation * TAU, -center);
-                let Vec2 { x: dx, y: dy } = transform.transform_point2(position).abs();
+                let transform_translation = Affine2::from_translation(-center);
+                let transform_rotation = Affine2::from_angle(-*rotation * TAU);
+                let transform_scale = Affine2::from_scale(-scale);
+                // Apply scale first, then rotation, then translation.
+                let Vec2 { x: dx, y: dy } = transform_scale
+                    .transform_point2(
+                        transform_rotation
+                            .transform_point2(transform_translation.transform_point2(position)),
+                    )
+                    .abs();
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
                 let ky = 1.0 - clamp((dy - half_size) / falloff_radius, 0.0, 1.0);
