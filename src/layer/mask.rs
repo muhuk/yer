@@ -207,7 +207,9 @@ impl MaskSource {
         }
     }
 
-    fn set_rotation(&mut self, new_rotation: f32) {
+    fn set_rotation(&mut self, mut new_rotation: f32) {
+        // Constrain rotation to [0.0; 1.0)
+        new_rotation = new_rotation.fract();
         match self {
             Self::Circle { rotation, .. } => *rotation = new_rotation,
             Self::Square { rotation, .. } => *rotation = new_rotation,
