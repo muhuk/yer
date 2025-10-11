@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::f32::consts::TAU;
+
 use bevy::ecs::{component::HookContext, world::DeferredWorld};
 use bevy::math::Affine2;
 use bevy::prelude::*;
@@ -121,13 +123,15 @@ struct NeedsMaskOrderNormalization;
 pub enum MaskSource {
     Circle {
         center: Vec2,
-        radius: f32,
         falloff_radius: f32,
+        radius: f32,
+        rotation: f32,
     },
     Square {
         center: Vec2,
-        size: f32,
         falloff_radius: f32,
+        rotation: f32,
+        size: f32,
     },
 }
 
@@ -135,16 +139,18 @@ impl MaskSource {
     pub fn circle() -> Self {
         Self::Circle {
             center: Vec2::ZERO,
-            radius: 1.5,
             falloff_radius: 0.5,
+            radius: 1.5,
+            rotation: 0.0,
         }
     }
 
     pub fn square() -> Self {
         Self::Square {
             center: Vec2::ZERO,
-            size: 2.0,
             falloff_radius: 0.5,
+            rotation: 0.0,
+            size: 2.0,
         }
     }
 }
@@ -155,18 +161,22 @@ impl MaskSource {
             Self::Circle {
                 center,
                 radius,
+                rotation,
                 falloff_radius,
             } => {
-                let transform = Affine2::from_scale_angle_translation(Vec2::ONE, 0.0, -center);
+                let transform =
+                    Affine2::from_scale_angle_translation(Vec2::ONE, -*rotation * TAU, -center);
                 let distance: f32 = transform.transform_point2(position).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
             Self::Square {
                 center,
-                size,
                 falloff_radius,
+                rotation,
+                size,
             } => {
-                let transform = Affine2::from_scale_angle_translation(Vec2::ONE, 0.0, -center);
+                let transform =
+                    Affine2::from_scale_angle_translation(Vec2::ONE, -*rotation * TAU, -center);
                 let Vec2 { x: dx, y: dy } = transform.transform_point2(position).abs();
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
@@ -194,6 +204,13 @@ impl MaskSource {
         match self {
             Self::Circle { radius, .. } => *radius = new_radius,
             Self::Square { .. } => unreachable!(),
+        }
+    }
+
+    fn set_rotation(&mut self, new_rotation: f32) {
+        match self {
+            Self::Circle { rotation, .. } => *rotation = new_rotation,
+            Self::Square { rotation, .. } => *rotation = new_rotation,
         }
     }
 
@@ -441,6 +458,11 @@ pub enum UpdateMaskSourceAction {
         old_value: f32,
         new_value: f32,
     },
+    UpdateRotation {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
     UpdateSize {
         mask_id: MaskId,
         old_value: f32,
@@ -473,6 +495,14 @@ impl UpdateMaskSourceAction {
         }
     }
 
+    pub fn update_rotation(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateRotation {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
     pub fn update_size(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
         Self::UpdateSize {
             mask_id,
@@ -486,6 +516,7 @@ impl UpdateMaskSourceAction {
             Self::UpdateCenter { mask_id, .. } => mask_id,
             Self::UpdateFalloffRadius { mask_id, .. } => mask_id,
             Self::UpdateRadius { mask_id, .. } => mask_id,
+            Self::UpdateRotation { mask_id, .. } => mask_id,
             Self::UpdateSize { mask_id, .. } => mask_id,
         }
     }
@@ -504,6 +535,7 @@ impl Action for UpdateMaskSourceAction {
                 mask_source.set_falloff_radius(*new_value)
             }
             Self::UpdateRadius { new_value, .. } => mask_source.set_radius(*new_value),
+            Self::UpdateRotation { new_value, .. } => mask_source.set_rotation(*new_value),
             Self::UpdateSize {
                 mask_id,
                 old_value,
@@ -537,6 +569,15 @@ impl Action for UpdateMaskSourceAction {
                 old_value,
                 new_value,
             } => Self::UpdateRadius {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateRotation {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateRotation {
                 mask_id,
                 old_value: new_value,
                 new_value: old_value,
