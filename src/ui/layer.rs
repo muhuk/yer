@@ -156,14 +156,16 @@ impl From<&layer::Mask> for MaskUi {
 pub(super) enum MaskSourceUi {
     Circle {
         center: Vec2,
-        radius: f32,
         falloff_radius: f32,
+        radius: f32,
+        rotation: f32,
         timer: Timer,
     },
     Square {
         center: Vec2,
-        size: f32,
         falloff_radius: f32,
+        rotation: f32,
+        size: f32,
         timer: Timer,
     },
 }
@@ -173,22 +175,26 @@ impl From<&layer::MaskSource> for MaskSourceUi {
         match value {
             layer::MaskSource::Circle {
                 center,
-                radius,
                 falloff_radius,
+                radius,
+                rotation,
             } => Self::Circle {
                 center: *center,
-                radius: *radius,
                 falloff_radius: *falloff_radius,
+                radius: *radius,
+                rotation: *rotation,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
             layer::MaskSource::Square {
                 center,
-                size,
                 falloff_radius,
+                rotation,
+                size,
             } => Self::Square {
                 center: *center,
-                size: *size,
                 falloff_radius: *falloff_radius,
+                rotation: *rotation,
+                size: *size,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
         }
@@ -319,13 +325,15 @@ fn update_mask_ui_system(
             (
                 layer::MaskSource::Circle {
                     center: original_center,
-                    radius: original_radius,
                     falloff_radius: original_falloff_radius,
+                    radius: original_radius,
+                    rotation: original_rotation,
                 },
                 &mut MaskSourceUi::Circle {
                     ref center,
-                    ref radius,
                     ref falloff_radius,
+                    ref radius,
+                    ref rotation,
                     ref mut timer,
                 },
             ) => {
@@ -368,19 +376,32 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
+                    if timer.just_finished()
+                        && !approx_eq(*original_rotation, *rotation, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_rotation(
+                                mask.id(),
+                                *original_rotation,
+                                *rotation,
+                            ),
+                        ));
+                    }
                 }
             }
             (layer::MaskSource::Circle { .. }, _) => unreachable!(),
             (
                 layer::MaskSource::Square {
                     center: original_center,
-                    size: original_size,
                     falloff_radius: original_falloff_radius,
+                    rotation: original_rotation,
+                    size: original_size,
                 },
                 &mut MaskSourceUi::Square {
                     ref center,
-                    ref size,
                     ref falloff_radius,
+                    ref rotation,
+                    ref size,
                     ref mut timer,
                 },
             ) => {
@@ -424,6 +445,17 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
+                    if timer.just_finished()
+                        && !approx_eq(*original_rotation, *rotation, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_rotation(
+                                mask.id(),
+                                *original_rotation,
+                                *rotation,
+                            ),
+                        ));
+                    }
                 }
             }
             (layer::MaskSource::Square { .. }, _) => unreachable!(),
@@ -462,38 +494,44 @@ fn reset_mask_ui_system(
             (
                 layer::MaskSource::Circle {
                     center: original_center,
-                    radius: original_radius,
                     falloff_radius: original_falloff_radius,
+                    radius: original_radius,
+                    rotation: original_rotation,
                 },
                 MaskSourceUi::Circle {
                     center,
-                    radius,
                     falloff_radius,
+                    radius,
+                    rotation,
                     timer,
                 },
             ) => {
                 *center = *original_center;
-                *radius = *original_radius;
                 *falloff_radius = *original_falloff_radius;
+                *radius = *original_radius;
+                *rotation = *original_rotation;
                 timer.pause();
             }
             (layer::MaskSource::Circle { .. }, _) => unreachable!(),
             (
                 layer::MaskSource::Square {
                     center: original_center,
-                    size: original_size,
                     falloff_radius: original_falloff_radius,
+                    rotation: original_rotation,
+                    size: original_size,
                 },
                 MaskSourceUi::Square {
                     center,
-                    size,
                     falloff_radius,
+                    rotation,
+                    size,
                     timer,
                 },
             ) => {
                 *center = *original_center;
-                *size = *original_size;
                 *falloff_radius = *original_falloff_radius;
+                *rotation = *original_rotation;
+                *size = *original_size;
                 timer.pause();
             }
             (layer::MaskSource::Square { .. }, _) => unreachable!(),
@@ -823,8 +861,9 @@ fn draw_ui_for_mask(
         match *mask.mask_source_ui {
             MaskSourceUi::Circle {
                 ref mut center,
-                ref mut radius,
                 ref mut falloff_radius,
+                ref mut radius,
+                ref mut rotation,
                 ref mut timer,
             } => {
                 ui.horizontal(|ui| {
@@ -863,11 +902,25 @@ fn draw_ui_for_mask(
                         timer.reset();
                     }
                 });
+                ui.horizontal(|ui| {
+                    ui.label("Rotation:");
+                    if let Some(new_rotation) = draw_ui_editable_f32(
+                        Some(ZERO_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *rotation,
+                    ) {
+                        *rotation = new_rotation;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
             }
             MaskSourceUi::Square {
                 ref mut center,
-                ref mut size,
                 ref mut falloff_radius,
+                ref mut rotation,
+                ref mut size,
                 ref mut timer,
             } => {
                 ui.horizontal(|ui| {
@@ -902,6 +955,19 @@ fn draw_ui_for_mask(
                         *falloff_radius,
                     ) {
                         *falloff_radius = new_falloff_radius;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Rotation:");
+                    if let Some(new_rotation) = draw_ui_editable_f32(
+                        Some(ZERO_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *rotation,
+                    ) {
+                        *rotation = new_rotation;
                         timer.unpause();
                         timer.reset();
                     }
