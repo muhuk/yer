@@ -15,6 +15,7 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use bevy::ecs::{component::HookContext, world::DeferredWorld};
+use bevy::math::Affine2;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -156,7 +157,8 @@ impl MaskSource {
                 radius,
                 falloff_radius,
             } => {
-                let distance: f32 = (position - center).length();
+                let transform = Affine2::from_scale_angle_translation(Vec2::ONE, 0.0, -center);
+                let distance: f32 = transform.transform_point2(position).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
             Self::Square {
@@ -164,7 +166,8 @@ impl MaskSource {
                 size,
                 falloff_radius,
             } => {
-                let Vec2 { x: dx, y: dy } = (position - center).abs();
+                let transform = Affine2::from_scale_angle_translation(Vec2::ONE, 0.0, -center);
+                let Vec2 { x: dx, y: dy } = transform.transform_point2(position).abs();
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
                 let ky = 1.0 - clamp((dy - half_size) / falloff_radius, 0.0, 1.0);
