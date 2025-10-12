@@ -16,10 +16,9 @@
 
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
-
+use bevy_egui::{egui, EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 #[cfg(feature = "inspector")]
-use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_egui::{EguiContext, PrimaryEguiContext};
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
