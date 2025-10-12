@@ -70,9 +70,13 @@ pub struct Mask {
 }
 
 impl Mask {
-    pub fn combine(&self, baseline: f32, sample: f32) -> f32 {
-        self.composition_mode
-            .combine(baseline, sample * self.strength)
+    pub fn combine(&self, baseline: Option<f32>, sample: f32) -> f32 {
+        if let Some(baseline) = baseline {
+            self.composition_mode
+                .combine(baseline, sample * self.strength)
+        } else {
+            sample * self.strength
+        }
     }
 
     pub fn id(&self) -> MaskId {

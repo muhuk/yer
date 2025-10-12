@@ -89,18 +89,11 @@ impl Sampler2D for LayerSampler {
 
         // We need this condition to avoid multiplying the sample with zero.
         if !self.masks.is_empty() {
-            let mut mask_multiplier: f32 = 0.0;
-            for (idx, (mask, mask_source)) in self.masks.iter().enumerate() {
-                if idx == 0 {
-                    // First mask _processed_ should always use the
-                    // default composition mode, which should be `add`.
-                    mask_multiplier = MaskCompositionMode::default()
-                        .combine(mask_multiplier, mask_source.sample(position));
-                } else {
-                    mask_multiplier = mask.combine(mask_multiplier, mask_source.sample(position));
-                }
+            let mut mask_multiplier: Option<f32> = None;
+            for (mask, mask_source) in self.masks.iter() {
+                mask_multiplier = Some(mask.combine(mask_multiplier, mask_source.sample(position)));
             }
-            sample.multiply_alpha_mut(mask_multiplier);
+            sample.multiply_alpha_mut(mask_multiplier.unwrap());
         }
 
         sample
