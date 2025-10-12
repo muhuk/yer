@@ -70,15 +70,15 @@ fn update_egui_theme_system(
     mut contexts: EguiContexts,
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
-) {
+) -> Result<(), BevyError> {
     if !theme.is_changed() {
-        return;
+        return Ok(());
     }
 
     const EGUI_THEME: egui::Theme = egui::Theme::Dark;
     if let Some(colors) = theme_colors.get(&theme.colors) {
         debug!("Updating theme.");
-        let ctx = contexts.ctx_mut();
+        let ctx = contexts.ctx_mut()?;
         ctx.set_theme(EGUI_THEME);
         let widgets = {
             let mut widgets = egui::style::Widgets::default();
@@ -141,6 +141,8 @@ fn update_egui_theme_system(
         };
         ctx.set_visuals_of(EGUI_THEME, visuals);
     }
+
+    Ok(())
 }
 
 // LIB

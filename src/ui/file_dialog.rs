@@ -16,7 +16,6 @@
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use bevy::prelude::*;
 use bevy_egui::egui::Context;
@@ -60,10 +59,7 @@ impl LoadFileDialog {
 impl Default for LoadFileDialog {
     fn default() -> Self {
         let mut file_dialog = egui_file_dialog::FileDialog::new()
-            .add_file_filter(
-                FILE_FILTER_PROJECT_FILES_NAME,
-                Arc::new(|path| path.extension().unwrap_or_default() == SUFFIX),
-            )
+            .add_file_filter_extensions(FILE_FILTER_PROJECT_FILES_NAME, vec![SUFFIX])
             .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
             .as_modal(true);
         file_dialog.pick_file();
@@ -94,14 +90,9 @@ impl SaveFileDialog {
 
 impl Default for SaveFileDialog {
     fn default() -> Self {
-        // `save_file` doesn't support file filters.
-        // See: https://github.com/fluxxcode/egui-file-dialog/issues/138
         let mut file_dialog = egui_file_dialog::FileDialog::new()
-            .add_file_filter(
-                FILE_FILTER_PROJECT_FILES_NAME,
-                Arc::new(|path| path.extension().unwrap_or_default() == SUFFIX),
-            )
-            .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
+            .add_save_extension(FILE_FILTER_PROJECT_FILES_NAME, SUFFIX)
+            .default_save_extension(FILE_FILTER_PROJECT_FILES_NAME)
             .default_file_name(DEFAULT_FILE_NAME)
             .as_modal(true);
         file_dialog.save_file();
