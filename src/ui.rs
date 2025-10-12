@@ -19,7 +19,7 @@ use bevy::window::PrimaryWindow;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 #[cfg(feature = "inspector")]
-use bevy_egui::EguiContext;
+use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
@@ -44,9 +44,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UiState>()
             .add_plugins((
-                EguiPlugin {
-                    enable_multipass_for_primary_context: false,
-                },
+                EguiPlugin::default(),
                 egui_ext::UiBevyExtPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
@@ -54,13 +52,12 @@ impl Plugin for UiPlugin {
             .init_state::<UiState>()
             .enable_state_scoped_entities::<UiState>()
             .add_systems(
+                EguiPrimaryContextPass,
+                (draw_ui_panels_system, draw_ui_dialogs_system).chain(),
+            )
+            .add_systems(
                 Update,
-                (
-                    draw_ui_panels_system,
-                    draw_ui_dialogs_system.after(draw_ui_panels_system),
-                    update_window_title_system
-                        .run_if(resource_exists_and_changed::<session::Session>),
-                ),
+                update_window_title_system.run_if(resource_exists_and_changed::<session::Session>),
             )
             .add_systems(
                 OnEnter(UiState::ShowingLoadFileDialog),
@@ -73,7 +70,7 @@ impl Plugin for UiPlugin {
 
         #[cfg(feature = "inspector")]
         app.add_plugins(DefaultInspectorConfigPlugin)
-            .add_systems(Update, inspector_ui_system);
+            .add_systems(EguiPrimaryContextPass, inspector_ui_system);
     }
 }
 
@@ -96,21 +93,26 @@ impl UiState {
 // SYSTEMS
 
 #[cfg(feature = "inspector")]
-fn inspector_ui_system(world: &mut World) {
-    let Ok((window, egui_context)) = world
-        .query_filtered::<(&Window, &mut EguiContext), With<PrimaryWindow>>()
+fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
+    let Ok((window_width, window_height)) = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
         .single(world)
+        .map(|window| (window.width(), window.height()))
     else {
-        return;
+        return Err("No primary window.".into());
     };
-    let mut egui_context = egui_context.clone();
+
+    let mut egui_context = world
+        .query_filtered::<&EguiContext, With<PrimaryEguiContext>>()
+        .single(world)?
+        .clone();
 
     egui::Window::new("Inspector")
         .default_open(false)
         .pivot(egui::Align2::CENTER_BOTTOM)
         .default_pos((
-            window.width() / 2.0f32,
-            f32::max(0.0f32, window.height() - 16.0f32),
+            window_width / 2.0f32,
+            f32::max(0.0f32, window_height - 16.0f32),
         ))
         .show(egui_context.get_mut(), |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -140,6 +142,8 @@ fn inspector_ui_system(world: &mut World) {
                 });
             });
         });
+
+    Ok(())
 }
 
 fn draw_ui_dialogs_system(
@@ -150,7 +154,7 @@ fn draw_ui_dialogs_system(
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
-    if let Some(ctx) = contexts.try_ctx_mut() {
+    if let Ok(ctx) = contexts.ctx_mut() {
         if !ui_state.is_interactive() {
             match ui_state.as_ref().get() {
                 UiState::Interactive => unreachable!(),
@@ -208,8 +212,8 @@ fn draw_ui_panels_system(
     undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
     viewport_region: ResMut<viewport::ViewportRegion>,
-) {
-    let ctx = contexts.ctx_mut();
+) -> Result<(), BevyError> {
+    let ctx = contexts.ctx_mut()?;
 
     let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
         .show(ctx, |ui| {
@@ -294,6 +298,8 @@ fn draw_ui_panels_system(
         primary_window,
         viewport_region,
     );
+
+    Ok(())
 }
 
 fn show_load_file_dialog_system(mut commands: Commands) {
