@@ -127,6 +127,7 @@ pub enum MaskSource {
         irregularity: f32,
         radius: f32,
         rotation: f32,
+        transform: Affine2,
     },
     Square {
         center: Vec2,
@@ -134,6 +135,7 @@ pub enum MaskSource {
         irregularity: f32,
         rotation: f32,
         size: f32,
+        transform: Affine2,
     },
 }
 
@@ -145,6 +147,7 @@ impl MaskSource {
             irregularity: 0.0,
             radius: 1.5,
             rotation: 0.0,
+            transform: Affine2::default(),
         }
     }
 
@@ -155,6 +158,7 @@ impl MaskSource {
             irregularity: 0.0,
             rotation: 0.0,
             size: 2.0,
+            transform: Affine2::default(),
         }
     }
 }
@@ -163,44 +167,20 @@ impl MaskSource {
     pub fn sample(&self, position: Vec2) -> f32 {
         match self {
             Self::Circle {
-                center,
                 falloff_radius,
-                irregularity,
                 radius,
-                rotation,
+                transform,
+                ..
             } => {
-                let scale = {
-                    const BASE: f32 = 10.0;
-                    let f = BASE.powf(*irregularity);
-                    Vec2::new(1.0 / f, f)
-                };
-                // Apply scale first, then rotation, then translation.
-                // We are multiplying the transforms in reverse order since
-                // it is a reverse transform.
-                let transform = Affine2::from_scale(-scale)
-                    * Affine2::from_angle(-*rotation * TAU)
-                    * Affine2::from_translation(-center);
                 let distance: f32 = transform.transform_point2(position).length();
                 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
             }
             Self::Square {
-                center,
                 falloff_radius,
-                irregularity,
-                rotation,
                 size,
+                transform,
+                ..
             } => {
-                let scale = {
-                    const BASE: f32 = 10.0;
-                    let f = BASE.powf(*irregularity);
-                    Vec2::new(1.0 / f, f)
-                };
-                // Apply scale first, then rotation, then translation.
-                // We are multiplying the transforms in reverse order since
-                // it is a reverse transform.
-                let transform = Affine2::from_scale(-scale)
-                    * Affine2::from_angle(-*rotation * TAU)
-                    * Affine2::from_translation(-center);
                 let Vec2 { x: dx, y: dy } = transform.transform_point2(position).abs();
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
@@ -215,6 +195,7 @@ impl MaskSource {
             Self::Circle { center, .. } => *center = new_center,
             Self::Square { center, .. } => *center = new_center,
         }
+        self.update_transform();
     }
 
     fn set_falloff_radius(&mut self, new_radius: f32) {
@@ -230,6 +211,7 @@ impl MaskSource {
             Self::Circle { irregularity, .. } => *irregularity = new_irregularity,
             Self::Square { irregularity, .. } => *irregularity = new_irregularity,
         }
+        self.update_transform();
     }
 
     fn set_radius(&mut self, new_radius: f32) {
@@ -246,6 +228,7 @@ impl MaskSource {
             Self::Circle { rotation, .. } => *rotation = new_rotation,
             Self::Square { rotation, .. } => *rotation = new_rotation,
         }
+        self.update_transform();
     }
 
     fn set_size(&mut self, new_size: f32) {
@@ -253,6 +236,36 @@ impl MaskSource {
             Self::Circle { .. } => unreachable!(),
             Self::Square { size, .. } => *size = new_size,
         }
+    }
+
+    fn update_transform(&mut self) {
+        let (center, irregularity, rotation, transform) = match self {
+            &mut Self::Circle {
+                ref center,
+                ref irregularity,
+                ref rotation,
+                ref mut transform,
+                ..
+            } => (center, irregularity, rotation, transform),
+            &mut Self::Square {
+                ref center,
+                ref irregularity,
+                ref rotation,
+                ref mut transform,
+                ..
+            } => (center, irregularity, rotation, transform),
+        };
+        let scale = {
+            const BASE: f32 = 10.0;
+            let f = BASE.powf(*irregularity);
+            Vec2::new(1.0 / f, f)
+        };
+        // Apply scale first, then rotation, then translation.
+        // We are multiplying the transforms in reverse order since
+        // it is a reverse transform.
+        *transform = Affine2::from_scale(-scale)
+            * Affine2::from_angle(-*rotation * TAU)
+            * Affine2::from_translation(-*center);
     }
 }
 
