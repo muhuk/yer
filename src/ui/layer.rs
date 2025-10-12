@@ -182,6 +182,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity,
                 radius,
                 rotation,
+                ..
             } => Self::Circle {
                 center: *center,
                 falloff_radius: *falloff_radius,
@@ -196,6 +197,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity,
                 rotation,
                 size,
+                ..
             } => Self::Square {
                 center: *center,
                 falloff_radius: *falloff_radius,
@@ -336,6 +338,7 @@ fn update_mask_ui_system(
                     irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
+                    ..
                 },
                 &mut MaskSourceUi::Circle {
                     ref center,
@@ -417,6 +420,7 @@ fn update_mask_ui_system(
                     irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
+                    ..
                 },
                 &mut MaskSourceUi::Square {
                     ref center,
@@ -531,6 +535,7 @@ fn reset_mask_ui_system(
                     irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
+                    ..
                 },
                 MaskSourceUi::Circle {
                     center,
@@ -556,6 +561,7 @@ fn reset_mask_ui_system(
                     irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
+                    ..
                 },
                 MaskSourceUi::Square {
                     center,
