@@ -352,15 +352,15 @@ fn draw_ui_menu(
     undo_stack: &undo::UndoStack,
     ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
-    egui::menu::bar(ui, |ui| {
+    egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
             if ui.button("New").clicked() {
                 commands.queue(session::InitializeNewSession);
-                ui.close_menu();
+                ui.close();
             }
             if ui.button("Open...").clicked() {
                 ui_state_next.set(UiState::ShowingLoadFileDialog);
-                ui.close_menu();
+                ui.close();
             }
             if ui.button("Save").clicked() {
                 if session.has_save_file() {
@@ -368,16 +368,16 @@ fn draw_ui_menu(
                 } else {
                     ui_state_next.set(UiState::ShowingSaveFileDialog);
                 }
-                ui.close_menu();
+                ui.close();
             }
             if ui.button("Save As...").clicked() {
                 ui_state_next.set(UiState::ShowingSaveFileDialog);
-                ui.close_menu();
+                ui.close();
             }
             ui.separator();
             if ui.button("Quit").clicked() {
                 app_exit_events.write(AppExit::Success);
-                ui.close_menu();
+                ui.close();
             }
         });
 
@@ -388,7 +388,7 @@ fn draw_ui_menu(
                 .clicked()
             {
                 commands.queue(undo::UndoAction);
-                ui.close_menu();
+                ui.close();
             }
             if ui
                 .add_enabled_ui(undo_stack.can_redo(), |ui| ui.button("Redo"))
@@ -396,7 +396,7 @@ fn draw_ui_menu(
                 .clicked()
             {
                 commands.queue(undo::RedoAction);
-                ui.close_menu();
+                ui.close();
             }
         });
 
@@ -443,7 +443,7 @@ fn draw_ui_menu(
                             layer_ids[selected_layer_idx + 1],
                         ),
                     ));
-                    ui.close_menu();
+                    ui.close();
                 }
             });
 
@@ -455,7 +455,7 @@ fn draw_ui_menu(
                             layer_ids[selected_layer_idx - 1],
                         ),
                     ));
-                    ui.close_menu();
+                    ui.close();
                 }
             })
         });
