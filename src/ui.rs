@@ -94,54 +94,52 @@ impl UiState {
 
 #[cfg(feature = "inspector")]
 fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
-    let Ok((window_width, window_height)) = world
+    if let Ok((window_width, window_height)) = world
         .query_filtered::<&Window, With<PrimaryWindow>>()
         .single(world)
         .map(|window| (window.width(), window.height()))
-    else {
-        return Err("No primary window.".into());
-    };
+    {
+        let mut egui_context = world
+            .query_filtered::<&EguiContext, With<PrimaryEguiContext>>()
+            .single(world)?
+            .clone();
 
-    let mut egui_context = world
-        .query_filtered::<&EguiContext, With<PrimaryEguiContext>>()
-        .single(world)?
-        .clone();
-
-    egui::Window::new("Inspector")
-        .default_open(false)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .default_pos((
-            window_width / 2.0f32,
-            f32::max(0.0f32, window_height - 16.0f32),
-        ))
-        .show(egui_context.get_mut(), |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                egui::CollapsingHeader::new("Entities")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        const WITH_CHILDREN: bool = true;
-                        bevy_inspector::ui_for_entities_filtered(
+        egui::Window::new("Inspector")
+            .default_open(false)
+            .pivot(egui::Align2::CENTER_BOTTOM)
+            .default_pos((
+                window_width / 2.0f32,
+                f32::max(0.0f32, window_height - 16.0f32),
+            ))
+            .show(egui_context.get_mut(), |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    egui::CollapsingHeader::new("Entities")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            const WITH_CHILDREN: bool = true;
+                            bevy_inspector::ui_for_entities_filtered(
                             world,
                             ui,
                             WITH_CHILDREN,
                             &bevy_inspector::Filter::<(Without<ChildOf>, Without<Observer>)>::all(),
                         );
+                        });
+                    ui.collapsing("Resources", |ui| {
+                        bevy_inspector::ui_for_resources(world, ui);
                     });
-                ui.collapsing("Resources", |ui| {
-                    bevy_inspector::ui_for_resources(world, ui);
-                });
-                ui.collapsing("Assets", |ui| {
-                    bevy_inspector::ui_for_all_assets(world, ui);
-                });
-                //bevy_inspector::ui_for_world(world, ui);
-                ui.collapsing("State", |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("UiState");
-                        bevy_inspector::ui_for_state::<UiState>(world, ui);
+                    ui.collapsing("Assets", |ui| {
+                        bevy_inspector::ui_for_all_assets(world, ui);
+                    });
+                    //bevy_inspector::ui_for_world(world, ui);
+                    ui.collapsing("State", |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("UiState");
+                            bevy_inspector::ui_for_state::<UiState>(world, ui);
+                        });
                     });
                 });
             });
-        });
+    }
 
     Ok(())
 }
