@@ -70,16 +70,10 @@ impl Sample {
         self.height
     }
 
-    pub fn mix(&self, other: &Self) -> Self {
-        let mut result = self.clone();
-        result.mix_mut(other);
-        result
-    }
-
     /// Mix `other` above `self`.
     ///
     /// See [reference](https://en.wikipedia.org/wiki/Alpha_compositing#Description).
-    pub fn mix_mut(&mut self, other: &Self) {
+    pub fn mix_in_place(&mut self, other: &Self) {
         let mix_factor = other.alpha.factor();
         let new_alpha = Alpha::from_factor(mix_factor + self.alpha().factor() * (1.0 - mix_factor));
         self.height =
@@ -150,31 +144,40 @@ mod tests {
 
         // If the 2nd operand is opaque, then the result is equal to 2nd
         // operand's value.  Final alpha is mixed.
-        assert!(approx_eq(
-            a.mix(&b).height(),
-            b.height(),
-            ONE_IN_TEN_THOUSAND
-        ));
-        assert!(a.mix(&b).alpha().is_opaque());
-        assert!(approx_eq(
-            c.mix(&b).height(),
-            b.height(),
-            ONE_IN_TEN_THOUSAND
-        ));
-        assert!(c.mix(&b).alpha().is_opaque());
+        {
+            let mut mixed = a.clone();
+            mixed.mix_in_place(&b);
+            assert!(approx_eq(mixed.height(), b.height(), ONE_IN_TEN_THOUSAND));
+            assert!(mixed.alpha().is_opaque());
+        }
+
+        {
+            let mut mixed = c.clone();
+            mixed.mix_in_place(&b);
+            assert!(approx_eq(mixed.height(), b.height(), ONE_IN_TEN_THOUSAND));
+            assert!(mixed.alpha().is_opaque());
+        }
 
         // If the 2nd operand is not opaque, but the 1st operand is opaque
         // then the result is mixed.  Final alpha is not changed.
-        assert!(approx_eq(
-            a.mix(&c).height(),
-            (a.height() + c.height()) / 2.0,
-            ONE_IN_TEN_THOUSAND
-        ));
-        assert!(a.mix(&c).alpha().is_opaque());
+        {
+            let mut mixed = a.clone();
+            mixed.mix_in_place(&c);
+            assert!(approx_eq(
+                mixed.height(),
+                (a.height() + c.height()) / 2.0,
+                ONE_IN_TEN_THOUSAND
+            ));
+            assert!(mixed.alpha().is_opaque());
+        }
 
         // If the 1st operand is not opaque, 2nd operand's values is mixed but
         // the final alpha still equals to the 1st operand's.
-        assert!(approx_eq(d.mix(&c).height(), 6.15, ONE_IN_TEN_THOUSAND));
-        assert_eq!(d.mix(&c).alpha(), Alpha::from_factor(0.7));
+        {
+            let mut mixed = d.clone();
+            mixed.mix_in_place(&c);
+            assert!(approx_eq(mixed.height(), 6.15, ONE_IN_TEN_THOUSAND));
+            assert_eq!(mixed.alpha(), Alpha::from_factor(0.7));
+        }
     }
 }

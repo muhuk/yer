@@ -597,7 +597,7 @@ async fn sample_layers(
             } else {
                 let mut sample = Sample::default();
                 for layer in layers.iter() {
-                    sample.mix_mut(&layer.sample(p, &sample));
+                    sample.mix_in_place(&layer.sample(p, &sample));
                 }
 
                 samples.push((p, sample.height()));
