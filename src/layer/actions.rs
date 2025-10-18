@@ -71,12 +71,14 @@ impl Action for CreateLayerAction {
                 });
             LayerOrder((bottom_layer_order + top_layer_order) / 2)
         };
-        world.spawn(LayerBundle {
-            name: self.layer.name_component(),
-            layer: self.layer.clone(),
+        world.spawn((
+            LayerBundle {
+                name: self.layer.name_component(),
+                layer: self.layer.clone(),
+                height_map: HeightMap::default(),
+            },
             layer_order,
-            height_map: HeightMap::default(),
-        });
+        ));
     }
 
     fn revert(&self, world: &mut World) {
