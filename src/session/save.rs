@@ -17,11 +17,13 @@
 use std::fs;
 use std::path::Path;
 
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use rmp_serde;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::id::LayerId;
 use crate::layer;
 use crate::preview;
 
@@ -47,6 +49,7 @@ pub fn load(path: &Path, world: &mut World) -> Result<(), SaveError> {
     let save_data = SaveV1::from_bytes(&save_container.data)?;
     layer::LayerBundle::insert_all(world, save_data.layers);
     world.spawn_batch(save_data.preview_regions);
+    layer::MaskBundle::insert_all(world, save_data.masks);
     Ok(())
 }
 
@@ -56,6 +59,7 @@ pub fn save(path: &Path, world: &mut World) -> Result<(), SaveError> {
         data: (SaveV1 {
             layers: layer::LayerBundle::extract_all(world),
             preview_regions: preview::PreviewBundle::extract_all(world),
+            masks: layer::MaskBundle::extract_all(world),
         })
         .to_bytes()?,
     };
@@ -81,12 +85,13 @@ impl SaveContainer {
     }
 }
 
+// TODO: Store bake config
+// TODO: Store cached preview mesh
 #[derive(Deserialize, Serialize)]
 struct SaveV1 {
     layers: Vec<layer::LayerBundle>,
     preview_regions: Vec<preview::PreviewBundle>,
-    // TODO: Store bake config
-    // TODO: Store cached preview mesh
+    masks: HashMap<LayerId, Vec<layer::MaskBundle>>,
 }
 
 impl SaveV1 {
