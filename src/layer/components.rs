@@ -45,14 +45,9 @@ impl Plugin for LayerComponentsPlugin {
 
 // BUNDLES
 
-// TODO: Remove LayerOrder from this bundle.  We want to order layers
-//       according to LayerOrder but we don't want to save it since it
-//       is not stable.  Also LayerBundle's are stored in a sequential
-//       collection so the order will not be lost when they're saved.
 #[derive(Bundle, Deserialize, Serialize)]
 pub struct LayerBundle {
     pub layer: Layer,
-    pub layer_order: LayerOrder,
     pub name: Name,
     pub height_map: HeightMap,
 }
@@ -60,18 +55,28 @@ pub struct LayerBundle {
 impl LayerBundle {
     pub fn extract_all(world: &mut World) -> Vec<Self> {
         let mut layer_bundles = vec![];
-        for (layer, layer_order, name, height_map) in world
+        for (layer, name, height_map) in world
             .query::<(&Layer, &LayerOrder, &Name, &HeightMap)>()
             .iter(world)
+            .sort::<&LayerOrder>()
+            .map(|(l, _, n, h)| (l, n, h))
         {
             layer_bundles.push(Self {
                 layer: layer.clone(),
-                layer_order: *layer_order,
                 name: name.clone(),
                 height_map: height_map.clone(),
             });
         }
         layer_bundles
+    }
+
+    pub fn insert_all(world: &mut World, layer_bundles: Vec<Self>) {
+        layer_bundles
+            .into_iter()
+            .enumerate()
+            .for_each(|(idx, layer_bundle)| {
+                world.spawn((layer_bundle, LayerOrder(idx as u32 * LAYER_SPACING)));
+            });
     }
 }
 
@@ -145,20 +150,7 @@ impl Display for Layer {
     }
 }
 
-#[derive(
-    Component,
-    Copy,
-    Clone,
-    Debug,
-    Deref,
-    Deserialize,
-    Eq,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Reflect,
-    Serialize,
-)]
+#[derive(Component, Copy, Clone, Debug, Deref, Eq, Ord, PartialEq, PartialOrd, Reflect)]
 #[component(on_remove = layer_order_on_remove_hook)]
 #[require(Layer)]
 pub struct LayerOrder(#[deref] pub(super) u32);

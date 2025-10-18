@@ -104,10 +104,12 @@ impl Sampler2D for LayerSampler {
 /// not emit LayerChange::Added event.
 pub fn create_initial_layer(world: &mut World) {
     let layer = Layer::default();
-    world.spawn(LayerBundle {
-        name: layer.name_component(),
-        layer,
-        layer_order: LayerOrder(0),
-        height_map: HeightMap::default(),
-    });
+    world.spawn((
+        LayerBundle {
+            name: layer.name_component(),
+            layer,
+            height_map: HeightMap::default(),
+        },
+        LayerOrder(0),
+    ));
 }

@@ -45,7 +45,7 @@ pub fn load(path: &Path, world: &mut World) -> Result<(), SaveError> {
         .map(|bytes| SaveContainer::from_bytes(&bytes))??;
     assert!(save_container.version == CURRENT_SAVE_VERSION);
     let save_data = SaveV1::from_bytes(&save_container.data)?;
-    world.spawn_batch(save_data.layers);
+    layer::LayerBundle::insert_all(world, save_data.layers);
     world.spawn_batch(save_data.preview_regions);
     Ok(())
 }
