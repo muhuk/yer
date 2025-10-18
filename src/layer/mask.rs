@@ -18,6 +18,7 @@ use std::f32::consts::TAU;
 
 use bevy::ecs::{component::HookContext, world::DeferredWorld};
 use bevy::math::Affine2;
+use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -53,15 +54,63 @@ impl Plugin for MaskPlugin {
 
 // BUNDLES
 
-#[derive(Bundle, Clone, Debug, Reflect)]
+#[derive(Bundle, Clone, Debug, Deserialize, Reflect, Serialize)]
 pub struct MaskBundle {
     pub mask: Mask,
     pub mask_source: MaskSource,
 }
 
+impl MaskBundle {
+    pub fn extract_all(world: &mut World) -> HashMap<LayerId, Vec<Self>> {
+        let mut result: HashMap<LayerId, Vec<Self>> = HashMap::new();
+        let layers: Vec<(Entity, LayerId)> = world
+            .query::<(Entity, &Layer)>()
+            .iter(world)
+            .map(|(e, l)| (e, l.id()))
+            .collect();
+        for (entity, layer_id) in layers.into_iter() {
+            result.insert(
+                layer_id,
+                world
+                    .query::<(&ChildOf, &Mask, &MaskSource, &MaskOrder)>()
+                    .iter(world)
+                    .sort::<&MaskOrder>()
+                    .filter(|(parent, _, _, _)| parent.parent() == entity)
+                    .map(|(_, m, ms, _)| Self {
+                        mask: m.clone(),
+                        mask_source: ms.clone(),
+                    })
+                    .collect(),
+            );
+        }
+        result
+    }
+
+    pub fn insert_all(world: &mut World, masks: HashMap<LayerId, Vec<Self>>) {
+        for (layer_id, masks) in masks.into_iter() {
+            let parent: Entity = world
+                .query::<(Entity, &Layer)>()
+                .iter(world)
+                .find(|(_, l)| l.id() == layer_id)
+                .map(|(e, _)| e)
+                .expect(&format!(
+                    "Adding masks to non-existent layer with id: '{}'.",
+                    &layer_id
+                ));
+            for (idx, mask_bundle) in masks.into_iter().enumerate() {
+                world.spawn((
+                    ChildOf(parent),
+                    mask_bundle,
+                    MaskOrder(idx as u32 * MASK_SPACING),
+                ));
+            }
+        }
+    }
+}
+
 // COMPONENTS
 
-#[derive(Clone, Component, Debug, Reflect)]
+#[derive(Clone, Component, Debug, Deserialize, Reflect, Serialize)]
 pub struct Mask {
     pub composition_mode: MaskCompositionMode,
     pub is_enabled: bool,
@@ -122,7 +171,7 @@ pub struct MaskOrder(#[deref] u32);
 #[derive(Clone, Component, Debug, Reflect)]
 struct NeedsMaskOrderNormalization;
 
-#[derive(Clone, Component, Debug, Reflect)]
+#[derive(Clone, Component, Debug, Deserialize, Reflect, Serialize)]
 #[require(Mask)]
 pub enum MaskSource {
     Circle {
@@ -706,7 +755,7 @@ fn normalize_mask_ordering_system(
 
 // LIB
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
 pub enum MaskCompositionMode {
     #[default]
     Add,
