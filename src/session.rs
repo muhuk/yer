@@ -171,6 +171,9 @@ fn process_undo_events_system(
                     session.new_project = true;
                 }
             }
+            (undo::UndoEvent::StackSizeChanged { .. }, _) => {
+                unimplemented!();
+            }
         }
     }
 }
