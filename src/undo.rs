@@ -15,16 +15,31 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::fmt::Debug;
+use std::num::NonZeroUsize;
 
 use bevy::prelude::*;
 
-pub struct UndoPlugin;
+const DEFAULT_UNDO_STACK_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(20) };
+
+// PLUGIN
+
+pub struct UndoPlugin {
+    max_actions: NonZeroUsize,
+}
+
+impl Default for UndoPlugin {
+    fn default() -> Self {
+        Self {
+            max_actions: DEFAULT_UNDO_STACK_SIZE,
+        }
+    }
+}
 
 impl Plugin for UndoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UndoStack>()
             .add_event::<UndoEvent>()
-            .init_resource::<UndoStack>();
+            .insert_resource(UndoStack::new(self.max_actions));
     }
 }
 
@@ -36,13 +51,16 @@ pub enum UndoEvent {
     ActionReapplied,
     ActionReverted,
     StackCleared,
+    StackSizeChanged { old_size: usize, new_size: usize },
 }
 
 // RESOURCES
 
-#[derive(Default, Resource, Reflect)]
+#[derive(Resource, Reflect)]
 #[reflect(Resource)]
 pub struct UndoStack {
+    max_actions: NonZeroUsize,
+
     // We can reflect these two fields when Box<dyn Trait> is supported.
     // See https://github.com/bevyengine/bevy/pull/15532
     #[reflect(ignore)]
@@ -52,12 +70,33 @@ pub struct UndoStack {
 }
 
 impl UndoStack {
+    pub fn new(max_actions: NonZeroUsize) -> Self {
+        Self {
+            max_actions,
+            undo_actions: Vec::new(),
+            redo_actions: Vec::new(),
+        }
+    }
+
     pub fn can_redo(&self) -> bool {
         !self.redo_actions.is_empty()
     }
 
     pub fn can_undo(&self) -> bool {
         !self.undo_actions.is_empty()
+    }
+
+    fn adjust_stack_size(&mut self, new_value: impl Into<NonZeroUsize>) {
+        self.max_actions = new_value.into();
+        if self.undo_actions.len() + self.redo_actions.len() > self.max_actions.get() {
+            if self.max_actions.get() >= self.redo_actions.len() {
+                self.undo_actions
+                    .truncate(self.max_actions.get() - self.redo_actions.len());
+            } else {
+                self.undo_actions.truncate(0);
+                self.redo_actions.truncate(self.max_actions.get());
+            }
+        }
     }
 }
 
@@ -125,6 +164,25 @@ impl Command for RedoAction {
     }
 }
 
+pub struct SetUndoStackSize(NonZeroUsize);
+
+impl Command for SetUndoStackSize {
+    fn apply(self, world: &mut World) -> () {
+        let mut undo_stack = world.resource_mut::<UndoStack>();
+
+        if undo_stack.max_actions == self.0 {
+            // Nothing to do, earyly exit.
+            return;
+        }
+
+        let old_size: usize = undo_stack.max_actions.get();
+        let new_size: usize = self.0.get();
+
+        undo_stack.adjust_stack_size(self.0);
+        world.send_event(UndoEvent::StackSizeChanged { old_size, new_size });
+    }
+}
+
 pub struct UndoAction;
 
 impl Command for UndoAction {
@@ -146,4 +204,109 @@ impl Command for UndoAction {
 pub trait Action: Reflect + Debug + Send + Sync {
     fn apply(&self, world: &mut World);
     fn revert(&self, world: &mut World);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Reflect)]
+    struct MockAction;
+
+    impl Action for MockAction {
+        fn apply(&self, _world: &mut World) {}
+        fn revert(&self, _world: &mut World) {}
+    }
+
+    #[test]
+    fn when_stack_size_is_increased_no_action_is_dropped() {
+        let mut app = App::new();
+        app.add_plugins(UndoPlugin {
+            max_actions: NonZeroUsize::new(2).unwrap(),
+        });
+        app.update();
+        app.world_mut()
+            .commands()
+            .queue(PushAction(Box::new(MockAction)));
+        app.world_mut()
+            .commands()
+            .queue(PushAction(Box::new(MockAction)));
+        app.update();
+        app.world_mut().commands().queue(UndoAction);
+        app.update();
+
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 2);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
+
+        app.world_mut()
+            .commands()
+            .queue(SetUndoStackSize(NonZeroUsize::new(3).unwrap()));
+        app.update();
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 3);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
+    }
+
+    #[test]
+    fn when_stack_size_is_decreased_first_undo_actions_are_dropped() {
+        let mut app = App::new();
+        app.add_plugins(UndoPlugin {
+            max_actions: NonZeroUsize::new(10).unwrap(),
+        });
+        app.update();
+        for _ in 0..8 {
+            app.world_mut()
+                .commands()
+                .queue(PushAction(Box::new(MockAction)));
+        }
+        app.update();
+        for _ in 0..3 {
+            app.world_mut().commands().queue(UndoAction);
+        }
+        app.update();
+
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 10);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 5);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 3);
+
+        app.world_mut()
+            .commands()
+            .queue(SetUndoStackSize(NonZeroUsize::new(4).unwrap()));
+        app.update();
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 4);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 3);
+    }
+
+    #[test]
+    fn when_stack_size_is_decreased_beyond_undo_actions_redo_actions_are_dropped() {
+        let mut app = App::new();
+        app.add_plugins(UndoPlugin {
+            max_actions: NonZeroUsize::new(10).unwrap(),
+        });
+        app.update();
+        for _ in 0..8 {
+            app.world_mut()
+                .commands()
+                .queue(PushAction(Box::new(MockAction)));
+        }
+        app.update();
+        for _ in 0..3 {
+            app.world_mut().commands().queue(UndoAction);
+        }
+        app.update();
+
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 10);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 5);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 3);
+
+        app.world_mut()
+            .commands()
+            .queue(SetUndoStackSize(NonZeroUsize::new(2).unwrap()));
+        app.update();
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 2);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 0);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 2);
+    }
 }
