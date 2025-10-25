@@ -219,33 +219,34 @@ mod tests {
     }
 
     #[test]
-    fn when_stack_size_is_increased_no_action_is_dropped() {
+    fn when_stack_size_is_decreased_beyond_undo_actions_redo_actions_are_dropped() {
         let mut app = App::new();
         app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(2).unwrap(),
+            max_actions: NonZeroUsize::new(10).unwrap(),
         });
         app.update();
-        app.world_mut()
-            .commands()
-            .queue(PushAction(Box::new(MockAction)));
-        app.world_mut()
-            .commands()
-            .queue(PushAction(Box::new(MockAction)));
+        for _ in 0..8 {
+            app.world_mut()
+                .commands()
+                .queue(PushAction(Box::new(MockAction)));
+        }
         app.update();
-        app.world_mut().commands().queue(UndoAction);
+        for _ in 0..3 {
+            app.world_mut().commands().queue(UndoAction);
+        }
         app.update();
 
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 10);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 5);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 3);
+
+        app.world_mut()
+            .commands()
+            .queue(SetUndoStackSize(NonZeroUsize::new(2).unwrap()));
+        app.update();
         assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 2);
-        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
-        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
-
-        app.world_mut()
-            .commands()
-            .queue(SetUndoStackSize(NonZeroUsize::new(3).unwrap()));
-        app.update();
-        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 3);
-        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
-        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 0);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 2);
     }
 
     #[test]
@@ -280,33 +281,32 @@ mod tests {
     }
 
     #[test]
-    fn when_stack_size_is_decreased_beyond_undo_actions_redo_actions_are_dropped() {
+    fn when_stack_size_is_increased_no_action_is_dropped() {
         let mut app = App::new();
         app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(10).unwrap(),
+            max_actions: NonZeroUsize::new(2).unwrap(),
         });
         app.update();
-        for _ in 0..8 {
-            app.world_mut()
-                .commands()
-                .queue(PushAction(Box::new(MockAction)));
-        }
+        app.world_mut()
+            .commands()
+            .queue(PushAction(Box::new(MockAction)));
+        app.world_mut()
+            .commands()
+            .queue(PushAction(Box::new(MockAction)));
         app.update();
-        for _ in 0..3 {
-            app.world_mut().commands().queue(UndoAction);
-        }
+        app.world_mut().commands().queue(UndoAction);
         app.update();
 
-        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 10);
-        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 5);
-        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 3);
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 2);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
 
         app.world_mut()
             .commands()
-            .queue(SetUndoStackSize(NonZeroUsize::new(2).unwrap()));
+            .queue(SetUndoStackSize(NonZeroUsize::new(3).unwrap()));
         app.update();
-        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 2);
-        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 0);
-        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 2);
+        assert_eq!(app.world().resource::<UndoStack>().max_actions.get(), 3);
+        assert_eq!(app.world().resource::<UndoStack>().undo_actions.len(), 1);
+        assert_eq!(app.world().resource::<UndoStack>().redo_actions.len(), 1);
     }
 }
