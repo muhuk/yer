@@ -146,12 +146,14 @@ fn process_undo_events_system(
 ) {
     for event in undo_events.read() {
         match (event, session.saved_action_idx) {
-            (undo::UndoEvent::ActionPushed, None) => {
+            (undo::UndoEvent::ActionPushed { .. }, None) => {
                 session.saved_action_idx = Some(-1);
                 session.new_project = false;
             }
-            (undo::UndoEvent::ActionPushed, Some(idx)) => {
-                session.saved_action_idx = Some(idx - 1);
+            (undo::UndoEvent::ActionPushed { old_action_dropped }, Some(idx)) => {
+                if !*old_action_dropped {
+                    session.saved_action_idx = Some(idx - 1);
+                }
                 session.new_project = false;
             }
             // Decrement the index if redo
@@ -169,6 +171,17 @@ fn process_undo_events_system(
                     // We have just loaded a save file.
                     session.saved_action_idx = None;
                     session.new_project = true;
+                }
+            }
+            (undo::UndoEvent::StackSizeChanged { new_size, old_size }, _) => {
+                // When the stack is potentially shrunk remove saved action
+                // index.  Just because the stack size is decreased does not
+                // mean any actions are dropped.  However doing the math here
+                // would be complex and require looking at undo and redo stack
+                // sizes.  Instead we throw in the towel.  Changing the undo
+                // stack size should not be a frequent event anyway.
+                if new_size < old_size {
+                    session.saved_action_idx = None;
                 }
             }
         }
