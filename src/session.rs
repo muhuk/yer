@@ -146,12 +146,14 @@ fn process_undo_events_system(
 ) {
     for event in undo_events.read() {
         match (event, session.saved_action_idx) {
-            (undo::UndoEvent::ActionPushed, None) => {
+            (undo::UndoEvent::ActionPushed { .. }, None) => {
                 session.saved_action_idx = Some(-1);
                 session.new_project = false;
             }
-            (undo::UndoEvent::ActionPushed, Some(idx)) => {
-                session.saved_action_idx = Some(idx - 1);
+            (undo::UndoEvent::ActionPushed { old_action_dropped }, Some(idx)) => {
+                if !*old_action_dropped {
+                    session.saved_action_idx = Some(idx - 1);
+                }
                 session.new_project = false;
             }
             // Decrement the index if redo

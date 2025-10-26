@@ -48,7 +48,7 @@ impl Plugin for UndoPlugin {
 
 #[derive(Debug, Event)]
 pub enum UndoEvent {
-    ActionPushed,
+    ActionPushed { old_action_dropped: bool },
     ActionReapplied,
     ActionReverted,
     StackCleared,
@@ -109,14 +109,18 @@ impl UndoStack {
         }
     }
 
-    fn push_action(&mut self, action: Box<dyn Action>) {
+    #[must_use]
+    fn push_action(&mut self, action: Box<dyn Action>) -> bool {
+        let mut old_action_dropped = false;
         // The new action is pushed as a result of user input.  Therefore any
         // actions undoed before are no longer redoable.
         self.redo_actions.clear();
         if self.undo_actions.len() >= self.max_actions.get() {
             self.undo_actions.pop_front().unwrap();
+            old_action_dropped = true;
         }
         self.undo_actions.push_back(action);
+        return old_action_dropped;
     }
 }
 
@@ -154,8 +158,8 @@ impl Command for PushAction {
         let action = self.0;
         debug!("Pushing new action: {:?}", &action);
         action.apply(world);
-        world.resource_mut::<UndoStack>().push_action(action);
-        world.send_event(UndoEvent::ActionPushed);
+        let old_action_dropped = world.resource_mut::<UndoStack>().push_action(action);
+        world.send_event(UndoEvent::ActionPushed { old_action_dropped });
     }
 }
 
