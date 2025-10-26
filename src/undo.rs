@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::num::NonZeroUsize;
 
@@ -64,17 +65,17 @@ pub struct UndoStack {
     // We can reflect these two fields when Box<dyn Trait> is supported.
     // See https://github.com/bevyengine/bevy/pull/15532
     #[reflect(ignore)]
-    undo_actions: Vec<Box<dyn Action>>,
+    undo_actions: VecDeque<Box<dyn Action>>,
     #[reflect(ignore)]
-    redo_actions: Vec<Box<dyn Action>>,
+    redo_actions: VecDeque<Box<dyn Action>>,
 }
 
 impl UndoStack {
     pub fn new(max_actions: NonZeroUsize) -> Self {
         Self {
             max_actions,
-            undo_actions: Vec::new(),
-            redo_actions: Vec::new(),
+            undo_actions: VecDeque::new(),
+            redo_actions: VecDeque::new(),
         }
     }
 
@@ -90,13 +91,32 @@ impl UndoStack {
         self.max_actions = new_value.into();
         if self.undo_actions.len() + self.redo_actions.len() > self.max_actions.get() {
             if self.max_actions.get() >= self.redo_actions.len() {
-                self.undo_actions
-                    .truncate(self.max_actions.get() - self.redo_actions.len());
+                let excess =
+                    self.undo_actions.len() + self.redo_actions.len() - self.max_actions.get();
+                for _ in 0..excess {
+                    self.undo_actions.pop_front().unwrap();
+                }
             } else {
-                self.undo_actions.truncate(0);
-                self.redo_actions.truncate(self.max_actions.get());
+                let excess_redo = self
+                    .redo_actions
+                    .len()
+                    .saturating_sub(self.max_actions.get());
+                self.undo_actions.clear();
+                for _ in 0..excess_redo {
+                    self.redo_actions.pop_front().unwrap();
+                }
             }
         }
+    }
+
+    fn push_action(&mut self, action: Box<dyn Action>) {
+        // The new action is pushed as a result of user input.  Therefore any
+        // actions undoed before are no longer redoable.
+        self.redo_actions.clear();
+        if self.undo_actions.len() >= self.max_actions.get() {
+            self.undo_actions.pop_front().unwrap();
+        }
+        self.undo_actions.push_back(action);
     }
 }
 
@@ -134,11 +154,7 @@ impl Command for PushAction {
         let action = self.0;
         debug!("Pushing new action: {:?}", &action);
         action.apply(world);
-        let mut undo_stack = world.resource_mut::<UndoStack>();
-        // The new action is pushed as a result of user input.  Therefore any
-        // actions undoed before are no longer redoable.
-        undo_stack.redo_actions.clear();
-        undo_stack.undo_actions.push(action);
+        world.resource_mut::<UndoStack>().push_action(action);
         world.send_event(UndoEvent::ActionPushed);
     }
 }
@@ -156,10 +172,13 @@ impl Command for RedoAction {
         let action = world
             .resource_mut::<UndoStack>()
             .redo_actions
-            .pop()
+            .pop_front()
             .unwrap();
         action.apply(world);
-        world.resource_mut::<UndoStack>().undo_actions.push(action);
+        world
+            .resource_mut::<UndoStack>()
+            .undo_actions
+            .push_back(action);
         world.send_event(UndoEvent::ActionReapplied);
     }
 }
@@ -190,10 +209,13 @@ impl Command for UndoAction {
         let action = world
             .resource_mut::<UndoStack>()
             .undo_actions
-            .pop()
+            .pop_back()
             .unwrap();
         action.revert(world);
-        world.resource_mut::<UndoStack>().redo_actions.push(action);
+        world
+            .resource_mut::<UndoStack>()
+            .redo_actions
+            .push_front(action);
         world.send_event(UndoEvent::ActionReverted);
     }
 }
@@ -210,12 +232,41 @@ pub trait Action: Reflect + Debug + Send + Sync {
 mod tests {
     use super::*;
 
-    #[derive(Debug, Reflect)]
-    struct MockAction;
+    #[derive(Debug, PartialEq, Reflect)]
+    struct MockAction(pub usize);
 
     impl Action for MockAction {
         fn apply(&self, _world: &mut World) {}
         fn revert(&self, _world: &mut World) {}
+    }
+
+    #[test]
+    fn adding_an_action_beyond_max_actions_drop_from_the_stack() {
+        let mut app = App::new();
+        app.add_plugins(UndoPlugin {
+            max_actions: NonZeroUsize::new(2).unwrap(),
+        });
+        app.update();
+        for idx in 0..5 {
+            app.world_mut()
+                .commands()
+                .queue(PushAction(Box::new(MockAction(idx))));
+        }
+        app.update();
+        assert_eq!(
+            app.world().resource::<UndoStack>().undo_actions[0]
+                .as_any()
+                .downcast_ref::<MockAction>()
+                .unwrap(),
+            &MockAction(3)
+        );
+        assert_eq!(
+            app.world().resource::<UndoStack>().undo_actions[1]
+                .as_any()
+                .downcast_ref::<MockAction>()
+                .unwrap(),
+            &MockAction(4)
+        );
     }
 
     #[test]
@@ -225,10 +276,10 @@ mod tests {
             max_actions: NonZeroUsize::new(10).unwrap(),
         });
         app.update();
-        for _ in 0..8 {
+        for idx in 0..8 {
             app.world_mut()
                 .commands()
-                .queue(PushAction(Box::new(MockAction)));
+                .queue(PushAction(Box::new(MockAction(idx))));
         }
         app.update();
         for _ in 0..3 {
@@ -256,10 +307,10 @@ mod tests {
             max_actions: NonZeroUsize::new(10).unwrap(),
         });
         app.update();
-        for _ in 0..8 {
+        for idx in 0..8 {
             app.world_mut()
                 .commands()
-                .queue(PushAction(Box::new(MockAction)));
+                .queue(PushAction(Box::new(MockAction(idx))));
         }
         app.update();
         for _ in 0..3 {
@@ -289,10 +340,10 @@ mod tests {
         app.update();
         app.world_mut()
             .commands()
-            .queue(PushAction(Box::new(MockAction)));
+            .queue(PushAction(Box::new(MockAction(1))));
         app.world_mut()
             .commands()
-            .queue(PushAction(Box::new(MockAction)));
+            .queue(PushAction(Box::new(MockAction(2))));
         app.update();
         app.world_mut().commands().queue(UndoAction);
         app.update();
