@@ -171,8 +171,16 @@ fn process_undo_events_system(
                     session.new_project = true;
                 }
             }
-            (undo::UndoEvent::StackSizeChanged { .. }, _) => {
-                unimplemented!();
+            (undo::UndoEvent::StackSizeChanged { new_size, old_size }, _) => {
+                // When the stack is potentially shrunk remove saved action
+                // index.  Just because the stack size is decreased does not
+                // mean any actions are dropped.  However doing the math here
+                // would be complex and require looking at undo and redo stack
+                // sizes.  Instead we throw in the towel.  Changing the undo
+                // stack size should not be a frequent event anyway.
+                if new_size < old_size {
+                    session.saved_action_idx = None;
+                }
             }
         }
     }
