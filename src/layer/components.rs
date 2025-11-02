@@ -17,7 +17,7 @@
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
 
-use bevy::ecs::{component::HookContext, world::DeferredWorld};
+use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 

@@ -18,8 +18,8 @@ use std::num::NonZeroU8;
 use std::sync::{mpsc, Arc, Mutex, TryLockError};
 use std::time::Duration;
 
+use bevy::mesh::{PlaneMeshBuilder, VertexAttributeValues};
 use bevy::prelude::*;
-use bevy::render::mesh::{PlaneMeshBuilder, VertexAttributeValues};
 use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
@@ -63,13 +63,13 @@ impl Plugin for PreviewPlugin {
             .register_type::<Preview>()
             .register_type::<PreviewGrid2D>()
             .register_type::<PreviewRegion>();
-        app.add_event::<UpdatePreviewRegion>();
+        app.add_message::<UpdatePreviewRegion>();
         app.init_resource::<Preview>();
         app.add_systems(
             Update,
             (
                 manage_preview_system,
-                update_preview_region_system.run_if(on_event::<UpdatePreviewRegion>),
+                update_preview_region_system.run_if(on_message::<UpdatePreviewRegion>),
             ),
         );
     }
@@ -77,7 +77,7 @@ impl Plugin for PreviewPlugin {
 
 // EVENTS
 
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 pub enum UpdatePreviewRegion {
     SetCenter(Entity, Vec2),
     SetSize(Entity, f32),
@@ -362,10 +362,10 @@ impl Command for UpdatePreviewMesh {
 
 fn manage_preview_system(
     mut commands: Commands,
-    mut undo_events: EventReader<undo::UndoEvent>,
+    mut undo_events: MessageReader<undo::UndoEvent>,
     mut preview_resource: ResMut<Preview>,
     time: Res<Time>,
-    mut update_preview_region_events: EventReader<UpdatePreviewRegion>,
+    mut update_preview_region_events: MessageReader<UpdatePreviewRegion>,
 ) {
     let now: Duration = time.elapsed();
 
@@ -424,7 +424,7 @@ fn manage_preview_system(
 
 fn update_preview_region_system(
     mut preview_regions: Query<&mut PreviewRegion>,
-    mut update_preview_region_events: EventReader<UpdatePreviewRegion>,
+    mut update_preview_region_events: MessageReader<UpdatePreviewRegion>,
 ) {
     for event in update_preview_region_events.read() {
         match event {

@@ -18,7 +18,7 @@ use std::ops::RangeInclusive;
 use bevy::prelude::*;
 use bevy_egui::{
     egui::{self, Color32},
-    EguiContexts, EguiPreUpdateSet, EguiUserTextures,
+    EguiContexts, EguiPreUpdateSet, EguiTextureHandle, EguiUserTextures,
 };
 
 use crate::theme;
@@ -57,7 +57,7 @@ impl FromWorld for EguiTheme {
         let icon_atlas_handle: Handle<Image> = world.resource::<theme::Theme>().icon_atlas.clone();
         let icon_atlas_texture_id = world
             .resource_mut::<EguiUserTextures>()
-            .add_image(icon_atlas_handle);
+            .add_image(EguiTextureHandle::Weak(icon_atlas_handle.id()));
         Self {
             icon_atlas: icon_atlas_texture_id,
         }

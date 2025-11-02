@@ -16,7 +16,7 @@
 
 use std::f32::consts::TAU;
 
-use bevy::ecs::{component::HookContext, world::DeferredWorld};
+use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy::math::Affine2;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;

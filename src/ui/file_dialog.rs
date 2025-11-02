@@ -50,7 +50,7 @@ impl LoadFileDialog {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => DialogState::Open,
             egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
-            egui_file_dialog::DialogState::Picked(path) => DialogState::Selected(path),
+            egui_file_dialog::DialogState::Picked(path) => DialogState::Selected(path.into()),
             _ => unreachable!(),
         }
     }
@@ -81,7 +81,7 @@ impl SaveFileDialog {
             egui_file_dialog::DialogState::Open => DialogState::Open,
             egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
             egui_file_dialog::DialogState::Picked(path) => {
-                DialogState::Selected(sanitize_path(path))
+                DialogState::Selected(sanitize_path(path.into()))
             }
             _ => unreachable!(),
         }

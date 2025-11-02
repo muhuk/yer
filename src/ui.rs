@@ -49,7 +49,6 @@ impl Plugin for UiPlugin {
                 layer::LayerUiPlugin,
             ))
             .init_state::<UiState>()
-            .enable_state_scoped_entities::<UiState>()
             .add_systems(
                 EguiPrimaryContextPass,
                 (draw_ui_panels_system, draw_ui_dialogs_system).chain(),
@@ -195,7 +194,7 @@ fn draw_ui_dialogs_system(
 }
 
 fn draw_ui_panels_system(
-    mut app_exit_events: EventWriter<AppExit>,
+    mut app_exit_events: MessageWriter<AppExit>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
@@ -304,7 +303,7 @@ fn show_load_file_dialog_system(mut commands: Commands) {
     commands.spawn((
         Name::new("Load File Dialog"),
         file_dialog::LoadFileDialog::default(),
-        StateScoped(UiState::ShowingLoadFileDialog),
+        DespawnOnExit(UiState::ShowingLoadFileDialog),
     ));
 }
 
@@ -312,7 +311,7 @@ fn show_save_file_dialog_system(mut commands: Commands) {
     commands.spawn((
         Name::new("Save File Dialog"),
         file_dialog::SaveFileDialog::default(),
-        StateScoped(UiState::ShowingSaveFileDialog),
+        DespawnOnExit(UiState::ShowingSaveFileDialog),
     ));
 }
 
@@ -344,7 +343,7 @@ fn update_window_title_system(
 
 fn draw_ui_menu(
     ui: &mut egui::Ui,
-    app_exit_events: &mut EventWriter<AppExit>,
+    app_exit_events: &mut MessageWriter<AppExit>,
     commands: &mut Commands,
     layers_query: &layer::Layers,
     session: &session::Session,
