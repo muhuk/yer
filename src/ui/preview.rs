@@ -25,7 +25,7 @@ use crate::preview;
 #[derive(SystemParam)]
 pub struct PreviewQuery<'w, 's> {
     preview_regions: Query<'w, 's, (Entity, &'static preview::PreviewRegion)>,
-    update_preview_region_events: EventWriter<'w, preview::UpdatePreviewRegion>,
+    update_preview_region_events: MessageWriter<'w, preview::UpdatePreviewRegion>,
 }
 
 // LIB

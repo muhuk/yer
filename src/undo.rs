@@ -39,14 +39,14 @@ impl Default for UndoPlugin {
 impl Plugin for UndoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UndoStack>()
-            .add_event::<UndoEvent>()
+            .add_message::<UndoEvent>()
             .insert_resource(UndoStack::new(self.max_actions));
     }
 }
 
 // EVENTS
 
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 pub enum UndoEvent {
     ActionPushed { old_action_dropped: bool },
     ActionReapplied,
@@ -144,7 +144,7 @@ impl Command for ClearStack {
         let mut undo_stack = world.resource_mut::<UndoStack>();
         undo_stack.undo_actions.clear();
         undo_stack.redo_actions.clear();
-        world.send_event(UndoEvent::StackCleared);
+        world.write_message(UndoEvent::StackCleared);
     }
 }
 
@@ -159,7 +159,7 @@ impl Command for PushAction {
         debug!("Pushing new action: {:?}", &action);
         action.apply(world);
         let old_action_dropped = world.resource_mut::<UndoStack>().push_action(action);
-        world.send_event(UndoEvent::ActionPushed { old_action_dropped });
+        world.write_message(UndoEvent::ActionPushed { old_action_dropped });
     }
 }
 
@@ -183,7 +183,7 @@ impl Command for RedoAction {
             .resource_mut::<UndoStack>()
             .undo_actions
             .push_back(action);
-        world.send_event(UndoEvent::ActionReapplied);
+        world.write_message(UndoEvent::ActionReapplied);
     }
 }
 
@@ -202,7 +202,7 @@ impl Command for SetUndoStackSize {
         let new_size: usize = self.0.get();
 
         undo_stack.adjust_stack_size(self.0);
-        world.send_event(UndoEvent::StackSizeChanged { old_size, new_size });
+        world.write_message(UndoEvent::StackSizeChanged { old_size, new_size });
     }
 }
 
@@ -220,7 +220,7 @@ impl Command for UndoAction {
             .resource_mut::<UndoStack>()
             .redo_actions
             .push_front(action);
-        world.send_event(UndoEvent::ActionReverted);
+        world.write_message(UndoEvent::ActionReverted);
     }
 }
 

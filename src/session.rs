@@ -142,7 +142,7 @@ impl Command for SaveSession {
 
 fn process_undo_events_system(
     mut session: ResMut<Session>,
-    mut undo_events: EventReader<undo::UndoEvent>,
+    mut undo_events: MessageReader<undo::UndoEvent>,
 ) {
     for event in undo_events.read() {
         match (event, session.saved_action_idx) {

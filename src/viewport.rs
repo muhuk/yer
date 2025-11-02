@@ -227,7 +227,7 @@ fn mouse_over_viewport_system(
 }
 
 fn middle_mouse_actions_system(
-    mut mouse_motion_reader: EventReader<MouseMotion>,
+    mut mouse_motion_reader: MessageReader<MouseMotion>,
     mouse_button: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,

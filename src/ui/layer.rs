@@ -98,7 +98,10 @@ pub(super) struct Masks<'w, 's> {
 }
 
 impl<'w, 's> Masks<'w, 's> {
-    pub fn masks_for_layer(&mut self, layer: Entity) -> impl Iterator<Item = MaskQueryItem<'_>> {
+    pub fn masks_for_layer(
+        &mut self,
+        layer: Entity,
+    ) -> impl Iterator<Item = MaskQueryItem<'_, '_>> {
         self.masks
             .iter_mut()
             .sort::<&layer::MaskOrder>()
@@ -283,7 +286,7 @@ fn update_height_map_ui_system(
                 height,
                 ref mut timer,
             } => {
-                if !timer.finished() {
+                if !timer.is_finished() {
                     timer.tick(time.delta());
                     let layer::HeightMap::Constant(original_height) = height_map;
                     if timer.just_finished()
@@ -315,7 +318,7 @@ fn update_mask_ui_system(
     )>,
 ) {
     for (mask, mask_source, mut mask_ui, mut mask_source_ui) in mask_query.iter_mut() {
-        if !mask_ui.timer.finished() {
+        if !mask_ui.timer.is_finished() {
             mask_ui.timer.tick(time.delta());
             if mask_ui.timer.just_finished()
                 && !approx_eq(mask.strength, mask_ui.strength, ONE_IN_TEN_THOUSAND)
@@ -349,7 +352,7 @@ fn update_mask_ui_system(
                     ref mut timer,
                 },
             ) => {
-                if !timer.finished() {
+                if !timer.is_finished() {
                     timer.tick(time.delta());
                     if timer.just_finished()
                         && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
@@ -431,7 +434,7 @@ fn update_mask_ui_system(
                     ref mut timer,
                 },
             ) => {
-                if !timer.finished() {
+                if !timer.is_finished() {
                     timer.tick(time.delta());
 
                     if timer.just_finished()
@@ -853,7 +856,7 @@ fn draw_ui_for_layer(
 fn draw_ui_for_mask(
     commands: &mut Commands,
     layer_id: LayerId,
-    mask: &mut <MaskQuery as QueryData>::Item<'_>,
+    mask: &mut <MaskQuery as QueryData>::Item<'_, '_>,
     previous_mask_id: Option<MaskId>,
     ui: &mut egui::Ui,
 ) {
