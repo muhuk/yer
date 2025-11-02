@@ -39,6 +39,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0
+        sudo apt-get install libwayland-dev libxkbcommon-dev
     - name: Run tests
       run: cargo test --verbose
     - name: Build
