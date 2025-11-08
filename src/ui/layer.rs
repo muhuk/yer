@@ -67,11 +67,23 @@ impl Plugin for LayerUiPlugin {
 #[query_data(mutable)]
 pub(super) struct LayerQuery {
     pub entity: Entity,
+    pub name: &'static Name,
     pub layer: &'static layer::Layer,
     pub layer_order: &'static layer::LayerOrder,
     pub layer_ui: &'static mut LayerUi,
+    pub height_map: &'static layer::HeightMap,
     pub height_map_ui: &'static mut HeightMapUi,
     pub is_selected: Has<Selected>,
+}
+
+impl<'w, 's> LayerQueryItem<'w, 's> {
+    fn to_layer_bundle(&self) -> layer::LayerBundle {
+        layer::LayerBundle {
+            layer: self.layer.clone(),
+            name: self.name.clone(),
+            height_map: self.height_map.clone(),
+        }
+    }
 }
 
 #[derive(Deref, DerefMut, SystemParam)]
@@ -592,8 +604,7 @@ fn reset_mask_ui_system(
 fn draw_ui_for_layer_common_bottom(
     commands: &mut Commands,
     masks_query: &mut Masks,
-    entity: Entity,
-    layer: &layer::Layer,
+    layer_query_item: &LayerQueryItem,
     ui: &mut egui::Ui,
 ) {
     let frame = egui::containers::Frame::group(ui.style());
@@ -601,7 +612,7 @@ fn draw_ui_for_layer_common_bottom(
         ui.heading("Masks");
 
         let mask_ids: Vec<MaskId> = masks_query
-            .masks_for_layer(entity)
+            .masks_for_layer(layer_query_item.entity)
             .map(|m| m.mask.id())
             .collect();
 
@@ -610,7 +621,7 @@ fn draw_ui_for_layer_common_bottom(
                 mask: layer::Mask::default(),
                 mask_source: layer::MaskSource::circle(),
             };
-            let layer_id: LayerId = layer.id();
+            let layer_id: LayerId = layer_query_item.layer.id();
             let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
@@ -624,7 +635,7 @@ fn draw_ui_for_layer_common_bottom(
                 mask: layer::Mask::default(),
                 mask_source: layer::MaskSource::square(),
             };
-            let layer_id: LayerId = layer.id();
+            let layer_id: LayerId = layer_query_item.layer.id();
             let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
@@ -633,9 +644,18 @@ fn draw_ui_for_layer_common_bottom(
             )));
         }
 
-        for (idx, mut m) in masks_query.masks_for_layer(entity).enumerate() {
+        for (idx, mut m) in masks_query
+            .masks_for_layer(layer_query_item.entity)
+            .enumerate()
+        {
             let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
-            draw_ui_for_mask(commands, layer.id(), &mut m, previous_mask_id, ui);
+            draw_ui_for_mask(
+                commands,
+                layer_query_item.layer.id(),
+                &mut m,
+                previous_mask_id,
+                ui,
+            );
         }
     });
 }
@@ -643,13 +663,12 @@ fn draw_ui_for_layer_common_bottom(
 fn draw_ui_for_layer_common_top(
     commands: &mut Commands,
     ui: &mut egui::Ui,
-    layer: &layer::Layer,
-    layer_ui: &mut LayerUi,
+    layer_query_item: &mut LayerQueryItem,
     parent_layer_id: Option<LayerId>,
 ) {
     const LAYER_NAME_CHAR_LIMIT: usize = 20;
     {
-        let widget = egui::widgets::TextEdit::singleline(&mut layer_ui.name)
+        let widget = egui::widgets::TextEdit::singleline(&mut layer_query_item.layer_ui.name)
             .char_limit(LAYER_NAME_CHAR_LIMIT);
         let mut output = widget.show(ui);
         // Select everything when the widget first gains focus.
@@ -659,44 +678,46 @@ fn draw_ui_for_layer_common_top(
                 .cursor
                 .set_char_range(Some(egui::text_selection::CCursorRange::two(
                     egui::text::CCursor::new(0),
-                    egui::text::CCursor::new(layer_ui.name.len()),
+                    egui::text::CCursor::new(layer_query_item.layer_ui.name.len()),
                 )));
             output.state.store(ui.ctx(), output.response.id);
         }
-        if output.response.lost_focus() && layer_ui.name != layer.name {
+        if output.response.lost_focus()
+            && layer_query_item.layer_ui.name != layer_query_item.layer.name
+        {
             commands.queue(undo::PushAction::from(layer::RenameLayerAction::new(
-                layer.id(),
-                &layer.name,
-                &layer_ui.name,
+                layer_query_item.layer.id(),
+                &layer_query_item.layer.name,
+                &layer_query_item.layer_ui.name,
             )));
         }
     }
     {
         ui.horizontal(|ui| {
             {
-                let mut layer_preview: bool = layer.enable_preview;
+                let mut layer_preview: bool = layer_query_item.layer.enable_preview;
                 if ui.toggle_value(&mut layer_preview, "Preview").changed()
-                    && layer_preview != layer.enable_preview
+                    && layer_preview != layer_query_item.layer.enable_preview
                 {
                     commands.queue(undo::PushAction::from(
-                        layer::UpdateLayerAction::toggle_enable_preview(layer),
+                        layer::UpdateLayerAction::toggle_enable_preview(layer_query_item.layer),
                     ));
                 }
             }
             {
-                let mut layer_baking: bool = layer.enable_baking;
+                let mut layer_baking: bool = layer_query_item.layer.enable_baking;
                 if ui.toggle_value(&mut layer_baking, "Bake").changed()
-                    && layer_baking != layer.enable_baking
+                    && layer_baking != layer_query_item.layer.enable_baking
                 {
                     commands.queue(undo::PushAction::from(
-                        layer::UpdateLayerAction::toggle_enable_baking(layer),
+                        layer::UpdateLayerAction::toggle_enable_baking(layer_query_item.layer),
                     ));
                 }
             }
             ui.separator();
             if ui.button("Delete").clicked() {
                 commands.queue(undo::PushAction::from(layer::DeleteLayerAction::new(
-                    layer.clone(),
+                    layer_query_item.to_layer_bundle(),
                     parent_layer_id,
                 )))
             }
@@ -768,12 +789,8 @@ pub fn draw_ui_for_layers(
                     theme_colors,
                     ui,
                     masks_query,
+                    &mut l,
                     parent_layer_id,
-                    l.entity,
-                    l.layer,
-                    l.layer_ui.as_mut(),
-                    l.height_map_ui.as_mut(),
-                    l.is_selected,
                 );
             }
         }
@@ -785,20 +802,16 @@ fn draw_ui_for_layer(
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
     masks_query: &mut Masks,
+    layer_query_item: &mut LayerQueryItem,
     parent_layer_id: Option<LayerId>,
-    entity: Entity,
-    layer: &layer::Layer,
-    layer_ui: &mut LayerUi,
-    height_map_ui: &mut HeightMapUi,
-    is_selected: bool,
 ) {
     let mut frame = egui::containers::Frame::group(ui.style());
-    if is_selected {
+    if layer_query_item.is_selected {
         frame = frame.fill(ui.style().visuals.widgets.noninteractive.weak_bg_fill);
     }
     frame.show(ui, |ui| {
         ui.horizontal(|ui| {
-            let height_id = ui.id().with("height").with(layer.id());
+            let height_id = ui.id().with("height").with(layer_query_item.layer.id());
             {
                 let height: f32 = ui.data(|map| map.get_temp(height_id).unwrap_or(32.0));
                 let (response, painter) = ui.allocate_painter(
@@ -808,36 +821,34 @@ fn draw_ui_for_layer(
                 painter.rect_filled(
                     response.rect,
                     4.0,
-                    if is_selected {
+                    if layer_query_item.is_selected {
                         theme_colors.secondary_color.to_color32()
                     } else {
                         theme_colors.bg_alt_color.to_color32()
                     },
                 );
 
-                if response.clicked() && !is_selected {
-                    commands.queue(SelectLayer(entity));
+                if response.clicked() && !layer_query_item.is_selected {
+                    commands.queue(SelectLayer(layer_query_item.entity));
                 }
             }
             let actual_height: f32 = ui
                 .vertical_centered_justified(|ui| {
-                    match *height_map_ui {
+                    match *layer_query_item.height_map_ui {
                         HeightMapUi::Constant { .. } => {
                             draw_ui_for_layer_common_top(
                                 commands,
                                 ui,
-                                layer,
-                                layer_ui,
+                                layer_query_item,
                                 parent_layer_id,
                             );
                             ui.separator();
-                            draw_ui_for_constant_layer(ui, height_map_ui);
+                            draw_ui_for_constant_layer(ui, layer_query_item.height_map_ui.as_mut());
                             ui.separator();
                             draw_ui_for_layer_common_bottom(
                                 commands,
                                 masks_query,
-                                entity,
-                                layer,
+                                layer_query_item,
                                 ui,
                             );
                         }

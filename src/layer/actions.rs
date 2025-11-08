@@ -26,7 +26,7 @@ use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct CreateLayerAction {
-    layer: Layer,
+    layer_bundle: LayerBundle,
     parent_id: Option<LayerId>,
 }
 
@@ -37,7 +37,7 @@ pub struct CreateLayerAction {
 impl CreateLayerAction {
     pub fn new(parent_id: Option<LayerId>) -> Self {
         Self {
-            layer: Layer::default(),
+            layer_bundle: LayerBundle::default(),
             parent_id,
         }
     }
@@ -71,19 +71,12 @@ impl Action for CreateLayerAction {
                 });
             LayerOrder((bottom_layer_order + top_layer_order) / 2)
         };
-        world.spawn((
-            LayerBundle {
-                name: self.layer.name_component(),
-                layer: self.layer.clone(),
-                height_map: HeightMap::default(),
-            },
-            layer_order,
-        ));
+        world.spawn((self.layer_bundle.clone(), layer_order));
     }
 
     fn revert(&self, world: &mut World) {
         DeleteLayerAction {
-            layer: self.layer.clone(),
+            layer_bundle: self.layer_bundle.clone(),
             parent_id: self.parent_id,
         }
         .apply(world)
@@ -93,24 +86,26 @@ impl Action for CreateLayerAction {
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct DeleteLayerAction {
-    // FIXME: This needs to cache the heightmap too.  If you delete a layer
-    //        then undo, you get a layer with default heightmap, changes lost.
-    layer: Layer,
+    layer_bundle: LayerBundle,
     parent_id: Option<LayerId>,
 }
 
 impl DeleteLayerAction {
-    pub fn new(layer: Layer, parent_id: Option<LayerId>) -> Self {
-        Self { layer, parent_id }
+    pub fn new(layer_bundle: LayerBundle, parent_id: Option<LayerId>) -> Self {
+        Self {
+            layer_bundle,
+            parent_id,
+        }
     }
 }
 
 impl Action for DeleteLayerAction {
     fn apply(&self, world: &mut World) {
+        let layer_id = self.layer_bundle.layer.id();
         match world
             .query::<(Entity, &Layer)>()
             .iter(world)
-            .find(|(_, layer)| layer.id() == self.layer.id())
+            .find(|(_, layer)| layer.id() == layer_id)
         {
             Some((entity, _)) => {
                 // TODO: This will delete all masks too, so we need to
@@ -119,14 +114,14 @@ impl Action for DeleteLayerAction {
             }
             None => warn!(
                 "Trying to delete non-existent layer with id '{}'",
-                self.layer.id().simple()
+                layer_id.simple()
             ),
         }
     }
 
     fn revert(&self, world: &mut World) {
         CreateLayerAction {
-            layer: self.layer.clone(),
+            layer_bundle: self.layer_bundle.clone(),
             parent_id: self.parent_id,
         }
         .apply(world);
