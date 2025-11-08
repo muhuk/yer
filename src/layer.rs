@@ -38,7 +38,7 @@ impl Plugin for LayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((components::LayerComponentsPlugin, mask::MaskPlugin));
         app.add_systems(
-            PreUpdate,
+            FixedUpdate,
             normalize_layer_ordering_system.run_if(
                 any_match_filter::<Changed<LayerOrder>>
                     .or(any_with_component::<NeedsLayerOrderNormalization>),
