@@ -48,7 +48,7 @@ impl Plugin for LayerComponentsPlugin {
 
 // BUNDLES
 
-#[derive(Bundle, Deserialize, Serialize)]
+#[derive(Bundle, Clone, Debug, Deserialize, Reflect, Serialize)]
 pub struct LayerBundle {
     pub layer: Layer,
     pub name: Name,
@@ -80,6 +80,17 @@ impl LayerBundle {
             .for_each(|(idx, layer_bundle)| {
                 world.spawn((layer_bundle, LayerOrder(idx as u32 * LAYER_SPACING)));
             });
+    }
+}
+
+impl Default for LayerBundle {
+    fn default() -> Self {
+        let layer = Layer::default();
+        Self {
+            name: layer.name_component(),
+            layer,
+            height_map: HeightMap::default(),
+        }
     }
 }
 
