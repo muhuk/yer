@@ -158,6 +158,8 @@ impl Display for Layer {
 #[require(Layer)]
 pub struct LayerOrder(#[deref] pub(super) u32);
 
+/// When a layer is despawned, and its [LayerOrder] is removed, this component
+/// signals a layer reordering.
 #[derive(Clone, Component, Debug, Reflect)]
 pub struct NeedsLayerOrderNormalization;
 
