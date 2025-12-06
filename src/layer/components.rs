@@ -24,9 +24,6 @@ use serde::{Deserialize, Serialize};
 use crate::id::LayerId;
 use crate::math::{Alpha, Sample, Sampler2D};
 
-// FIXME: Circular dependency.
-use super::mask::MaskBundle;
-
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
 
