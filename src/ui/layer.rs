@@ -104,6 +104,15 @@ pub(super) struct MaskQuery {
     pub mask_source_ui: &'static mut MaskSourceUi,
 }
 
+impl<'w, 's> MaskQueryItem<'w, 's> {
+    fn to_mask_bundle(&self) -> layer::MaskBundle {
+        layer::MaskBundle {
+            mask: self.mask.clone(),
+            mask_source: self.mask_source.clone(),
+        }
+    }
+}
+
 #[derive(SystemParam)]
 pub(super) struct Masks<'w, 's> {
     masks: Query<'w, 's, MaskQuery>,
@@ -117,7 +126,6 @@ impl<'w, 's> Masks<'w, 's> {
         self.masks
             .iter_mut()
             .sort::<&layer::MaskOrder>()
-            .rev()
             .filter(move |m| m.child_of.0 == layer)
     }
 }
@@ -611,10 +619,29 @@ fn draw_ui_for_layer_common_bottom(
     frame.show(ui, |ui| {
         ui.heading("Masks");
 
-        let mask_ids: Vec<MaskId> = masks_query
-            .masks_for_layer(layer_query_item.entity)
-            .map(|m| m.mask.id())
-            .collect();
+        // This is a tuple of previous mask id & `MaskQueryItem` in reverse
+        // MaskOrder.
+        //
+        // We have reversed iteration order of masks, so that masks with
+        // highter MaskOrder appear above then ones with lower MaskOrder.
+        let mut masks_in_reverse_order: Vec<(Option<MaskId>, MaskQueryItem)> = {
+            let mut masks: Vec<_> = masks_query
+                .masks_for_layer(layer_query_item.entity)
+                .fold(
+                    (None::<MaskId>, vec![]),
+                    |(previous_mask_id, mut acc), m| {
+                        let new_previous_mask_id = m.mask.id().clone();
+                        acc.push((previous_mask_id, m));
+                        (Some(new_previous_mask_id), acc)
+                    },
+                )
+                .1;
+            masks.reverse();
+            masks
+        };
+        let topmost_mask_id: Option<MaskId> = masks_in_reverse_order
+            .first()
+            .map(|(_, m)| m.mask.id().clone());
 
         if ui.button("Add circle mask").clicked() {
             let mask_bundle: layer::MaskBundle = layer::MaskBundle {
@@ -622,11 +649,10 @@ fn draw_ui_for_layer_common_bottom(
                 mask_source: layer::MaskSource::circle(),
             };
             let layer_id: LayerId = layer_query_item.layer.id();
-            let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
                 layer_id,
-                previous_mask_id,
+                topmost_mask_id,
             )));
         }
 
@@ -636,24 +662,19 @@ fn draw_ui_for_layer_common_bottom(
                 mask_source: layer::MaskSource::square(),
             };
             let layer_id: LayerId = layer_query_item.layer.id();
-            let previous_mask_id: Option<MaskId> = mask_ids.first().cloned();
             commands.queue(undo::PushAction::from(layer::CreateMaskAction::new(
                 mask_bundle,
                 layer_id,
-                previous_mask_id,
+                topmost_mask_id,
             )));
         }
 
-        for (idx, mut m) in masks_query
-            .masks_for_layer(layer_query_item.entity)
-            .enumerate()
-        {
-            let previous_mask_id: Option<MaskId> = mask_ids.get(idx + 1).cloned();
+        for (previous_mask_id, m) in masks_in_reverse_order.iter_mut() {
             draw_ui_for_mask(
                 commands,
                 layer_query_item.layer.id(),
-                &mut m,
-                previous_mask_id,
+                m,
+                *previous_mask_id,
                 ui,
             );
         }
@@ -664,6 +685,7 @@ fn draw_ui_for_layer_common_top(
     commands: &mut Commands,
     ui: &mut egui::Ui,
     layer_query_item: &mut LayerQueryItem,
+    masks_query: &mut Masks,
     parent_layer_id: Option<LayerId>,
 ) {
     const LAYER_NAME_CHAR_LIMIT: usize = 20;
@@ -716,8 +738,14 @@ fn draw_ui_for_layer_common_top(
             }
             ui.separator();
             if ui.button("Delete").clicked() {
+                let masks: Vec<layer::MaskBundle> = masks_query
+                    .masks_for_layer(layer_query_item.entity)
+                    .map(|m| m.to_mask_bundle())
+                    .collect();
+
                 commands.queue(undo::PushAction::from(layer::DeleteLayerAction::new(
                     layer_query_item.to_layer_bundle(),
+                    masks,
                     parent_layer_id,
                 )))
             }
@@ -840,6 +868,7 @@ fn draw_ui_for_layer(
                                 commands,
                                 ui,
                                 layer_query_item,
+                                masks_query,
                                 parent_layer_id,
                             );
                             ui.separator();
