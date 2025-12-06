@@ -29,7 +29,6 @@ pub use actions::{
 };
 pub use components::{
     HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization, HEIGHT_RANGE,
-    LAYER_SPACING,
 };
 pub use mask::{
     CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskCompositionMode, MaskOrder,
@@ -74,8 +73,9 @@ fn normalize_layer_ordering_system(
         .for_each(|(idx, mut layer_order)| {
             // Start from LAYER_SPACING (1-based) and increment for
             // as much as LAYER_SPACING at each layer.
-            layer_order.bypass_change_detection().0 =
-                u32::try_from(idx + 1).expect("There are too many layers.") * LAYER_SPACING;
+            layer_order.bypass_change_detection().0 = u32::try_from(idx + 1)
+                .expect("There are too many layers.")
+                * components::LAYER_SPACING;
         });
     needs_layer_order_normalization_query
         .iter()
