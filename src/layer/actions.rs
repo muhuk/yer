@@ -75,7 +75,6 @@ impl Action for CreateLayerAction {
             self.layer_bundle.clone(),
             layer_order,
             Children::spawn(SpawnIter(self.masks.clone().into_iter().enumerate().map(
-                // TODO: Do not leak MASK_SPACING, multiply in MaskOrder::new as necessary.
                 |(idx, mask_bundle)| (mask_bundle, MaskOrder::new(idx as u32 * MASK_SPACING)),
             ))),
         ));
