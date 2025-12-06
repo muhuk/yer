@@ -23,8 +23,14 @@ mod actions;
 mod components;
 mod mask;
 
-pub use actions::*;
-pub use components::*;
+pub use actions::{
+    CreateLayerAction, DeleteLayerAction, HeightMapConstantUpdateHeightAction, RenameLayerAction,
+    SwitchLayerPositionsAction, UpdateLayerAction,
+};
+pub use components::{
+    HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization, HEIGHT_RANGE,
+    LAYER_SPACING,
+};
 pub use mask::{
     CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskCompositionMode, MaskOrder,
     MaskSource, UpdateMaskAction, UpdateMaskSourceAction,
