@@ -166,6 +166,12 @@ impl Default for Mask {
 #[require(Mask)]
 pub struct MaskOrder(#[deref] u32);
 
+impl MaskOrder {
+    pub fn new(order: impl Into<u32>) -> Self {
+        Self(order.into())
+    }
+}
+
 /// This is added to a layer entity when its masks' order need to be
 /// normalized.
 #[derive(Clone, Component, Debug, Reflect)]

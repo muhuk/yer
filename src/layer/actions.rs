@@ -17,27 +17,27 @@
 use bevy::prelude::*;
 
 use crate::id::LayerId;
+use crate::layer::mask::{MaskOrder, MASK_SPACING};
 use crate::math::approx_eq;
 use crate::undo::{Action, ReflectAction};
 
 // FIXME: Rename components module.
 use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
+use super::MaskBundle;
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
 pub struct CreateLayerAction {
     layer_bundle: LayerBundle,
+    masks: Vec<MaskBundle>,
     parent_id: Option<LayerId>,
 }
 
-// TODO: Store masks and restore them on revert.
-//
-//       Restoring masks should not appear as additional items in undo stack.
-//       So we are not reuisng Crate/DeleteMask actions.
 impl CreateLayerAction {
     pub fn new(parent_id: Option<LayerId>) -> Self {
         Self {
             layer_bundle: LayerBundle::default(),
+            masks: vec![],
             parent_id,
         }
     }
@@ -71,12 +71,20 @@ impl Action for CreateLayerAction {
                 });
             LayerOrder((bottom_layer_order + top_layer_order) / 2)
         };
-        world.spawn((self.layer_bundle.clone(), layer_order));
+        world.spawn((
+            self.layer_bundle.clone(),
+            layer_order,
+            Children::spawn(SpawnIter(self.masks.clone().into_iter().enumerate().map(
+                // TODO: Do not leak MASK_SPACING, multiply in MaskOrder::new as necessary.
+                |(idx, mask_bundle)| (mask_bundle, MaskOrder::new(idx as u32 * MASK_SPACING)),
+            ))),
+        ));
     }
 
     fn revert(&self, world: &mut World) {
         DeleteLayerAction {
             layer_bundle: self.layer_bundle.clone(),
+            masks: self.masks.clone(),
             parent_id: self.parent_id,
         }
         .apply(world)
@@ -87,13 +95,19 @@ impl Action for CreateLayerAction {
 #[reflect(Action)]
 pub struct DeleteLayerAction {
     layer_bundle: LayerBundle,
+    masks: Vec<MaskBundle>,
     parent_id: Option<LayerId>,
 }
 
 impl DeleteLayerAction {
-    pub fn new(layer_bundle: LayerBundle, parent_id: Option<LayerId>) -> Self {
+    pub fn new(
+        layer_bundle: LayerBundle,
+        masks: Vec<MaskBundle>,
+        parent_id: Option<LayerId>,
+    ) -> Self {
         Self {
             layer_bundle,
+            masks,
             parent_id,
         }
     }
@@ -108,8 +122,6 @@ impl Action for DeleteLayerAction {
             .find(|(_, layer)| layer.id() == layer_id)
         {
             Some((entity, _)) => {
-                // TODO: This will delete all masks too, so we need to
-                //       store masks in the undo queue.
                 world.despawn(entity);
             }
             None => warn!(
@@ -122,6 +134,7 @@ impl Action for DeleteLayerAction {
     fn revert(&self, world: &mut World) {
         CreateLayerAction {
             layer_bundle: self.layer_bundle.clone(),
+            masks: self.masks.clone(),
             parent_id: self.parent_id,
         }
         .apply(world);
