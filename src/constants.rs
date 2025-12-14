@@ -15,3 +15,9 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
 pub const APPLICATION_TITLE: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
+
+pub const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR")
+);
