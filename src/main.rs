@@ -13,6 +13,8 @@
 //
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 #[cfg(feature = "embed-assets")]
@@ -22,6 +24,7 @@ mod constants;
 mod id;
 mod layer;
 mod math;
+mod preferences;
 mod preview;
 mod session;
 mod theme;
@@ -30,6 +33,9 @@ mod undo;
 mod viewport;
 
 fn main() {
+    let data_dir: PathBuf = find_data_dir();
+    ensure_dir(&data_dir.join(constants::VERSION));
+
     let mut app = App::new();
     #[cfg(feature = "embed-assets")]
     {
@@ -47,6 +53,9 @@ fn main() {
     }));
     app.add_plugins((
         layer::LayerPlugin,
+        preferences::PreferencesPlugin {
+            config_file_path: data_dir.join(constants::VERSION).join("config.toml"),
+        },
         preview::PreviewPlugin,
         session::SessionPlugin,
         theme::ThemePlugin,
@@ -55,4 +64,20 @@ fn main() {
         viewport::ViewportPlugin,
     ));
     app.run();
+}
+
+// LIB
+
+fn ensure_dir<P: AsRef<Path>>(path: P) {
+    if let Err(e) = fs::create_dir_all(&path) {
+        error!("Cannot create data directory: {}", e);
+    }
+}
+
+/// Return the root directory where all the user files for all versions live.
+fn find_data_dir() -> PathBuf {
+    let project_dirs = directories::ProjectDirs::from("", "", env!("CARGO_PKG_NAME"));
+    let data_dir: PathBuf = project_dirs.unwrap().data_local_dir().to_owned();
+    info!("Using data dir: '{}'.", data_dir.to_str().unwrap());
+    data_dir
 }
