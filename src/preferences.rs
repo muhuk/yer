@@ -15,6 +15,7 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 use std::fs::{self, File};
 use std::io::{Error as IoError, Read, Write};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -22,6 +23,8 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml::{de::Error as TomlDeserializeError, ser::Error as TomlSerializeError};
+
+use crate::constants;
 
 const BACKUP_SUFFIX: &str = ".bak";
 const SAVE_DELAY: Duration = Duration::from_millis(1500);
@@ -50,13 +53,18 @@ impl Plugin for PreferencesPlugin {
 #[derive(Deserialize, Resource, Reflect, Serialize)]
 #[reflect(Resource)]
 pub struct Preferences {
+    max_undo_stack_size: NonZeroUsize,
+
     #[serde(skip)]
     file_path: Option<PathBuf>,
 }
 
 impl Default for Preferences {
     fn default() -> Self {
-        Preferences { file_path: None }
+        Preferences {
+            max_undo_stack_size: constants::DEFAULT_UNDO_STACK_SIZE,
+            file_path: None,
+        }
     }
 }
 

@@ -53,7 +53,7 @@ impl Plugin for LayerPlugin {
 
     fn finish(&self, app: &mut App) {
         if !app.is_plugin_added::<undo::UndoPlugin>() {
-            app.add_plugins(undo::UndoPlugin::default());
+            app.add_plugins(undo::UndoPlugin);
         }
     }
 }

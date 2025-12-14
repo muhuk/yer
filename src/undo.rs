@@ -20,27 +20,17 @@ use std::num::NonZeroUsize;
 
 use bevy::prelude::*;
 
-const DEFAULT_UNDO_STACK_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(20) };
+use crate::constants;
 
 // PLUGIN
 
-pub struct UndoPlugin {
-    max_actions: NonZeroUsize,
-}
-
-impl Default for UndoPlugin {
-    fn default() -> Self {
-        Self {
-            max_actions: DEFAULT_UNDO_STACK_SIZE,
-        }
-    }
-}
+pub struct UndoPlugin;
 
 impl Plugin for UndoPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<UndoStack>()
             .add_message::<UndoEvent>()
-            .insert_resource(UndoStack::new(self.max_actions));
+            .insert_resource(UndoStack::new(constants::DEFAULT_UNDO_STACK_SIZE));
     }
 }
 
@@ -247,10 +237,10 @@ mod tests {
     #[test]
     fn adding_an_action_beyond_max_actions_drop_from_the_stack() {
         let mut app = App::new();
-        app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(2).unwrap(),
-        });
-        app.update();
+        app.add_plugins(UndoPlugin);
+        app.world_mut()
+            .resource_mut::<UndoStack>()
+            .adjust_stack_size(NonZeroUsize::new(2).unwrap());
         for idx in 0..5 {
             app.world_mut()
                 .commands()
@@ -276,10 +266,10 @@ mod tests {
     #[test]
     fn when_stack_size_is_decreased_beyond_undo_actions_redo_actions_are_dropped() {
         let mut app = App::new();
-        app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(10).unwrap(),
-        });
-        app.update();
+        app.add_plugins(UndoPlugin);
+        app.world_mut()
+            .resource_mut::<UndoStack>()
+            .adjust_stack_size(NonZeroUsize::new(10).unwrap());
         for idx in 0..8 {
             app.world_mut()
                 .commands()
@@ -307,10 +297,10 @@ mod tests {
     #[test]
     fn when_stack_size_is_decreased_first_undo_actions_are_dropped() {
         let mut app = App::new();
-        app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(10).unwrap(),
-        });
-        app.update();
+        app.add_plugins(UndoPlugin);
+        app.world_mut()
+            .resource_mut::<UndoStack>()
+            .adjust_stack_size(NonZeroUsize::new(10).unwrap());
         for idx in 0..8 {
             app.world_mut()
                 .commands()
@@ -338,10 +328,10 @@ mod tests {
     #[test]
     fn when_stack_size_is_increased_no_action_is_dropped() {
         let mut app = App::new();
-        app.add_plugins(UndoPlugin {
-            max_actions: NonZeroUsize::new(2).unwrap(),
-        });
-        app.update();
+        app.add_plugins(UndoPlugin);
+        app.world_mut()
+            .resource_mut::<UndoStack>()
+            .adjust_stack_size(NonZeroUsize::new(2).unwrap());
         app.world_mut()
             .commands()
             .queue(PushAction(Box::new(MockAction(1))));
