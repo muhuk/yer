@@ -227,6 +227,10 @@ fn update_stack_size_when_preferences_change_system(
     mut undo_stack: ResMut<UndoStack>,
 ) {
     if undo_stack.max_actions != preferences.max_undo_stack_size {
+        info!(
+            "Changing undo stack size from {} to {}.",
+            undo_stack.max_actions, preferences.max_undo_stack_size
+        );
         undo_stack.adjust_stack_size(preferences.max_undo_stack_size);
     }
 }
