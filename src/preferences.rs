@@ -53,7 +53,7 @@ impl Plugin for PreferencesPlugin {
 #[derive(Deserialize, Resource, Reflect, Serialize)]
 #[reflect(Resource)]
 pub struct Preferences {
-    max_undo_stack_size: NonZeroUsize,
+    pub max_undo_stack_size: NonZeroUsize,
 
     #[serde(skip)]
     file_path: Option<PathBuf>,

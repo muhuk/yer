@@ -21,6 +21,7 @@ use std::num::NonZeroUsize;
 use bevy::prelude::*;
 
 use crate::constants;
+use crate::preferences::Preferences;
 
 // PLUGIN
 
@@ -28,9 +29,14 @@ pub struct UndoPlugin;
 
 impl Plugin for UndoPlugin {
     fn build(&self, app: &mut App) {
+        app.add_message::<UndoEvent>();
         app.register_type::<UndoStack>()
-            .add_message::<UndoEvent>()
             .insert_resource(UndoStack::new(constants::DEFAULT_UNDO_STACK_SIZE));
+        app.add_systems(
+            FixedUpdate,
+            update_stack_size_when_preferences_change_system
+                .run_if(resource_exists_and_changed::<Preferences>),
+        );
     }
 }
 
@@ -211,6 +217,17 @@ impl Command for UndoAction {
             .redo_actions
             .push_front(action);
         world.write_message(UndoEvent::ActionReverted);
+    }
+}
+
+// SYSTEMS
+
+fn update_stack_size_when_preferences_change_system(
+    preferences: Res<Preferences>,
+    mut undo_stack: ResMut<UndoStack>,
+) {
+    if undo_stack.max_actions != preferences.max_undo_stack_size {
+        undo_stack.adjust_stack_size(preferences.max_undo_stack_size);
     }
 }
 
