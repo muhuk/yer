@@ -60,7 +60,7 @@ fn main() {
         session::SessionPlugin,
         theme::ThemePlugin,
         ui::UiPlugin,
-        undo::UndoPlugin::default(),
+        undo::UndoPlugin,
         viewport::ViewportPlugin,
     ));
     app.run();
