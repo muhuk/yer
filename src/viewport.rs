@@ -226,6 +226,9 @@ fn mouse_over_viewport_system(
     Ok(())
 }
 
+// TODO: When a dialog is displayed viewport can still be manipulated with
+//       mouse.  To solve this we need to use picking to drive mouse actions
+//       on the viewport.
 fn middle_mouse_actions_system(
     mut mouse_motion_reader: MessageReader<MouseMotion>,
     mouse_button: Res<ButtonInput<MouseButton>>,
