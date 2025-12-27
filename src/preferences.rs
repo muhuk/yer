@@ -50,7 +50,7 @@ impl Plugin for PreferencesPlugin {
 
 // RESOURCES
 
-#[derive(Deserialize, Resource, Reflect, Serialize)]
+#[derive(Clone, Deserialize, Resource, Reflect, Serialize)]
 #[reflect(Resource)]
 pub struct Preferences {
     pub max_undo_stack_size: NonZeroUsize,
@@ -62,7 +62,7 @@ pub struct Preferences {
 impl Default for Preferences {
     fn default() -> Self {
         Preferences {
-            max_undo_stack_size: constants::DEFAULT_UNDO_STACK_SIZE,
+            max_undo_stack_size: constants::UNDO_STACK_SIZE_DEFAULT,
             file_path: None,
         }
     }

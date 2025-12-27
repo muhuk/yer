@@ -13,11 +13,12 @@
 //
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
-use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, ops::RangeInclusive};
 
 pub const APPLICATION_TITLE: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
-pub const DEFAULT_UNDO_STACK_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(20) };
+pub const UNDO_STACK_SIZE_DEFAULT: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(20) };
+pub const UNDO_STACK_SIZE_RANGE: RangeInclusive<usize> = 1..=100;
 
 pub const VERSION: &str = concat!(
     env!("CARGO_PKG_VERSION_MAJOR"),
