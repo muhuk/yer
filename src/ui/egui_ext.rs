@@ -153,8 +153,8 @@ pub trait ToColor32 {
 
 impl ToColor32 for Color {
     fn to_color32(self) -> Color32 {
-        let [r, g, b] = self.to_srgba().to_u8_array_no_alpha();
-        Color32::from_rgb(r, g, b)
+        let [r, g, b, a] = self.to_srgba().to_u8_array();
+        Color32::from_rgba_unmultiplied(r, g, b, a)
     }
 }
 

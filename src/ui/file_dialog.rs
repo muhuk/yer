@@ -18,8 +18,11 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
-use bevy_egui::egui::Context;
+use bevy_egui::egui::{Color32, Context};
 use egui_file_dialog;
+
+use crate::theme::{Theme, ThemeColors};
+use crate::ui::egui_ext::ToColor32;
 
 static DEFAULT_FILE_NAME: &str = "untitled.yer";
 static FILE_FILTER_PROJECT_FILES_NAME: &str = "Project Files";
@@ -56,11 +59,21 @@ impl LoadFileDialog {
     }
 }
 
-impl Default for LoadFileDialog {
-    fn default() -> Self {
+impl FromWorld for LoadFileDialog {
+    fn from_world(world: &mut World) -> Self {
+        let modal_overlay_color: Color32 = {
+            let theme = world.resource::<Theme>();
+            let theme_colors = world.resource::<Assets<ThemeColors>>();
+            let colors = theme_colors
+                .get(&theme.colors)
+                .expect("Cannot read theme colors.");
+            colors.bg_color.with_alpha(0.85).to_color32()
+        };
+
         let mut file_dialog = egui_file_dialog::FileDialog::new()
             .add_file_filter_extensions(FILE_FILTER_PROJECT_FILES_NAME, vec![SUFFIX])
             .default_file_filter(FILE_FILTER_PROJECT_FILES_NAME)
+            .modal_overlay_color(modal_overlay_color)
             .as_modal(true);
         file_dialog.pick_file();
 

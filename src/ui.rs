@@ -154,6 +154,8 @@ fn draw_ui_dialogs_system(
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
     mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
+    theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
@@ -180,11 +182,15 @@ fn draw_ui_dialogs_system(
                 }
                 UiState::ShowingPreferencesDialog => {
                     if let Ok(mut dialog) = preferences_dialogs.single_mut() {
-                        match dialog.show(ctx) {
-                            preferences_dialog::DialogState::Open => (),
-                            preferences_dialog::DialogState::Cancelled => {
-                                ui_state_next.set(UiState::Interactive);
+                        if let Some(colors) = theme_colors.get(&theme.colors) {
+                            match dialog.show(ctx, colors) {
+                                preferences_dialog::DialogState::Open => (),
+                                preferences_dialog::DialogState::Cancelled => {
+                                    ui_state_next.set(UiState::Interactive);
+                                }
                             }
+                        } else {
+                            error!("Cannot read theme colors.");
                         }
                     }
                 }
@@ -248,6 +254,8 @@ fn draw_ui_panels_system(
         .show(ctx, |ui| {
             if let Some(colors) = theme_colors.get(&theme.colors) {
                 toolbar::draw_toolbar(&mut commands, ui, &egui_theme, colors, &undo_stack);
+            } else {
+                error!("Cannot read theme colors.");
             }
         })
         .response
@@ -315,11 +323,11 @@ fn draw_ui_panels_system(
     Ok(())
 }
 
-fn show_load_file_dialog_system(mut commands: Commands) {
-    // Set dir & file name.
-    commands.spawn((
+fn show_load_file_dialog_system(world: &mut World) {
+    let dialog = file_dialog::LoadFileDialog::from_world(world);
+    world.spawn((
         Name::new("Load File Dialog"),
-        file_dialog::LoadFileDialog::default(),
+        dialog,
         DespawnOnExit(UiState::ShowingLoadFileDialog),
     ));
 }
