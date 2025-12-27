@@ -19,6 +19,9 @@ use bevy_egui::egui;
 
 use crate::constants;
 use crate::preferences::Preferences;
+use crate::theme::ThemeColors;
+
+use super::egui_ext::ToColor32;
 
 // COMPONENTS
 
@@ -29,7 +32,7 @@ pub struct PreferencesDialog {
 }
 
 impl PreferencesDialog {
-    pub fn show(&mut self, ctx: &mut egui::Context) -> DialogState {
+    pub fn show(&mut self, ctx: &mut egui::Context, theme_colors: &ThemeColors) -> DialogState {
         // Basically copied from egui-file-dialog.
         // See file_dialog::FileDialog::ui_update_modal_background.
         let modal_overlay_response = egui::Area::new("Modal Overlay".into())
@@ -44,7 +47,7 @@ impl PreferencesDialog {
                 ui.painter().rect_filled(
                     content_rect,
                     egui::CornerRadius::ZERO,
-                    egui::Color32::from_rgba_premultiplied(127, 127, 127, 63),
+                    theme_colors.bg_color.with_alpha(0.85).to_color32(),
                 );
             })
             .response;
