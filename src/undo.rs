@@ -31,7 +31,7 @@ impl Plugin for UndoPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<UndoEvent>();
         app.register_type::<UndoStack>()
-            .insert_resource(UndoStack::new(constants::DEFAULT_UNDO_STACK_SIZE));
+            .insert_resource(UndoStack::new(constants::UNDO_STACK_SIZE_DEFAULT));
         app.add_systems(
             FixedUpdate,
             update_stack_size_when_preferences_change_system
@@ -197,6 +197,11 @@ impl Command for SetUndoStackSize {
         let old_size: usize = undo_stack.max_actions.get();
         let new_size: usize = self.0.get();
 
+        info!(
+            "Changing undo stack size from {} to {}.",
+            old_size, new_size
+        );
+
         undo_stack.adjust_stack_size(self.0);
         world.write_message(UndoEvent::StackSizeChanged { old_size, new_size });
     }
@@ -223,15 +228,12 @@ impl Command for UndoAction {
 // SYSTEMS
 
 fn update_stack_size_when_preferences_change_system(
+    mut commands: Commands,
     preferences: Res<Preferences>,
-    mut undo_stack: ResMut<UndoStack>,
+    undo_stack: ResMut<UndoStack>,
 ) {
     if undo_stack.max_actions != preferences.max_undo_stack_size {
-        info!(
-            "Changing undo stack size from {} to {}.",
-            undo_stack.max_actions, preferences.max_undo_stack_size
-        );
-        undo_stack.adjust_stack_size(preferences.max_undo_stack_size);
+        commands.queue(SetUndoStackSize(preferences.max_undo_stack_size));
     }
 }
 

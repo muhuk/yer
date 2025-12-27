@@ -32,6 +32,7 @@ use crate::viewport;
 mod egui_ext;
 mod file_dialog;
 mod layer;
+mod preferences_dialog;
 mod preview;
 mod toolbar;
 
@@ -62,6 +63,10 @@ impl Plugin for UiPlugin {
                 show_load_file_dialog_system,
             )
             .add_systems(
+                OnEnter(UiState::ShowingPreferencesDialog),
+                show_preferences_dialog_system,
+            )
+            .add_systems(
                 OnEnter(UiState::ShowingSaveFileDialog),
                 show_save_file_dialog_system,
             );
@@ -79,6 +84,7 @@ enum UiState {
     #[default]
     Interactive,
     ShowingLoadFileDialog,
+    ShowingPreferencesDialog,
     ShowingSaveFileDialog,
 }
 
@@ -146,6 +152,7 @@ fn draw_ui_dialogs_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
+    mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
@@ -166,6 +173,16 @@ fn draw_ui_dialogs_system(
                                 // Currently there is no cleanup necessary.  If there is
                                 // need for cleanup in the future it should ideally be
                                 // handled by a OnExit(state) system.
+                                ui_state_next.set(UiState::Interactive);
+                            }
+                        }
+                    }
+                }
+                UiState::ShowingPreferencesDialog => {
+                    if let Ok(mut dialog) = preferences_dialogs.single_mut() {
+                        match dialog.show(ctx) {
+                            preferences_dialog::DialogState::Open => (),
+                            preferences_dialog::DialogState::Cancelled => {
                                 ui_state_next.set(UiState::Interactive);
                             }
                         }
@@ -307,6 +324,17 @@ fn show_load_file_dialog_system(mut commands: Commands) {
     ));
 }
 
+fn show_preferences_dialog_system(mut commands: Commands) {
+    commands.queue(|world: &mut World| {
+        let dialog = preferences_dialog::PreferencesDialog::from_world(world);
+        world.spawn((
+            Name::new("Preferences Dialog"),
+            dialog,
+            DespawnOnExit(UiState::ShowingPreferencesDialog),
+        ));
+    })
+}
+
 fn show_save_file_dialog_system(mut commands: Commands) {
     commands.spawn((
         Name::new("Save File Dialog"),
@@ -394,6 +422,11 @@ fn draw_ui_menu(
                 .clicked()
             {
                 commands.queue(undo::RedoAction);
+                ui.close();
+            }
+            ui.separator();
+            if ui.button("Edit Preferences").clicked() {
+                ui_state_next.set(UiState::ShowingPreferencesDialog);
                 ui.close();
             }
         });
