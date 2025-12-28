@@ -18,7 +18,7 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::constants;
-use crate::preferences::Preferences;
+use crate::preferences::{Preferences, UpdatePreferences};
 use crate::theme::ThemeColors;
 
 use super::egui_ext::ToColor32;
@@ -57,18 +57,21 @@ impl PreferencesDialog {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Undo stack size");
-                    let response = ui.add(
+                    ui.add(
                         egui::widgets::DragValue::new(&mut self.preferences.max_undo_stack_size)
                             .fixed_decimals(0)
                             .range(constants::UNDO_STACK_SIZE_RANGE),
                     );
                 });
 
-                if ui.button("Cancel").clicked() {
-                    DialogState::Cancelled
-                } else {
-                    DialogState::Open
+                let mut response = DialogState::Open;
+                if ui.button("Save and Close").clicked() {
+                    response = DialogState::Confirmed;
                 }
+                if ui.button("Cancel").clicked() {
+                    response = DialogState::Cancelled;
+                }
+                response
             })
             .map(|r| {
                 ctx.move_to_top(r.response.layer_id);
@@ -76,6 +79,10 @@ impl PreferencesDialog {
             })
             .flatten()
             .unwrap_or(DialogState::Cancelled)
+    }
+
+    pub fn to_command(&self) -> UpdatePreferences {
+        UpdatePreferences(self.preferences.clone())
     }
 }
 
@@ -91,5 +98,6 @@ impl FromWorld for PreferencesDialog {
 
 pub enum DialogState {
     Open,
+    Confirmed,
     Cancelled,
 }

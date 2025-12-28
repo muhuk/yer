@@ -185,6 +185,10 @@ fn draw_ui_dialogs_system(
                         if let Some(colors) = theme_colors.get(&theme.colors) {
                             match dialog.show(ctx, colors) {
                                 preferences_dialog::DialogState::Open => (),
+                                preferences_dialog::DialogState::Confirmed => {
+                                    commands.queue(dialog.to_command());
+                                    ui_state_next.set(UiState::Interactive);
+                                }
                                 preferences_dialog::DialogState::Cancelled => {
                                     ui_state_next.set(UiState::Interactive);
                                 }

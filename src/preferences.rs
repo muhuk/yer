@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy::time::common_conditions::on_real_timer;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml::{de::Error as TomlDeserializeError, ser::Error as TomlSerializeError};
@@ -37,6 +38,15 @@ pub struct PreferencesPlugin {
 
 impl Plugin for PreferencesPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            save_preferences_system.run_if(
+                on_real_timer(SAVE_DELAY)
+                    .and(resource_exists_and_changed::<Preferences>)
+                    .and(not(resource_added::<Preferences>)),
+            ),
+        );
+
         match read_or_create(&self.config_file_path) {
             Ok(preferences) => {
                 app.insert_resource(preferences);
@@ -50,7 +60,7 @@ impl Plugin for PreferencesPlugin {
 
 // RESOURCES
 
-#[derive(Clone, Deserialize, Resource, Reflect, Serialize)]
+#[derive(Clone, Deserialize, PartialEq, Resource, Reflect, Serialize)]
 #[reflect(Resource)]
 pub struct Preferences {
     pub max_undo_stack_size: NonZeroUsize,
@@ -66,6 +76,31 @@ impl Default for Preferences {
             file_path: None,
         }
     }
+}
+
+// COMMANDS
+
+pub struct UpdatePreferences(pub Preferences);
+
+impl Command<Result<(), BevyError>> for UpdatePreferences {
+    fn apply(self, world: &mut World) -> Result<(), BevyError> {
+        let mut preferences = world.resource_mut::<Preferences>();
+        if self.0.file_path != preferences.file_path {
+            return Err("File path of the preferences do not match.".into());
+        }
+        if self.0 != *preferences {
+            *preferences = self.0;
+        }
+        Ok(())
+    }
+}
+
+// SYSTEMS
+
+fn save_preferences_system(preferences: Res<Preferences>) -> Result<(), BevyError> {
+    info!("Saving preferences.");
+    write_preferences(preferences.file_path.as_ref().unwrap(), &preferences)?;
+    Ok(())
 }
 
 // LIB
