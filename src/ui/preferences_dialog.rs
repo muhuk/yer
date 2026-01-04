@@ -1,4 +1,4 @@
-// Copyright © 2024-2025 Atamert Ölçgen.
+// Copyright © 2024-2026 Atamert Ölçgen.
 // This file is part of Yer.
 //
 // Yer is free software: you can redistribute it and/or modify it under the
