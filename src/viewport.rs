@@ -124,6 +124,11 @@ impl TargetTransform {
     }
 }
 
+#[derive(Component, Default, Deref, DerefMut, Reflect)]
+#[reflect(Component)]
+/// Whether the viewport is in focus or not.
+pub struct ViewportFocus(#[deref] bool);
+
 // OBSERVERS
 
 fn viewport_background_sphere_pointer_drag_observer(
@@ -208,13 +213,15 @@ fn draw_grid_system(
         .outer_edges();
 }
 
-// FIXME: This resets the viewport even when a modal dialog is open.
-//
-//        Use picking to fix it.
 fn keyboard_actions_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+    viewport_focus: Single<&ViewportFocus>,
 ) {
+    if !***viewport_focus {
+        return;
+    }
+
     if keyboard_input.just_pressed(KeyCode::Home) {
         target_transform_query.single_mut().unwrap().reset();
     }
@@ -234,6 +241,7 @@ fn startup_system(
     let viewport_root: Entity = commands
         .spawn((
             Name::new("Viewport"),
+            ViewportFocus::default(),
             Transform::default(),
             Visibility::default(),
         ))
@@ -319,7 +327,17 @@ fn startup_system(
             })),
             ChildOf(camera_entity),
         ))
-        .observe(viewport_background_sphere_pointer_drag_observer);
+        .observe(viewport_background_sphere_pointer_drag_observer)
+        .observe(
+            |_over: On<Pointer<Over>>, mut viewport_focus: Single<&mut ViewportFocus>| {
+                ***viewport_focus = true;
+            },
+        )
+        .observe(
+            |_out: On<Pointer<Out>>, mut viewport_focus: Single<&mut ViewportFocus>| {
+                ***viewport_focus = false;
+            },
+        );
 
     Ok(())
 }
