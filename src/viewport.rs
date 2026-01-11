@@ -20,6 +20,7 @@ use bevy::prelude::*;
 
 use crate::theme;
 
+const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
 const PREVIEW_FACE_ALPHA: f32 = 0.65f32;
 
 // PLUGIN
@@ -60,8 +61,6 @@ struct TargetTransform {
 }
 
 impl TargetTransform {
-    const DEFAULT_ZOOM: f32 = 5.0;
-
     fn dolly(&mut self, factor: f32) {
         const MIN_DIST: f32 = 1.0;
         const MAX_DIST: f32 = 500.0;
@@ -120,7 +119,7 @@ impl TargetTransform {
         self.translation -= self.looking_at();
 
         // Reset zoom.
-        self.translation = self.translation.normalize() * Self::DEFAULT_ZOOM;
+        self.translation = self.translation.normalize() * CAMERA_INITIAL_TRANSLATION.length();
     }
 }
 
@@ -233,7 +232,6 @@ fn startup_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) -> Result<(), BevyError> {
-    const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
     const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
     const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
     const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
