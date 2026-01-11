@@ -14,11 +14,9 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use bevy::input::{common_conditions::input_pressed, mouse::MouseMotion};
 use bevy::math::Affine3A;
 use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframePlugin};
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 
 use crate::theme;
 
@@ -33,44 +31,17 @@ impl Plugin for ViewportPlugin {
         if !app.is_plugin_added::<WireframePlugin>() {
             app.add_plugins(WireframePlugin::default());
         }
-        app.register_type::<TargetTransform>()
-            .register_type::<ViewportRegion>()
-            .init_resource::<ViewportRegion>()
-            .add_systems(Startup, startup_system)
-            .add_systems(
-                Update,
-                (
-                    draw_grid_system,
-                    draw_focal_point_system,
-                    middle_mouse_actions_system
-                        .run_if(input_pressed(MouseButton::Middle))
-                        .after(mouse_over_viewport_system),
-                    mouse_over_viewport_system,
-                    keyboard_actions_system,
-                    update_camera_system,
-                    update_viewport_colors_system,
-                ),
-            );
-    }
-}
-
-// RESOURCES
-
-/// Unclaimed area of primary window is where the 3D viewport is visible.
-#[derive(Debug, Default, Reflect, Resource)]
-#[reflect(Resource)]
-pub struct ViewportRegion {
-    rect: Rect,
-    mouse_position: Vec2,
-}
-
-impl ViewportRegion {
-    pub fn set_rect(&mut self, rect: Rect) {
-        self.rect = rect;
-    }
-
-    fn is_mouse_over(&self) -> bool {
-        self.rect.contains(self.mouse_position)
+        app.add_systems(Startup, startup_system);
+        app.add_systems(
+            Update,
+            (
+                draw_grid_system,
+                draw_focal_point_system,
+                keyboard_actions_system,
+                update_camera_system,
+                update_viewport_colors_system,
+            ),
+        );
     }
 }
 
@@ -207,6 +178,9 @@ fn draw_grid_system(
         .outer_edges();
 }
 
+// FIXME: This resets the viewport even when a modal dialog is open.
+//
+//        Use picking to fix it.
 fn keyboard_actions_system(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
@@ -216,90 +190,37 @@ fn keyboard_actions_system(
     }
 }
 
-fn mouse_over_viewport_system(
-    mut viewport: ResMut<ViewportRegion>,
-    window: Query<&Window, With<PrimaryWindow>>,
-) -> Result<(), BevyError> {
-    if let Some(mouse_position) = window.single()?.physical_cursor_position() {
-        viewport.mouse_position = mouse_position;
-    }
-    Ok(())
-}
-
-// TODO: When a dialog is displayed viewport can still be manipulated with
-//       mouse.  To solve this we need to use picking to drive mouse actions
-//       on the viewport.
-fn middle_mouse_actions_system(
-    mut mouse_motion_reader: MessageReader<MouseMotion>,
-    mouse_button: Res<ButtonInput<MouseButton>>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
-    viewport: Res<ViewportRegion>,
-) -> Result<(), BevyError> {
-    if !viewport.is_mouse_over() {
-        return Ok(());
-    }
-
-    // We are reading these events without fear becuase this system must be
-    // run only when MMB is pressed or it will panic.  Otherwise consuming
-    // these events would prevent another system to read them.
-    let mouse_motion: Vec2 = mouse_motion_reader
-        .read()
-        .fold(Vec2::ZERO, |acc, ev| acc + ev.delta);
-
-    match (
-        mouse_button.pressed(MouseButton::Middle),
-        mouse_motion.length() > f32::EPSILON,
-        keyboard_input.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
-        keyboard_input.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
-    ) {
-        (true, true, true, false) => {
-            // Pan
-            target_transform_query
-                .single_mut()?
-                .pan_xy(-mouse_motion.x, -mouse_motion.y);
-        }
-        (true, true, false, true) => {
-            // Dolly
-            target_transform_query.single_mut()?.dolly(mouse_motion.y);
-        }
-        (true, true, false, false) => {
-            // Orbit
-            target_transform_query
-                .single_mut()?
-                .orbit_xy(-mouse_motion.x, -mouse_motion.y);
-        }
-        (true, _, true, true) => (), // Do nothing if both shift and control is pressed.
-        (true, false, _, _) => (),   // Do nothing if there is no mouse movement.
-        (false, _, _, _) => unreachable!(),
-    }
-
-    Ok(())
-}
-
 /// Create camera and preview mesh.
 fn startup_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+) -> Result<(), BevyError> {
     const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
     const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
     const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
     const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
 
     // Create camera
-    let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
-        .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
-    commands.spawn((
-        Camera3d::default(),
-        transform,
-        TargetTransform {
-            translation: transform.translation,
-            rotation: transform.rotation,
-        },
-        Name::new("Camera"),
-    ));
+    let (camera_entity, far): (Entity, f32) = {
+        let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
+            .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
+        let projection = Projection::default();
+        let far = projection.far();
+        let entity = commands
+            .spawn((
+                Camera3d::default(),
+                projection,
+                transform,
+                TargetTransform {
+                    translation: transform.translation,
+                    rotation: transform.rotation,
+                },
+                Name::new("Camera"),
+            ))
+            .id();
+        (entity, far)
+    };
 
     // A pivot point so we can work in Z-up coords.
     commands
@@ -317,6 +238,7 @@ fn startup_system(
                 MeshMaterial3d(
                     materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA)),
                 ),
+                Pickable::IGNORE,
                 // This is a quick and dirty way of rendering the wireframe,
                 // but it is not capable of quad rendering.  To do proper quad
                 // wireframes we either need to mark the diagonal edges
@@ -334,6 +256,58 @@ fn startup_system(
         DirectionalLight::default(),
         Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
+
+    // Add an invisible background object to capture picking events.
+    commands
+        .spawn((
+            Name::new("Viewport Background Sphere"),
+            Mesh3d(
+                meshes.add(
+                    Sphere::new(far * (1.0 - f32::EPSILON))
+                        .mesh()
+                        .uv(32, 18)
+                        .with_computed_smooth_normals()
+                        .with_inverted_winding()?,
+                ),
+            ),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                alpha_mode: AlphaMode::Multiply,
+                unlit: true,
+                base_color: Color::Srgba(Srgba::NONE),
+                ..default()
+            })),
+            ChildOf(camera_entity),
+        ))
+        .observe(
+            |drag: On<Pointer<Drag>>,
+             keyboard_input: Res<ButtonInput<KeyCode>>,
+             mut target_transform_query: Query<&mut TargetTransform, With<Camera>>| {
+                if drag.button == PointerButton::Middle {
+                    if let Ok(mut target_transform) = target_transform_query.single_mut() {
+                        match (
+                            keyboard_input.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
+                            keyboard_input
+                                .any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
+                        ) {
+                            (false, false) => {
+                                target_transform.orbit_xy(-drag.delta.x, -drag.delta.y);
+                            }
+                            (true, false) => {
+                                target_transform.pan_xy(-drag.delta.x, -drag.delta.y);
+                            }
+                            (false, true) => {
+                                target_transform.dolly(drag.delta.y);
+                            }
+                            (true, true) => (),
+                        }
+                    } else {
+                        error!("Cannot access viewport target transform.");
+                    }
+                }
+            },
+        );
+
+    Ok(())
 }
 
 fn update_camera_system(
