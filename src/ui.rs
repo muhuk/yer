@@ -27,7 +27,6 @@ use crate::layer as crate_layer;
 use crate::session;
 use crate::theme;
 use crate::undo;
-use crate::viewport;
 
 mod egui_ext;
 mod file_dialog;
@@ -228,56 +227,43 @@ fn draw_ui_panels_system(
     mut layers_query: layer::Layers,
     mut masks_query: layer::Masks,
     preview_query: preview::PreviewQuery,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
     session: Res<session::Session>,
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
     undo_stack: Res<undo::UndoStack>,
     mut ui_state_next: ResMut<NextState<UiState>>,
-    viewport_region: ResMut<viewport::ViewportRegion>,
 ) -> Result<(), BevyError> {
     let ctx = contexts.ctx_mut()?;
 
-    let menubar_height: f32 = egui::TopBottomPanel::top("menubar")
-        .show(ctx, |ui| {
-            draw_ui_menu(
-                ui,
-                &mut app_exit_events,
-                &mut commands,
-                &layers_query,
-                session.as_ref(),
-                undo_stack.as_ref(),
-                &mut ui_state_next,
-            );
-        })
-        .response
-        .rect
-        .height();
+    egui::TopBottomPanel::top("menubar").show(ctx, |ui| {
+        draw_ui_menu(
+            ui,
+            &mut app_exit_events,
+            &mut commands,
+            &layers_query,
+            session.as_ref(),
+            undo_stack.as_ref(),
+            &mut ui_state_next,
+        );
+    });
 
-    let toolbar_height: f32 = egui::TopBottomPanel::top("toolbar")
-        .show(ctx, |ui| {
-            if let Some(colors) = theme_colors.get(&theme.colors) {
-                toolbar::draw_toolbar(&mut commands, ui, &egui_theme, colors, &undo_stack);
-            } else {
-                error!("Cannot read theme colors.");
-            }
-        })
-        .response
-        .rect
-        .height();
+    egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+        if let Some(colors) = theme_colors.get(&theme.colors) {
+            toolbar::draw_toolbar(&mut commands, ui, &egui_theme, colors, &undo_stack);
+        } else {
+            error!("Cannot read theme colors.");
+        }
+    });
 
-    let panel_left_width: f32 = egui::SidePanel::left("sidepanel_left")
+    egui::SidePanel::left("sidepanel_left")
         .resizable(true)
         .show(ctx, |ui| {
             ui.heading("Side Panel Left");
             preview::draw_ui_for_preview(ui, preview_query);
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        })
-        .response
-        .rect
-        .width();
+        });
 
-    let panel_right_width: f32 = egui::SidePanel::right("sidepanel_right")
+    egui::SidePanel::right("sidepanel_right")
         .resizable(true)
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
@@ -310,19 +296,7 @@ fn draw_ui_panels_system(
                 // complex and I am not sure it's entirely reliable.
                 ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
             });
-        })
-        .response
-        .rect
-        .width();
-
-    set_viewport_region(
-        menubar_height,
-        toolbar_height,
-        panel_left_width,
-        panel_right_width,
-        primary_window,
-        viewport_region,
-    );
+        });
 
     Ok(())
 }
@@ -503,25 +477,4 @@ fn draw_ui_menu(
             })
         });
     });
-}
-
-/// Update the region where the viewport is visible by deducting the areas
-/// allocated to menubar and side panels.
-fn set_viewport_region(
-    menubar_height: f32,
-    toolbar_height: f32,
-    panel_left_width: f32,
-    panel_right_width: f32,
-    primary_window: Query<&Window, With<PrimaryWindow>>,
-    mut viewport_region: ResMut<viewport::ViewportRegion>,
-) {
-    if let Ok(window) = primary_window.single() {
-        let scale_factor: f32 = window.scale_factor();
-        viewport_region.set_rect(Rect::new(
-            panel_left_width * scale_factor,
-            (menubar_height + toolbar_height) * scale_factor,
-            (window.physical_width() as f32) - panel_right_width * scale_factor,
-            window.physical_height() as f32,
-        ));
-    }
 }
