@@ -231,6 +231,14 @@ fn startup_system(
     const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
     const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
 
+    let viewport_root: Entity = commands
+        .spawn((
+            Name::new("Viewport"),
+            Transform::default(),
+            Visibility::default(),
+        ))
+        .id();
+
     // Create camera
     let (camera_entity, far): (Entity, f32) = {
         let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
@@ -239,6 +247,8 @@ fn startup_system(
         let far = projection.far();
         let entity = commands
             .spawn((
+                Name::new("Camera"),
+                ChildOf(viewport_root),
                 Camera3d::default(),
                 projection,
                 transform,
@@ -246,7 +256,6 @@ fn startup_system(
                     translation: transform.translation,
                     rotation: transform.rotation,
                 },
-                Name::new("Camera"),
             ))
             .id();
         (entity, far)
@@ -255,9 +264,10 @@ fn startup_system(
     // A pivot point so we can work in Z-up coords.
     commands
         .spawn((
+            Name::new("Pivot Z-Up"),
+            ChildOf(viewport_root),
             Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
             Visibility::default(),
-            Name::new("Pivot Z-Up"),
         ))
         .with_children(|parent| {
             // Create preview mesh.
@@ -283,6 +293,7 @@ fn startup_system(
 
     // Add light.
     commands.spawn((
+        ChildOf(viewport_root),
         DirectionalLight::default(),
         Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
