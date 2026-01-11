@@ -124,6 +124,36 @@ impl TargetTransform {
     }
 }
 
+// OBSERVERS
+
+fn viewport_background_sphere_pointer_drag_observer(
+    drag: On<Pointer<Drag>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut target_transform_query: Query<&mut TargetTransform, With<Camera>>,
+) {
+    if drag.button == PointerButton::Middle {
+        if let Ok(mut target_transform) = target_transform_query.single_mut() {
+            match (
+                keyboard_input.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
+                keyboard_input.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
+            ) {
+                (false, false) => {
+                    target_transform.orbit_xy(-drag.delta.x, -drag.delta.y);
+                }
+                (true, false) => {
+                    target_transform.pan_xy(-drag.delta.x, -drag.delta.y);
+                }
+                (false, true) => {
+                    target_transform.dolly(drag.delta.y);
+                }
+                (true, true) => (),
+            }
+        } else {
+            error!("Cannot access viewport target transform.");
+        }
+    }
+}
+
 // SYSTEMS
 
 fn draw_focal_point_system(
@@ -278,34 +308,7 @@ fn startup_system(
             })),
             ChildOf(camera_entity),
         ))
-        .observe(
-            |drag: On<Pointer<Drag>>,
-             keyboard_input: Res<ButtonInput<KeyCode>>,
-             mut target_transform_query: Query<&mut TargetTransform, With<Camera>>| {
-                if drag.button == PointerButton::Middle {
-                    if let Ok(mut target_transform) = target_transform_query.single_mut() {
-                        match (
-                            keyboard_input.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]),
-                            keyboard_input
-                                .any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]),
-                        ) {
-                            (false, false) => {
-                                target_transform.orbit_xy(-drag.delta.x, -drag.delta.y);
-                            }
-                            (true, false) => {
-                                target_transform.pan_xy(-drag.delta.x, -drag.delta.y);
-                            }
-                            (false, true) => {
-                                target_transform.dolly(drag.delta.y);
-                            }
-                            (true, true) => (),
-                        }
-                    } else {
-                        error!("Cannot access viewport target transform.");
-                    }
-                }
-            },
-        );
+        .observe(viewport_background_sphere_pointer_drag_observer);
 
     Ok(())
 }
