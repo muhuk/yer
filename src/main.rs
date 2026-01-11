@@ -44,13 +44,16 @@ fn main() {
             mode: bevy_embedded_assets::PluginMode::ReplaceDefault,
         });
     }
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
-        primary_window: Some(Window {
-            title: constants::APPLICATION_TITLE.to_owned(),
+    app.add_plugins((
+        DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: constants::APPLICATION_TITLE.to_owned(),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
-        ..Default::default()
-    }));
+        MeshPickingPlugin,
+    ));
     app.add_plugins((
         layer::LayerPlugin,
         preferences::PreferencesPlugin {
