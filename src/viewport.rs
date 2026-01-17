@@ -20,8 +20,13 @@ use bevy::prelude::*;
 
 use crate::theme;
 
+const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
 const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
+const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
+const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
 const PREVIEW_FACE_ALPHA: f32 = 0.65f32;
+const VIEWPORT_LIGHT_POSITION: Vec3 = Vec3::new(-3.0, 5.0, -4.0);
+const VIEWPORT_LIGHT_LOOK_AT_TARGET: Vec3 = Vec3::ZERO;
 
 // PLUGIN
 
@@ -32,7 +37,15 @@ impl Plugin for ViewportPlugin {
         if !app.is_plugin_added::<WireframePlugin>() {
             app.add_plugins(WireframePlugin::default());
         }
-        app.add_systems(Startup, startup_system);
+        app.add_systems(
+            Startup,
+            (
+                create_viewport_root_system,
+                create_viewport_camera_system,
+                create_preview_mesh_system,
+            )
+                .chain(),
+        );
         app.add_systems(
             Update,
             (
@@ -65,6 +78,10 @@ impl Plugin for ViewportPlugin {
 #[reflect(Component)]
 /// Marker component for preview mesh.
 pub struct PreviewMesh;
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+struct PivotZUp;
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
@@ -136,10 +153,15 @@ impl TargetTransform {
     }
 }
 
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+/// Marker component for viewport root.
+struct Viewport;
+
 #[derive(Component, Default, Deref, DerefMut, Reflect)]
 #[reflect(Component)]
 /// Whether the viewport is in focus or not.
-pub struct ViewportFocus(#[deref] bool);
+struct ViewportFocus(#[deref] bool);
 
 // OBSERVERS
 
@@ -172,6 +194,119 @@ fn viewport_background_sphere_pointer_drag_observer(
 }
 
 // SYSTEMS
+
+fn create_viewport_camera_system(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    viewport_root: Single<Entity, With<Viewport>>,
+) -> Result<(), BevyError> {
+    let (camera_entity, far): (Entity, f32) = {
+        let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
+            .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
+        let projection = Projection::default();
+        let far = projection.far();
+        let entity = commands
+            .spawn((
+                Name::new("Viewport Camera"),
+                ChildOf(*viewport_root),
+                Camera3d::default(),
+                projection,
+                transform,
+                TargetTransform {
+                    translation: transform.translation,
+                    rotation: transform.rotation,
+                },
+            ))
+            .id();
+        (entity, far)
+    };
+
+    // Add an invisible background object to capture picking events.
+    commands
+        .spawn((
+            Name::new("Viewport Background Sphere"),
+            Mesh3d(
+                meshes.add(
+                    Sphere::new(far * (1.0 - f32::EPSILON))
+                        .mesh()
+                        .uv(32, 18)
+                        .with_computed_smooth_normals()
+                        .with_inverted_winding()?,
+                ),
+            ),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                alpha_mode: AlphaMode::Multiply,
+                unlit: true,
+                base_color: Color::Srgba(Srgba::NONE),
+                ..default()
+            })),
+            ChildOf(camera_entity),
+        ))
+        .observe(viewport_background_sphere_pointer_drag_observer)
+        .observe(
+            |_over: On<Pointer<Over>>, mut viewport_focus: Single<&mut ViewportFocus>| {
+                ***viewport_focus = true;
+            },
+        )
+        .observe(
+            |_out: On<Pointer<Out>>, mut viewport_focus: Single<&mut ViewportFocus>| {
+                ***viewport_focus = false;
+            },
+        );
+
+    // Add light.
+    commands.spawn((
+        ChildOf(*viewport_root),
+        DirectionalLight::default(),
+        Transform::from_translation(VIEWPORT_LIGHT_POSITION)
+            .looking_at(VIEWPORT_LIGHT_LOOK_AT_TARGET, Vec3::Y),
+    ));
+
+    Ok(())
+}
+
+fn create_preview_mesh_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    pivot_z_up: Single<Entity, With<PivotZUp>>,
+) {
+    // A pivot point so we can work in Z-up coords.
+    commands.spawn((
+        Name::new("Preview Mesh"),
+        PreviewMesh,
+        ChildOf(*pivot_z_up),
+        Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
+        MeshMaterial3d(materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA))),
+        Pickable::IGNORE,
+        // This is a quick and dirty way of rendering the wireframe,
+        // but it is not capable of quad rendering.  To do proper quad
+        // wireframes we either need to mark the diagonal edges
+        // somehow (how?) and use a custom shader, or we need to use a
+        // second edges-only mesh.
+        Wireframe,
+        WireframeColor {
+            color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
+        },
+    ));
+}
+
+fn create_viewport_root_system(mut commands: Commands) {
+    commands.spawn((
+        Name::new("Viewport"),
+        Viewport,
+        ViewportFocus::default(),
+        Transform::default(),
+        Visibility::default(),
+        children![(
+            Name::new("Pivot Z-Up"),
+            PivotZUp,
+            Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+            Visibility::default(),
+        )],
+    ));
+}
 
 fn draw_focal_point_system(
     mut gizmos: Gizmos,
@@ -245,120 +380,6 @@ fn keyboard_actions_system(
     if keyboard_input.just_pressed(KeyCode::Home) {
         target_transform_query.single_mut().unwrap().reset();
     }
-}
-
-/// Create camera and preview mesh.
-fn startup_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) -> Result<(), BevyError> {
-    const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
-    const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
-    const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
-
-    let viewport_root: Entity = commands
-        .spawn((
-            Name::new("Viewport"),
-            ViewportFocus::default(),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .id();
-
-    // Create camera
-    let (camera_entity, far): (Entity, f32) = {
-        let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
-            .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
-        let projection = Projection::default();
-        let far = projection.far();
-        let entity = commands
-            .spawn((
-                Name::new("Camera"),
-                ChildOf(viewport_root),
-                Camera3d::default(),
-                projection,
-                transform,
-                TargetTransform {
-                    translation: transform.translation,
-                    rotation: transform.rotation,
-                },
-            ))
-            .id();
-        (entity, far)
-    };
-
-    // A pivot point so we can work in Z-up coords.
-    commands
-        .spawn((
-            Name::new("Pivot Z-Up"),
-            ChildOf(viewport_root),
-            Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-            Visibility::default(),
-        ))
-        .with_children(|parent| {
-            // Create preview mesh.
-            parent.spawn((
-                Name::new("Preview Mesh"),
-                PreviewMesh,
-                Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
-                MeshMaterial3d(
-                    materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA)),
-                ),
-                Pickable::IGNORE,
-                // This is a quick and dirty way of rendering the wireframe,
-                // but it is not capable of quad rendering.  To do proper quad
-                // wireframes we either need to mark the diagonal edges
-                // somehow (how?) and use a custom shader, or we need to use a
-                // second edges-only mesh.
-                Wireframe,
-                WireframeColor {
-                    color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
-                },
-            ));
-        });
-
-    // Add light.
-    commands.spawn((
-        ChildOf(viewport_root),
-        DirectionalLight::default(),
-        Transform::from_xyz(-3.0, 5.0, -4.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
-
-    // Add an invisible background object to capture picking events.
-    commands
-        .spawn((
-            Name::new("Viewport Background Sphere"),
-            Mesh3d(
-                meshes.add(
-                    Sphere::new(far * (1.0 - f32::EPSILON))
-                        .mesh()
-                        .uv(32, 18)
-                        .with_computed_smooth_normals()
-                        .with_inverted_winding()?,
-                ),
-            ),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                alpha_mode: AlphaMode::Multiply,
-                unlit: true,
-                base_color: Color::Srgba(Srgba::NONE),
-                ..default()
-            })),
-            ChildOf(camera_entity),
-        ))
-        .observe(viewport_background_sphere_pointer_drag_observer)
-        .observe(
-            |_over: On<Pointer<Over>>, mut viewport_focus: Single<&mut ViewportFocus>| {
-                ***viewport_focus = true;
-            },
-        )
-        .observe(
-            |_out: On<Pointer<Out>>, mut viewport_focus: Single<&mut ViewportFocus>| {
-                ***viewport_focus = false;
-            },
-        );
-
-    Ok(())
 }
 
 fn update_camera_system(
