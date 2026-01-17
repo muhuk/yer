@@ -43,6 +43,19 @@ impl Plugin for ViewportPlugin {
                 update_viewport_colors_system,
             ),
         );
+
+        app.init_gizmo_group::<ThickLines>();
+        app.world_mut().resource_mut::<GizmoConfigStore>().insert(
+            GizmoConfig {
+                depth_bias: -0.03,
+                line: GizmoLineConfig {
+                    width: 5.0,
+                    ..default()
+                },
+                ..default()
+            },
+            ThickLines,
+        );
     }
 }
 
@@ -181,24 +194,18 @@ fn draw_focal_point_system(
 
 fn draw_grid_system(
     mut gizmos: Gizmos,
+    mut thick_gizmos: Gizmos<ThickLines>,
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
-    // TODO: Use retained gizmos.
-    //
-    //       See: https://bevyengine.org/news/bevy-0-16/#retained-gizmos
-    //
-    //       Implementing this before https://github.com/bevyengine/bevy/issues/16041
-    //       is resolved doesn't make a lot of sense.  Once asset events start
-    //       being triggered, implemening retained gizmos will be easier.
-    let color_major = theme_colors.get(&theme.colors).unwrap().secondary_color;
-    let color_minor = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
+    let color_minor = theme_colors.get(&theme.colors).unwrap().secondary_color;
+    let color_major = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
     gizmos
         .grid_3d(
             Isometry3d::IDENTITY,
             UVec3::new(10, 0, 10), // cells
             Vec3::splat(100.0),    // spacing
-            color_minor.with_alpha(0.8),
+            color_major.with_alpha(0.3),
         )
         .outer_edges();
 
@@ -207,9 +214,23 @@ fn draw_grid_system(
             Isometry3d::IDENTITY,
             UVec3::new(100, 0, 100), // cells
             Vec3::splat(10.0),       // spacing
-            color_major.with_alpha(0.15),
+            color_minor.with_alpha(0.15),
         )
         .outer_edges();
+
+    // X axis line
+    thick_gizmos.line(
+        Vec3::NEG_X * 500.0,
+        Vec3::X * 500.0,
+        color_major.with_alpha(0.3),
+    );
+
+    // Y axis line
+    thick_gizmos.line(
+        Vec3::NEG_Z * 500.0,
+        Vec3::Z * 500.0,
+        color_major.with_alpha(0.3),
+    );
 }
 
 fn keyboard_actions_system(
@@ -394,3 +415,8 @@ fn update_viewport_colors_system(
         }
     }
 }
+
+// LIB
+
+#[derive(Default, GizmoConfigGroup, Reflect)]
+struct ThickLines;
