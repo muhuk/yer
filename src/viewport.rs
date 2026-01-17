@@ -20,15 +20,12 @@ use bevy::math::Affine3A;
 use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframePlugin};
 use bevy::prelude::*;
 
+use crate::constants::{
+    PREVIEW_DEFAULT_FACE_ALPHA, PREVIEW_DEFAULT_FACE_COLOR, PREVIEW_DEFAULT_WIREFRAME_COLOR,
+    VIEWPORT_CAMERA_INITIAL_TARGET, VIEWPORT_CAMERA_INITIAL_TRANSLATION,
+    VIEWPORT_LIGHT_LOOK_AT_TARGET, VIEWPORT_LIGHT_POSITION,
+};
 use crate::theme;
-
-const CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
-const CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
-const DEFAULT_PREVIEW_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
-const DEFAULT_PREVIEW_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
-const PREVIEW_FACE_ALPHA: f32 = 0.65f32;
-const VIEWPORT_LIGHT_POSITION: Vec3 = Vec3::new(-3.0, 5.0, -4.0);
-const VIEWPORT_LIGHT_LOOK_AT_TARGET: Vec3 = Vec3::ZERO;
 
 // PLUGIN
 
@@ -137,7 +134,8 @@ impl TargetTransform {
         self.translation -= self.looking_at();
 
         // Reset zoom.
-        self.translation = self.translation.normalize() * CAMERA_INITIAL_TRANSLATION.length();
+        self.translation =
+            self.translation.normalize() * VIEWPORT_CAMERA_INITIAL_TRANSLATION.length();
     }
 }
 
@@ -195,7 +193,9 @@ fn create_preview_mesh_system(
         PreviewMesh,
         ChildOf(*pivot_z_up),
         Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
-        MeshMaterial3d(materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA))),
+        MeshMaterial3d(
+            materials.add(PREVIEW_DEFAULT_FACE_COLOR.with_alpha(PREVIEW_DEFAULT_FACE_ALPHA)),
+        ),
         Pickable::IGNORE,
         // This is a quick and dirty way of rendering the wireframe,
         // but it is not capable of quad rendering.  To do proper quad
@@ -204,7 +204,7 @@ fn create_preview_mesh_system(
         // second edges-only mesh.
         Wireframe,
         WireframeColor {
-            color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
+            color: PREVIEW_DEFAULT_WIREFRAME_COLOR,
         },
     ));
 }
@@ -216,8 +216,8 @@ fn create_viewport_camera_system(
     viewport_root: Single<Entity, With<Viewport>>,
 ) -> Result<(), BevyError> {
     let (camera_entity, far): (Entity, f32) = {
-        let transform = Transform::from_translation(CAMERA_INITIAL_TRANSLATION)
-            .looking_at(CAMERA_INITIAL_TARGET, Vec3::Y);
+        let transform = Transform::from_translation(VIEWPORT_CAMERA_INITIAL_TRANSLATION)
+            .looking_at(VIEWPORT_CAMERA_INITIAL_TARGET, Vec3::Y);
         let projection = Projection::default();
         let far = projection.far();
         let entity = commands
@@ -465,7 +465,8 @@ fn update_viewport_colors_system(
         standard_materials.get_mut(&preview_mesh.0 .0),
     ) {
         (Some(colors), Some(standard_material)) => {
-            standard_material.base_color = colors.primary_color.with_alpha(PREVIEW_FACE_ALPHA);
+            standard_material.base_color =
+                colors.primary_color.with_alpha(PREVIEW_DEFAULT_FACE_ALPHA);
             preview_mesh.1.color = colors.primary_color;
             clear_color.0 = colors.bg_color;
         }

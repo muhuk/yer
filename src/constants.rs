@@ -15,7 +15,14 @@
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 use std::{num::NonZeroUsize, ops::RangeInclusive};
 
+use bevy::color::Color;
+use bevy::math::Vec3;
+
 pub const APPLICATION_TITLE: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
+
+pub const PREVIEW_DEFAULT_FACE_COLOR: Color = Color::hsl(0.0, 0.0, 0.5);
+pub const PREVIEW_DEFAULT_WIREFRAME_COLOR: Color = Color::hsl(0.0, 0.0, 0.85);
+pub const PREVIEW_DEFAULT_FACE_ALPHA: f32 = 0.65f32;
 
 pub const UNDO_STACK_SIZE_DEFAULT: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(20) };
 pub const UNDO_STACK_SIZE_RANGE: RangeInclusive<usize> = 1..=100;
@@ -25,3 +32,8 @@ pub const VERSION: &str = concat!(
     ".",
     env!("CARGO_PKG_VERSION_MINOR")
 );
+
+pub const VIEWPORT_CAMERA_INITIAL_TARGET: Vec3 = Vec3::ZERO;
+pub const VIEWPORT_CAMERA_INITIAL_TRANSLATION: Vec3 = Vec3::new(-50.0, 300.0, 200.0);
+pub const VIEWPORT_LIGHT_POSITION: Vec3 = Vec3::new(-3.0, 5.0, -4.0);
+pub const VIEWPORT_LIGHT_LOOK_AT_TARGET: Vec3 = Vec3::ZERO;
