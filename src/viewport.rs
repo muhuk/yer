@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use core::f32::consts::FRAC_PI_2;
+
 use bevy::math::Affine3A;
 use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframePlugin};
 use bevy::prelude::*;
@@ -41,33 +43,19 @@ impl Plugin for ViewportPlugin {
             Startup,
             (
                 create_viewport_root_system,
-                create_viewport_camera_system,
-                create_preview_mesh_system,
+                (create_viewport_camera_system, create_preview_mesh_system),
             )
                 .chain(),
         );
         app.add_systems(
             Update,
             (
-                draw_grid_system,
+                create_viewport_grid_system,
                 draw_focal_point_system,
                 keyboard_actions_system,
                 update_camera_system,
                 update_viewport_colors_system,
             ),
-        );
-
-        app.init_gizmo_group::<ThickLines>();
-        app.world_mut().resource_mut::<GizmoConfigStore>().insert(
-            GizmoConfig {
-                depth_bias: -0.03,
-                line: GizmoLineConfig {
-                    width: 5.0,
-                    ..default()
-                },
-                ..default()
-            },
-            ThickLines,
         );
     }
 }
@@ -195,6 +183,32 @@ fn viewport_background_sphere_pointer_drag_observer(
 
 // SYSTEMS
 
+fn create_preview_mesh_system(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    pivot_z_up: Single<Entity, With<PivotZUp>>,
+) {
+    // A pivot point so we can work in Z-up coords.
+    commands.spawn((
+        Name::new("Preview Mesh"),
+        PreviewMesh,
+        ChildOf(*pivot_z_up),
+        Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
+        MeshMaterial3d(materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA))),
+        Pickable::IGNORE,
+        // This is a quick and dirty way of rendering the wireframe,
+        // but it is not capable of quad rendering.  To do proper quad
+        // wireframes we either need to mark the diagonal edges
+        // somehow (how?) and use a custom shader, or we need to use a
+        // second edges-only mesh.
+        Wireframe,
+        WireframeColor {
+            color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
+        },
+    ));
+}
+
 fn create_viewport_camera_system(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -266,30 +280,95 @@ fn create_viewport_camera_system(
     Ok(())
 }
 
-fn create_preview_mesh_system(
+// TODO: If/when https://github.com/bevyengine/bevy/issues/16041 is implemented
+//       we won't need to run this system in Update.
+fn create_viewport_grid_system(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut gizmo_assets: ResMut<Assets<GizmoAsset>>,
+    mut grid_created: Local<bool>,
     pivot_z_up: Single<Entity, With<PivotZUp>>,
+    theme: Res<theme::Theme>,
+    theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
-    // A pivot point so we can work in Z-up coords.
-    commands.spawn((
-        Name::new("Preview Mesh"),
-        PreviewMesh,
-        ChildOf(*pivot_z_up),
-        Mesh3d(meshes.add(Rectangle::new(1.0, 1.0))),
-        MeshMaterial3d(materials.add(DEFAULT_PREVIEW_FACE_COLOR.with_alpha(PREVIEW_FACE_ALPHA))),
-        Pickable::IGNORE,
-        // This is a quick and dirty way of rendering the wireframe,
-        // but it is not capable of quad rendering.  To do proper quad
-        // wireframes we either need to mark the diagonal edges
-        // somehow (how?) and use a custom shader, or we need to use a
-        // second edges-only mesh.
-        Wireframe,
-        WireframeColor {
-            color: DEFAULT_PREVIEW_WIREFRAME_COLOR,
-        },
-    ));
+    if *grid_created {
+        return;
+    }
+
+    if let Some(colors) = theme_colors.get(&theme.colors) {
+        debug!("Creating viewport grid.");
+
+        let color_minor = colors.secondary_color;
+        let color_major = colors.secondary_alt_color;
+
+        // Grid
+        {
+            let mut gizmo = GizmoAsset::default();
+
+            // Rotate around X axis for -90 degrees to make it Y up.
+            // This may or may not be correct.
+            let isometry = Isometry3d::from_rotation(Quat::from_rotation_x(-FRAC_PI_2));
+
+            gizmo
+                .grid_3d(
+                    isometry,
+                    UVec3::new(10, 0, 10), // cells
+                    Vec3::splat(100.0),    // spacing
+                    color_major.with_alpha(0.3),
+                )
+                .outer_edges();
+
+            gizmo
+                .grid_3d(
+                    isometry,
+                    UVec3::new(100, 0, 100), // cells
+                    Vec3::splat(10.0),       // spacing
+                    color_minor.with_alpha(0.15),
+                )
+                .outer_edges();
+
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Gizmo {
+                    handle: gizmo_assets.add(gizmo),
+                    line_config: GizmoLineConfig::default(),
+                    ..default()
+                },
+            ));
+        }
+
+        // Axis Lines
+        {
+            let mut gizmo = GizmoAsset::default();
+
+            // X axis line
+            gizmo.line(
+                Vec3::NEG_X * 500.0,
+                Vec3::X * 500.0,
+                color_major.with_alpha(0.3),
+            );
+
+            // Y axis line
+            gizmo.line(
+                Vec3::NEG_Y * 500.0,
+                Vec3::Y * 500.0,
+                color_major.with_alpha(0.3),
+            );
+
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Gizmo {
+                    handle: gizmo_assets.add(gizmo),
+                    line_config: GizmoLineConfig {
+                        width: 5.0,
+                        ..default()
+                    },
+                    depth_bias: -0.03,
+                },
+            ));
+        }
+
+        *grid_created = true;
+    }
 }
 
 fn create_viewport_root_system(mut commands: Commands) {
@@ -325,47 +404,6 @@ fn draw_focal_point_system(
             color,
         );
     }
-}
-
-fn draw_grid_system(
-    mut gizmos: Gizmos,
-    mut thick_gizmos: Gizmos<ThickLines>,
-    theme: Res<theme::Theme>,
-    theme_colors: Res<Assets<theme::ThemeColors>>,
-) {
-    let color_minor = theme_colors.get(&theme.colors).unwrap().secondary_color;
-    let color_major = theme_colors.get(&theme.colors).unwrap().secondary_alt_color;
-    gizmos
-        .grid_3d(
-            Isometry3d::IDENTITY,
-            UVec3::new(10, 0, 10), // cells
-            Vec3::splat(100.0),    // spacing
-            color_major.with_alpha(0.3),
-        )
-        .outer_edges();
-
-    gizmos
-        .grid_3d(
-            Isometry3d::IDENTITY,
-            UVec3::new(100, 0, 100), // cells
-            Vec3::splat(10.0),       // spacing
-            color_minor.with_alpha(0.15),
-        )
-        .outer_edges();
-
-    // X axis line
-    thick_gizmos.line(
-        Vec3::NEG_X * 500.0,
-        Vec3::X * 500.0,
-        color_major.with_alpha(0.3),
-    );
-
-    // Y axis line
-    thick_gizmos.line(
-        Vec3::NEG_Z * 500.0,
-        Vec3::Z * 500.0,
-        color_major.with_alpha(0.3),
-    );
 }
 
 fn keyboard_actions_system(
@@ -436,8 +474,3 @@ fn update_viewport_colors_system(
         }
     }
 }
-
-// LIB
-
-#[derive(Default, GizmoConfigGroup, Reflect)]
-struct ThickLines;
