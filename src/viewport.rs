@@ -27,6 +27,21 @@ use crate::constants::{
 };
 use crate::theme;
 
+const LINES_PLUS: [(Vec2, Vec2); 2] = [
+    (Vec2::new(-2.5, 0.0), Vec2::new(2.5, 0.0)),
+    (Vec2::new(0.0, 2.5), Vec2::new(0.0, -2.5)),
+];
+const LINES_MINUS: [(Vec2, Vec2); 1] = [(Vec2::new(-2.5, 0.0), Vec2::new(2.5, 0.0))];
+const LINES_X: [(Vec2, Vec2); 2] = [
+    (Vec2::new(-3.0, 5.0), Vec2::new(3.0, -5.0)),
+    (Vec2::new(3.0, 5.0), Vec2::new(-3.0, -5.0)),
+];
+const LINES_Y: [(Vec2, Vec2); 3] = [
+    (Vec2::new(-3.0, 5.0), Vec2::ZERO),
+    (Vec2::new(3.0, 5.0), Vec2::ZERO),
+    (Vec2::new(0.0, -5.0), Vec2::ZERO),
+];
+
 // PLUGIN
 
 pub struct ViewportPlugin;
@@ -290,6 +305,9 @@ fn create_viewport_grid_system(
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) {
+    const AXIS_LINE_EXTEND_FACTOR: f32 = 1.05;
+    const GRID_SIZE: f32 = 1000.0;
+
     if *grid_created {
         return;
     }
@@ -311,8 +329,8 @@ fn create_viewport_grid_system(
             gizmo
                 .grid_3d(
                     isometry,
-                    UVec3::new(10, 0, 10), // cells
-                    Vec3::splat(100.0),    // spacing
+                    UVec3::new(10, 0, 10),         // cells
+                    Vec3::splat(GRID_SIZE / 10.0), // spacing
                     color_major.with_alpha(0.3),
                 )
                 .outer_edges();
@@ -320,8 +338,8 @@ fn create_viewport_grid_system(
             gizmo
                 .grid_3d(
                     isometry,
-                    UVec3::new(100, 0, 100), // cells
-                    Vec3::splat(10.0),       // spacing
+                    UVec3::new(100, 0, 100),        // cells
+                    Vec3::splat(GRID_SIZE / 100.0), // spacing
                     color_minor.with_alpha(0.15),
                 )
                 .outer_edges();
@@ -342,15 +360,15 @@ fn create_viewport_grid_system(
 
             // X axis line
             gizmo.line(
-                Vec3::NEG_X * 500.0,
-                Vec3::X * 500.0,
+                Vec3::NEG_X * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR,
+                Vec3::X * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR,
                 color_major.with_alpha(0.3),
             );
 
             // Y axis line
             gizmo.line(
-                Vec3::NEG_Y * 500.0,
-                Vec3::Y * 500.0,
+                Vec3::NEG_Y * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR,
+                Vec3::Y * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR,
                 color_major.with_alpha(0.3),
             );
 
@@ -364,6 +382,131 @@ fn create_viewport_grid_system(
                     },
                     depth_bias: -0.03,
                 },
+            ));
+        }
+
+        // Axis Labels
+        {
+            let line_config = GizmoLineConfig {
+                width: 2.0,
+                ..default()
+            };
+
+            let plus_gizmo_handle: Handle<GizmoAsset> = gizmo_assets.add(
+                create_character_gizmo_asset(LINES_PLUS.into_iter(), color_major.with_alpha(0.45)),
+            );
+            let minus_gizmo_handle: Handle<GizmoAsset> = gizmo_assets.add(
+                create_character_gizmo_asset(LINES_MINUS.into_iter(), color_major.with_alpha(0.45)),
+            );
+            let x_gizmo_handle: Handle<GizmoAsset> = gizmo_assets.add(
+                create_character_gizmo_asset(LINES_X.into_iter(), color_major.with_alpha(0.45)),
+            );
+            let y_gizmo_handle: Handle<GizmoAsset> = gizmo_assets.add(
+                create_character_gizmo_asset(LINES_Y.into_iter(), color_major.with_alpha(0.45)),
+            );
+
+            // +X
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Transform::from_translation(
+                    Vec3::X * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR + Vec3::X * 7.0,
+                ),
+                children![
+                    (
+                        Gizmo {
+                            handle: plus_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::NEG_X * 3.0)
+                    ),
+                    (
+                        Gizmo {
+                            handle: x_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::X * 3.0)
+                    ),
+                ],
+            ));
+
+            // -X
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Transform::from_translation(
+                    Vec3::NEG_X * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR + Vec3::NEG_X * 7.0,
+                ),
+                children![
+                    (
+                        Gizmo {
+                            handle: minus_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::NEG_X * 3.0)
+                    ),
+                    (
+                        Gizmo {
+                            handle: x_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::X * 3.0)
+                    )
+                ],
+            ));
+
+            // +Y
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Transform::from_translation(
+                    Vec3::Y * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR + Vec3::Y * 7.0,
+                ),
+                children![
+                    (
+                        Gizmo {
+                            handle: plus_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::NEG_X * 3.0)
+                    ),
+                    (
+                        Gizmo {
+                            handle: y_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::X * 3.0)
+                    ),
+                ],
+            ));
+
+            // -Y
+            commands.spawn((
+                ChildOf(*pivot_z_up),
+                Transform::from_translation(
+                    Vec3::NEG_Y * GRID_SIZE * 0.5 * AXIS_LINE_EXTEND_FACTOR + Vec3::NEG_Y * 7.0,
+                ),
+                children![
+                    (
+                        Gizmo {
+                            handle: minus_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::NEG_X * 3.0)
+                    ),
+                    (
+                        Gizmo {
+                            handle: y_gizmo_handle.clone(),
+                            line_config: line_config.clone(),
+                            depth_bias: -0.03,
+                        },
+                        Transform::from_translation(Vec3::X * 3.0)
+                    )
+                ],
             ));
         }
 
@@ -474,4 +617,19 @@ fn update_viewport_colors_system(
             error!("Cannot update preview mesh colors from theme.");
         }
     }
+}
+
+// LIB
+
+fn create_character_gizmo_asset(
+    lines: impl Iterator<Item = (Vec2, Vec2)>,
+    color: Color,
+) -> GizmoAsset {
+    let mut gizmo = GizmoAsset::default();
+
+    for (start, end) in lines {
+        gizmo.line((start, 0.0).into(), (end, 0.0).into(), color);
+    }
+
+    gizmo
 }
