@@ -25,14 +25,14 @@ lack of documentation and occasional bugs.
 
 - [ ] Layer types:
 
-  - [ ] Constant.
+  - [x] Constant.
   - [ ] Noise.
   - [ ] Bitmap.
   - [ ] Summit. (hills & mountains)
 
 - [ ] Layer masking.
 
-  - [ ] Basic. (circle, rectangle)
+  - [x] Basic. (circle, rectangle)
   - [ ] Bitmap.
   - [ ] Height.
   - [ ] Slope.
