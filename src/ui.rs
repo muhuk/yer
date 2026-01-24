@@ -258,7 +258,6 @@ fn draw_ui_panels_system(
     egui::SidePanel::left("sidepanel_left")
         .resizable(true)
         .show(ctx, |ui| {
-            ui.heading("Side Panel Left");
             preview::draw_ui_for_preview(ui, preview_query);
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         });
@@ -267,7 +266,6 @@ fn draw_ui_panels_system(
         .resizable(true)
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                ui.heading("Side Panel Right");
                 if let Some(colors) = theme_colors.get(&theme.colors) {
                     layer::draw_ui_for_layers(
                         &mut commands,
