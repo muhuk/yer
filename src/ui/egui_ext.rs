@@ -23,6 +23,8 @@ use bevy_egui::{
 
 use crate::theme;
 
+const DEFAULT_SPEED: f32 = 0.05;
+
 // PLUGIN
 
 pub struct UiBevyExtPlugin;
@@ -167,7 +169,7 @@ pub fn draw_ui_editable_f32(
     let mut value_edited: f32 = value;
     let mut widget = egui::widgets::DragValue::new(&mut value_edited)
         .update_while_editing(false)
-        .speed(speed.unwrap_or(0.25));
+        .speed(speed.unwrap_or(DEFAULT_SPEED));
     if let Some(range) = range {
         widget = widget.range(range);
     }
