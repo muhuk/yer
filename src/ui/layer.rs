@@ -34,7 +34,7 @@ const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 const MINUS_ONE_TO_ONE: RangeInclusive<f32> = -1.0..=1.0;
 const ZERO_TO_POSITIVE_INFINITY: RangeInclusive<f32> = 0.0..=f32::INFINITY;
 const ZERO_TO_ONE: RangeInclusive<f32> = 0.0..=1.0;
-const ZERO_TO_ONE_INCREMENT: f32 = 0.025;
+const ZERO_TO_ONE_INCREMENT: f32 = 0.0025;
 
 // PLUGIN
 
