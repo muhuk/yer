@@ -186,6 +186,7 @@ pub enum MaskSource {
         irregularity: f32,
         radius: f32,
         rotation: f32,
+        smoothness: f32,
         transform: Affine2,
     },
     Square {
@@ -194,6 +195,7 @@ pub enum MaskSource {
         irregularity: f32,
         rotation: f32,
         size: f32,
+        smoothness: f32,
         transform: Affine2,
     },
 }
@@ -206,6 +208,7 @@ impl MaskSource {
             irregularity: 0.0,
             radius: 1.5,
             rotation: 0.0,
+            smoothness: 1.0,
             transform: Affine2::default(),
         }
     }
@@ -217,6 +220,7 @@ impl MaskSource {
             irregularity: 0.0,
             rotation: 0.0,
             size: 2.0,
+            smoothness: 1.0,
             transform: Affine2::default(),
         }
     }
@@ -228,15 +232,19 @@ impl MaskSource {
             Self::Circle {
                 falloff_radius,
                 radius,
+                smoothness,
                 transform,
                 ..
             } => {
                 let distance: f32 = transform.transform_point2(position).length();
-                1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0)
+                let factor = 1.0 - clamp((distance - radius) / falloff_radius, 0.0, 1.0);
+                let smooth_factor = SmootherStepCurve.sample_clamped(factor);
+                factor.lerp(smooth_factor, *smoothness)
             }
             Self::Square {
                 falloff_radius,
                 size,
+                smoothness,
                 transform,
                 ..
             } => {
@@ -244,7 +252,9 @@ impl MaskSource {
                 let half_size: f32 = size * 0.5;
                 let kx = 1.0 - clamp((dx - half_size) / falloff_radius, 0.0, 1.0);
                 let ky = 1.0 - clamp((dy - half_size) / falloff_radius, 0.0, 1.0);
-                kx * ky
+                let factor = kx * ky;
+                let smooth_factor = SmootherStepCurve.sample_clamped(factor);
+                factor.lerp(smooth_factor, *smoothness)
             }
         }
     }
@@ -294,6 +304,14 @@ impl MaskSource {
         match self {
             Self::Circle { .. } => unreachable!(),
             Self::Square { size, .. } => *size = new_size,
+        }
+    }
+
+    fn set_smoothness(&mut self, new_smoothness: f32) {
+        let clamped_smoothness = new_smoothness.clamp(0.0, 1.0);
+        match self {
+            Self::Circle { smoothness, .. } => *smoothness = clamped_smoothness,
+            Self::Square { smoothness, .. } => *smoothness = clamped_smoothness,
         }
     }
 
@@ -579,6 +597,11 @@ pub enum UpdateMaskSourceAction {
         old_value: f32,
         new_value: f32,
     },
+    UpdateSmoothness {
+        mask_id: MaskId,
+        old_value: f32,
+        new_value: f32,
+    },
 }
 
 impl UpdateMaskSourceAction {
@@ -630,6 +653,14 @@ impl UpdateMaskSourceAction {
         }
     }
 
+    pub fn update_smoothness(mask_id: MaskId, old_value: f32, new_value: f32) -> Self {
+        Self::UpdateSmoothness {
+            mask_id,
+            old_value,
+            new_value,
+        }
+    }
+
     fn mask_id(&self) -> &MaskId {
         match self {
             Self::UpdateCenter { mask_id, .. } => mask_id,
@@ -638,6 +669,7 @@ impl UpdateMaskSourceAction {
             Self::UpdateRadius { mask_id, .. } => mask_id,
             Self::UpdateRotation { mask_id, .. } => mask_id,
             Self::UpdateSize { mask_id, .. } => mask_id,
+            Self::UpdateSmoothness { mask_id, .. } => mask_id,
         }
     }
 }
@@ -659,6 +691,7 @@ impl Action for UpdateMaskSourceAction {
             Self::UpdateRadius { new_value, .. } => mask_source.set_radius(*new_value),
             Self::UpdateRotation { new_value, .. } => mask_source.set_rotation(*new_value),
             Self::UpdateSize { new_value, .. } => mask_source.set_size(*new_value),
+            Self::UpdateSmoothness { new_value, .. } => mask_source.set_smoothness(*new_value),
         };
     }
 
@@ -714,6 +747,15 @@ impl Action for UpdateMaskSourceAction {
                 old_value,
                 new_value,
             } => Self::UpdateSize {
+                mask_id,
+                old_value: new_value,
+                new_value: old_value,
+            },
+            Self::UpdateSmoothness {
+                mask_id,
+                old_value,
+                new_value,
+            } => Self::UpdateSmoothness {
                 mask_id,
                 old_value: new_value,
                 new_value: old_value,
