@@ -184,6 +184,7 @@ pub(super) enum MaskSourceUi {
         irregularity: f32,
         radius: f32,
         rotation: f32,
+        smoothness: f32,
         timer: Timer,
     },
     Square {
@@ -192,6 +193,7 @@ pub(super) enum MaskSourceUi {
         irregularity: f32,
         rotation: f32,
         size: f32,
+        smoothness: f32,
         timer: Timer,
     },
 }
@@ -205,6 +207,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity,
                 radius,
                 rotation,
+                smoothness,
                 ..
             } => Self::Circle {
                 center: *center,
@@ -212,6 +215,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity: *irregularity,
                 radius: *radius,
                 rotation: *rotation,
+                smoothness: *smoothness,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
             layer::MaskSource::Square {
@@ -220,6 +224,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity,
                 rotation,
                 size,
+                smoothness,
                 ..
             } => Self::Square {
                 center: *center,
@@ -227,6 +232,7 @@ impl From<&layer::MaskSource> for MaskSourceUi {
                 irregularity: *irregularity,
                 rotation: *rotation,
                 size: *size,
+                smoothness: *smoothness,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
         }
@@ -361,6 +367,7 @@ fn update_mask_ui_system(
                     irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
+                    smoothness: original_smoothness,
                     ..
                 },
                 &mut MaskSourceUi::Circle {
@@ -369,6 +376,7 @@ fn update_mask_ui_system(
                     ref irregularity,
                     ref radius,
                     ref rotation,
+                    ref smoothness,
                     ref mut timer,
                 },
             ) => {
@@ -433,6 +441,17 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
+                    if timer.just_finished()
+                        && !approx_eq(*original_smoothness, *smoothness, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_smoothness(
+                                mask.id(),
+                                *original_smoothness,
+                                *smoothness,
+                            ),
+                        ));
+                    }
                 }
             }
             (layer::MaskSource::Circle { .. }, _) => unreachable!(),
@@ -443,6 +462,7 @@ fn update_mask_ui_system(
                     irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
+                    smoothness: original_smoothness,
                     ..
                 },
                 &mut MaskSourceUi::Square {
@@ -451,6 +471,7 @@ fn update_mask_ui_system(
                     ref irregularity,
                     ref rotation,
                     ref size,
+                    ref smoothness,
                     ref mut timer,
                 },
             ) => {
@@ -516,6 +537,17 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
+                    if timer.just_finished()
+                        && !approx_eq(*original_smoothness, *smoothness, ONE_IN_TEN_THOUSAND)
+                    {
+                        commands.queue(undo::PushAction::from(
+                            layer::UpdateMaskSourceAction::update_smoothness(
+                                mask.id(),
+                                *original_smoothness,
+                                *smoothness,
+                            ),
+                        ));
+                    }
                 }
             }
             (layer::MaskSource::Square { .. }, _) => unreachable!(),
@@ -558,6 +590,7 @@ fn reset_mask_ui_system(
                     irregularity: original_irregularity,
                     radius: original_radius,
                     rotation: original_rotation,
+                    smoothness: original_smoothness,
                     ..
                 },
                 MaskSourceUi::Circle {
@@ -566,6 +599,7 @@ fn reset_mask_ui_system(
                     irregularity,
                     radius,
                     rotation,
+                    smoothness,
                     timer,
                 },
             ) => {
@@ -574,6 +608,7 @@ fn reset_mask_ui_system(
                 *irregularity = *original_irregularity;
                 *radius = *original_radius;
                 *rotation = *original_rotation;
+                *smoothness = *original_smoothness;
                 timer.pause();
             }
             (layer::MaskSource::Circle { .. }, _) => unreachable!(),
@@ -584,6 +619,7 @@ fn reset_mask_ui_system(
                     irregularity: original_irregularity,
                     rotation: original_rotation,
                     size: original_size,
+                    smoothness: original_smoothness,
                     ..
                 },
                 MaskSourceUi::Square {
@@ -592,6 +628,7 @@ fn reset_mask_ui_system(
                     irregularity,
                     rotation,
                     size,
+                    smoothness,
                     timer,
                 },
             ) => {
@@ -600,6 +637,7 @@ fn reset_mask_ui_system(
                 *irregularity = *original_irregularity;
                 *rotation = *original_rotation;
                 *size = *original_size;
+                *smoothness = *original_smoothness;
                 timer.pause();
             }
             (layer::MaskSource::Square { .. }, _) => unreachable!(),
@@ -953,6 +991,7 @@ fn draw_ui_for_mask(
                 ref mut irregularity,
                 ref mut radius,
                 ref mut rotation,
+                ref mut smoothness,
                 ref mut timer,
             } => {
                 ui.horizontal(|ui| {
@@ -992,6 +1031,19 @@ fn draw_ui_for_mask(
                     }
                 });
                 ui.horizontal(|ui| {
+                    ui.label("Smoothness:");
+                    if let Some(new_smoothness) = draw_ui_editable_f32(
+                        Some(ZERO_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *smoothness,
+                    ) {
+                        *smoothness = new_smoothness;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
                     ui.label("Rotation:");
                     if let Some(new_rotation) = draw_ui_editable_f32(
                         Some(ZERO_TO_ONE),
@@ -1024,6 +1076,7 @@ fn draw_ui_for_mask(
                 ref mut irregularity,
                 ref mut rotation,
                 ref mut size,
+                ref mut smoothness,
                 ref mut timer,
             } => {
                 ui.horizontal(|ui| {
@@ -1058,6 +1111,19 @@ fn draw_ui_for_mask(
                         *falloff_radius,
                     ) {
                         *falloff_radius = new_falloff_radius;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Smoothness:");
+                    if let Some(new_smoothness) = draw_ui_editable_f32(
+                        Some(ZERO_TO_ONE),
+                        Some(ZERO_TO_ONE_INCREMENT),
+                        ui,
+                        *smoothness,
+                    ) {
+                        *smoothness = new_smoothness;
                         timer.unpause();
                         timer.reset();
                     }
