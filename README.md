@@ -7,6 +7,8 @@
 
 A terrain generation toolkit.
 
+![Demo](https://github.com/muhuk/yer/blob/master/doc/img/demo.gif)
+
 ## Project Status
 
 This project is in very early stages of development.  Expect missing features,
