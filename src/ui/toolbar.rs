@@ -69,7 +69,7 @@ fn draw_toolbar_button(
     );
     let uv_max = uv_min + egui::Vec2::splat(SPRITE_SIZE);
     let widget = egui::widgets::Button::image(
-        egui::Image::new(egui::load::SizedTexture::new(theme.icon_atlas, ICON_SIZE))
+        egui::Image::from_texture(egui::load::SizedTexture::new(theme.icon_atlas, ICON_SIZE))
             .tint(colors.fg_color.to_color32())
             .uv(egui::Rect::from_min_max(uv_min, uv_max)),
     );
