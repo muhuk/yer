@@ -35,7 +35,12 @@ impl Plugin for UiBevyExtPlugin {
             .init_resource::<EguiTheme>()
             .add_systems(
                 Update,
-                update_egui_theme_system.after(EguiPreUpdateSet::InitContexts),
+                (
+                    update_egui_theme_system
+                        .run_if(resource_exists_and_changed::<theme::Theme>)
+                        .after(EguiPreUpdateSet::InitContexts),
+                    premultiply_alpha_for_images_system.run_if(on_message::<AssetEvent<Image>>),
+                ),
             );
     }
 }
@@ -49,6 +54,13 @@ pub struct EguiTheme {
     pub icon_atlas: egui::TextureId,
 }
 
+impl EguiTheme {
+    fn set_icon_atlas(&mut self, egui_user_textures: &mut EguiUserTextures, handle: Handle<Image>) {
+        let texture_id = egui_user_textures.add_image(EguiTextureHandle::Strong(handle));
+        self.icon_atlas = texture_id;
+    }
+}
+
 impl FromWorld for EguiTheme {
     fn from_world(world: &mut World) -> Self {
         // FIXME: Make icon_atlas updateable.
@@ -56,6 +68,10 @@ impl FromWorld for EguiTheme {
         // This is currently just taking the icon atlas loaded
         // on startup and does not update if the Theme changes.
         // See also [update_egui_theme_system].
+        //
+        // Also this works purely because by this resource gets
+        // instantiated after Theme resource.  Ideally it should
+        // be tracking changes on Theme anyway.
         let icon_atlas_handle: Handle<Image> = world.resource::<theme::Theme>().icon_atlas.clone();
         let icon_atlas_texture_id = world
             .resource_mut::<EguiUserTextures>()
@@ -73,10 +89,6 @@ fn update_egui_theme_system(
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
 ) -> Result<(), BevyError> {
-    if !theme.is_changed() {
-        return Ok(());
-    }
-
     const EGUI_THEME: egui::Theme = egui::Theme::Dark;
     if let Some(colors) = theme_colors.get(&theme.colors) {
         debug!("Updating theme.");
@@ -147,6 +159,26 @@ fn update_egui_theme_system(
     Ok(())
 }
 
+fn premultiply_alpha_for_images_system(
+    mut messages: MessageReader<AssetEvent<Image>>,
+    mut egui_theme: ResMut<EguiTheme>,
+    mut egui_user_textures: ResMut<EguiUserTextures>,
+    theme: Res<theme::Theme>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    for asset_event in messages.read() {
+        if let AssetEvent::LoadedWithDependencies { id } = asset_event {
+            if *id == theme.icon_atlas.id() {
+                info!("Premultiplying icon atlas image.");
+                let mut image = images.get(*id).expect("should have loaded image").clone();
+                premultiply_alpha(&mut image);
+                let handle = images.add(image);
+                egui_theme.set_icon_atlas(egui_user_textures.as_mut(), handle);
+            }
+        }
+    }
+}
+
 // LIB
 
 pub trait ToColor32 {
@@ -178,5 +210,23 @@ pub fn draw_ui_editable_f32(
         Some(value_edited)
     } else {
         None
+    }
+}
+
+pub fn premultiply_alpha(image: &mut Image) {
+    for x in 0..image.width() {
+        for y in 0..image.height() {
+            let mut color = image
+                .get_color_at(x, y)
+                .expect("should have existing pixel")
+                .to_linear();
+            color.red *= color.alpha;
+            color.green *= color.alpha;
+            color.blue *= color.alpha;
+
+            image
+                .set_color_at(x, y, Color::LinearRgba(color))
+                .expect("should set color");
+        }
     }
 }
