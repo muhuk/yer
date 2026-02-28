@@ -16,9 +16,11 @@
 
 use std::fmt::{self, Display};
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 
 use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy::prelude::*;
+use image::{DynamicImage, ImageFormat};
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
@@ -28,6 +30,13 @@ pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
 
 const DEFAULT_LAYER_NAME: &str = "<unnamed>";
+
+// We need to store ImageFormat because DynamicImage is not
+// serializable.  So we convert the DynamicImage to an image file and
+// serialize its bytes instead.
+//
+// See serde_image module.
+type Image = (ImageFormat, DynamicImage);
 
 // PLUGIN
 
@@ -93,10 +102,10 @@ impl Default for LayerBundle {
 
 // COMPONENTS
 
-#[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
+#[derive(Component, Clone, Debug, Deserialize, PartialEq, Reflect, Serialize)]
 #[require(Layer)]
 pub enum HeightMap {
-    Bitmap,
+    Bitmap(Bitmap),
     Constant(f32),
 }
 
@@ -109,7 +118,7 @@ impl Default for HeightMap {
 impl Sampler2D for HeightMap {
     fn sample(&self, _position: Vec2, _base: &Sample) -> Sample {
         match self {
-            Self::Bitmap => todo!(),
+            Self::Bitmap { .. } => todo!(),
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
     }
@@ -175,6 +184,122 @@ pub struct NeedsLayerOrderNormalization;
 
 // LIB
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Reflect, Serialize)]
+pub enum Bitmap {
+    Embedded {
+        #[reflect(ignore)]
+        #[reflect(default = "default_image")]
+        #[serde(with = "serde_image")]
+        image: Image,
+        original_path: PathBuf,
+    },
+    Linked {
+        #[reflect(ignore)]
+        #[serde(skip)]
+        image: Option<Image>,
+        path: PathBuf,
+    },
+}
+
 fn layer_order_on_remove_hook(mut world: DeferredWorld, HookContext { .. }: HookContext) {
     world.commands().spawn(NeedsLayerOrderNormalization);
+}
+
+fn default_image() -> Image {
+    (ImageFormat::Png, DynamicImage::default())
+}
+
+mod serde_image {
+    use std::io::{BufReader, BufWriter, Cursor};
+
+    use image::ImageReader;
+    use serde::{
+        de::{self, Visitor},
+        ser, Deserializer, Serializer,
+    };
+
+    use super::Image;
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Image, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(ImageVisitor)
+    }
+
+    pub fn serialize<S>(image: &Image, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let (image_format, dynamic_image) = image;
+        let mut data: Vec<u8> = vec![];
+        let writer = BufWriter::new(Cursor::new(&mut data));
+        dynamic_image
+            .write_to(writer, *image_format)
+            .map_err(ser::Error::custom)?;
+        serializer.serialize_bytes(&data[..])
+    }
+
+    struct ImageVisitor;
+
+    impl<'de> Visitor<'de> for ImageVisitor {
+        type Value = Image;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(formatter, "bytes content of an image file")
+        }
+
+        fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            let reader = BufReader::new(Cursor::new(v));
+
+            let image_reader = ImageReader::new(reader)
+                .with_guessed_format()
+                .map_err(de::Error::custom)?;
+            let image_format = image_reader
+                .format()
+                .ok_or("Cannot determine image format.")
+                .map_err(de::Error::custom)?;
+            let image = image_reader.decode().map_err(de::Error::custom)?;
+            Ok((image_format, image))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use image::ImageReader;
+    use rmp_serde;
+
+    use super::*;
+
+    #[test]
+    fn bitmap_serialization_roundtrip() {
+        const TEST_FILE_PATH: &str = "test_assets/soft_circle_mask_grayscale.png";
+
+        let file_path: PathBuf = {
+            let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            file_path.push(TEST_FILE_PATH);
+            file_path
+        };
+
+        let (image_format, dynamic_image) = {
+            let reader = ImageReader::open(&file_path).unwrap();
+            (reader.format().unwrap(), reader.decode().unwrap())
+        };
+
+        let bitmap = Bitmap::Embedded {
+            image: (image_format, dynamic_image),
+            original_path: file_path,
+        };
+
+        let serialized = rmp_serde::to_vec(&bitmap).unwrap();
+        let deserialized: Bitmap = rmp_serde::from_slice(serialized.as_slice()).unwrap();
+
+        assert_eq!(deserialized, bitmap);
+    }
 }

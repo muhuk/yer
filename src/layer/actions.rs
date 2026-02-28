@@ -163,7 +163,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .iter_mut(world)
             .find(|(layer, _)| layer.id() == self.layer_id)
             .map(|(_, mut height_map)| match *height_map {
-                HeightMap::Bitmap => todo!(),
+                HeightMap::Bitmap { .. } => todo!(),
                 HeightMap::Constant(ref mut height) => {
                     debug_assert!(approx_eq(
                         *height,

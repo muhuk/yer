@@ -140,7 +140,7 @@ pub(super) enum HeightMapUi {
 impl From<&layer::HeightMap> for HeightMapUi {
     fn from(value: &layer::HeightMap) -> Self {
         match value {
-            layer::HeightMap::Bitmap => todo!(),
+            layer::HeightMap::Bitmap { .. } => todo!(),
             layer::HeightMap::Constant(height) => Self::Constant {
                 height: *height,
                 timer: Timer::new(LATENCY, TimerMode::Once),
@@ -316,7 +316,7 @@ fn update_height_map_ui_system(
                 if !timer.is_finished() {
                     timer.tick(time.delta());
                     match height_map {
-                        layer::HeightMap::Bitmap => todo!(),
+                        layer::HeightMap::Bitmap { .. } => todo!(),
                         layer::HeightMap::Constant(original_height) => {
                             if timer.just_finished()
                                 && !approx_eq(*original_height, height, ONE_IN_TEN_THOUSAND)
@@ -568,7 +568,7 @@ fn reset_height_map_ui_system(
 ) {
     for (height_map, mut height_map_ui) in layers.iter_mut() {
         match height_map {
-            layer::HeightMap::Bitmap => todo!(),
+            layer::HeightMap::Bitmap { .. } => todo!(),
             layer::HeightMap::Constant(original_height) => {
                 let HeightMapUi::Constant {
                     ref mut height,
