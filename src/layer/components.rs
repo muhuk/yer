@@ -96,6 +96,7 @@ impl Default for LayerBundle {
 #[derive(Component, Clone, Debug, Deserialize, Reflect, Serialize)]
 #[require(Layer)]
 pub enum HeightMap {
+    Bitmap,
     Constant(f32),
 }
 
@@ -108,6 +109,7 @@ impl Default for HeightMap {
 impl Sampler2D for HeightMap {
     fn sample(&self, _position: Vec2, _base: &Sample) -> Sample {
         match self {
+            Self::Bitmap => todo!(),
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
     }
