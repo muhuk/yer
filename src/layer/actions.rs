@@ -17,13 +17,11 @@
 use bevy::prelude::*;
 
 use crate::id::LayerId;
-use crate::layer::mask::{MaskOrder, MASK_SPACING};
 use crate::math::approx_eq;
 use crate::undo::{Action, ReflectAction};
 
-// FIXME: Rename components module.
 use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
-use super::MaskBundle;
+use super::mask::{MaskBundle, MaskOrder, MASK_SPACING};
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]

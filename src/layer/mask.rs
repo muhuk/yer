@@ -23,10 +23,10 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::id::{LayerId, MaskId};
-// FIXME: Circular dependency
-use crate::layer::Layer;
 use crate::math::clamp;
 use crate::undo::{Action, ReflectAction};
+
+use super::components::Layer;
 
 pub const MASK_SPACING: u32 = 100;
 
