@@ -17,6 +17,8 @@
 use std::f32;
 
 use bevy::math::Vec2;
+use bevy::reflect::Reflect;
+use serde::{Deserialize, Serialize};
 
 pub const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
 
@@ -117,6 +119,12 @@ pub fn clamp(x: f32, min: f32, max: f32) -> f32 {
     debug_assert!(min < max);
     // Poetry
     max.min(min.max(x))
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
+pub struct Transform2D {
+    translation: Vec2,
+    rotation: f32,
 }
 
 #[cfg(test)]

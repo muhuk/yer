@@ -24,7 +24,7 @@ use image::{DynamicImage, ImageFormat};
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
-use crate::math::{Alpha, Sample, Sampler2D};
+use crate::math::{Alpha, Sample, Sampler2D, Transform2D};
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
@@ -105,7 +105,11 @@ impl Default for LayerBundle {
 #[derive(Component, Clone, Debug, Deserialize, PartialEq, Reflect, Serialize)]
 #[require(Layer)]
 pub enum HeightMap {
-    Bitmap(Bitmap),
+    Bitmap {
+        bitmap: Bitmap,
+        transform: Transform2D,
+        repeat_mode: BitmapRepeatMode,
+    },
     Constant(f32),
 }
 
@@ -199,6 +203,13 @@ pub enum Bitmap {
         image: Option<Image>,
         path: PathBuf,
     },
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
+pub enum BitmapRepeatMode {
+    Extend,
+    #[default]
+    Repeat,
 }
 
 fn layer_order_on_remove_hook(mut world: DeferredWorld, HookContext { .. }: HookContext) {
