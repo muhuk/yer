@@ -127,9 +127,39 @@ pub struct Transform2D {
     rotation: f32,
 }
 
+impl Transform2D {
+    pub fn apply(&self, position: Vec2) -> Vec2 {
+        Vec2::from_angle(self.rotation).rotate(position + self.translation)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::f32::consts::TAU;
+
     use super::*;
+
+    fn vec2_approx_eq(a: Vec2, b: Vec2, ratio: f32) -> bool {
+        approx_eq(a.x, b.x, ratio) && approx_eq(a.y, b.y, ratio)
+    }
+
+    #[test]
+    fn apply_transform_2d() {
+        let transform = Transform2D {
+            translation: Vec2::new(2.0, 5.0),
+            rotation: TAU * 0.25, // 90 degrees
+        };
+        assert!(vec2_approx_eq(
+            transform.apply(Vec2::ZERO),
+            Vec2::new(-5.0, 2.0),
+            ONE_IN_TEN_THOUSAND
+        ));
+        assert!(vec2_approx_eq(
+            transform.apply(Vec2::new(3.0, 0.0)),
+            Vec2::new(-5.0, 5.0),
+            ONE_IN_TEN_THOUSAND
+        ));
+    }
 
     #[test]
     fn mix_samples() {

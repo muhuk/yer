@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use bevy::ecs::{lifecycle::HookContext, world::DeferredWorld};
 use bevy::prelude::*;
-use image::{DynamicImage, ImageFormat};
+use image::{DynamicImage, GenericImageView, ImageFormat, Pixel};
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
@@ -120,9 +120,13 @@ impl Default for HeightMap {
 }
 
 impl Sampler2D for HeightMap {
-    fn sample(&self, _position: Vec2, _base: &Sample) -> Sample {
+    fn sample(&self, position: Vec2, _base: &Sample) -> Sample {
         match self {
-            Self::Bitmap { .. } => todo!(),
+            Self::Bitmap {
+                bitmap,
+                transform,
+                repeat_mode,
+            } => bitmap.sample(transform.apply(position), *repeat_mode),
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
     }
@@ -205,9 +209,52 @@ pub enum Bitmap {
     },
 }
 
+impl Bitmap {
+    pub fn sample(&self, position: Vec2, repeat_mode: BitmapRepeatMode) -> Sample {
+        // FIXME: Apply non-uniform scaling.
+
+        let size = self.size();
+        let image_position = match repeat_mode {
+            BitmapRepeatMode::Extend => Vec2::new(
+                position.x.min(size.x).max(0.0),
+                position.y.min(size.y).max(0.0),
+            ),
+            BitmapRepeatMode::Fade => unimplemented!(),
+            BitmapRepeatMode::Repeat => Vec2::new(position.x % size.x, position.y % size.y),
+        };
+
+        // TODO: We need a setting for which channel to sample in Bitmap.
+        //       Currently we are assuming it is grayscale.
+        let value: f32 = self
+            .image()
+            .1
+            .get_pixel(
+                image_position.x.round() as u32,
+                image_position.y.round() as u32,
+            )
+            .to_luma()
+            .0[0]
+            .into();
+        Sample::new(value, Alpha::Opaque)
+    }
+
+    fn image(&self) -> &Image {
+        match self {
+            Self::Embedded { image, .. } => &image,
+            Self::Linked { image, .. } => image.as_ref().unwrap(),
+        }
+    }
+
+    fn size(&self) -> Vec2 {
+        let (width, height) = self.image().1.dimensions();
+        Vec2::new(width as f32, height as f32)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
 pub enum BitmapRepeatMode {
     Extend,
+    Fade,
     #[default]
     Repeat,
 }
