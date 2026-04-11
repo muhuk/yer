@@ -200,9 +200,9 @@ impl PreviewGrid2D {
         match mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION) {
             Some(VertexAttributeValues::Float32x3(positions)) => {
                 for (idx, p) in positions.iter_mut().enumerate() {
-                    // Preview mesh is Z-up and Y is inverted
+                    // Preview mesh is Z-up.
                     p[0] = self.samples[idx].0.x;
-                    p[1] = self.samples[idx].0.y * -1.0;
+                    p[1] = self.samples[idx].0.y;
                     p[2] = self.samples[idx].1;
                 }
             }
@@ -563,14 +563,17 @@ async fn sample_layers(
         .unwrap_or(true));
 
     // Number of vertices on one axis.
+    //
+    // We are flipping Y here not to change the coordinate system,
+    // but to get the right winding for the PlaneMesh.
     let k: u32 = 2u32.pow(subdivisions.get().into()) + 1;
     let start: Vec2 = {
         let hs: f32 = preview_region.size / 2.0;
-        preview_region.center - Vec2::new(hs, hs)
+        preview_region.center - Vec2::new(hs, -hs)
     };
     let gap: Vec2 = {
         let g: f32 = preview_region.size / (k - 1) as f32;
-        Vec2::new(g, g)
+        Vec2::new(g, -g)
     };
 
     let mut samples: Vec<(Vec2, f32)> = vec![];

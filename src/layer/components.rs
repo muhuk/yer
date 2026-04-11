@@ -220,17 +220,20 @@ impl Bitmap {
     pub fn sample(&self, position: Vec2, repeat_mode: BitmapRepeatMode) -> f32 {
         // FIXME: Apply non-uniform scaling.
 
-        let image_position = repeat_mode.apply(position, self.size());
+        let repeat_applied_position = repeat_mode.apply(position, self.size());
+        // Flip Y to convert from Z-up world coordinates to Y-down image
+        // coordinates.
+        let image_position = UVec2::new(
+            repeat_applied_position.x.round() as u32,
+            self.size().y - 1 - repeat_applied_position.y.round() as u32,
+        );
 
         // TODO: We need a setting for which channel to sample in Bitmap.
         //       Currently we are assuming it is grayscale.
         f32::from(
             self.image()
                 .1
-                .get_pixel(
-                    image_position.x.round() as u32,
-                    image_position.y.round() as u32,
-                )
+                .get_pixel(image_position.x, image_position.y)
                 .to_luma()
                 .0[0],
         ) * Self::NORMALIZE_HEIGHT
