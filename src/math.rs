@@ -22,6 +22,15 @@ use serde::{Deserialize, Serialize};
 
 pub const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
 
+// We cannot just return a single f32.
+//
+// Minimum; we need an alpha value.
+//
+// Design this in a way we can return additional channels.
+pub trait Sampler2D: Send + Sync {
+    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Alpha {
     Opaque,
@@ -99,15 +108,6 @@ impl Default for Sample {
             alpha: Alpha::Opaque,
         }
     }
-}
-
-// We cannot just return a single f32.
-//
-// Minimum; we need an alpha value.
-//
-// Design this in a way we can return additional channels.
-pub trait Sampler2D: Send + Sync {
-    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample;
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
