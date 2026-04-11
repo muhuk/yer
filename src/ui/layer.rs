@@ -23,7 +23,7 @@ use bevy_egui::egui;
 
 use crate::id::{LayerId, MaskId};
 use crate::layer;
-use crate::math::{approx_eq, ONE_IN_TEN_THOUSAND};
+use crate::math::ApproxEq;
 use crate::theme;
 use crate::undo;
 
@@ -326,9 +326,7 @@ fn update_height_map_ui_system(
                             unreachable!();
                         }
                         layer::HeightMap::Constant(original_height) => {
-                            if timer.just_finished()
-                                && !approx_eq(*original_height, height, ONE_IN_TEN_THOUSAND)
-                            {
+                            if timer.just_finished() && !original_height.approx_eq(height, None) {
                                 commands.queue(undo::PushAction::from(
                                     layer::HeightMapConstantUpdateHeightAction::new(
                                         layer.id(),
@@ -359,9 +357,7 @@ fn update_mask_ui_system(
     for (mask, mask_source, mut mask_ui, mut mask_source_ui) in mask_query.iter_mut() {
         if !mask_ui.timer.is_finished() {
             mask_ui.timer.tick(time.delta());
-            if mask_ui.timer.just_finished()
-                && !approx_eq(mask.strength, mask_ui.strength, ONE_IN_TEN_THOUSAND)
-            {
+            if mask_ui.timer.just_finished() && !mask.strength.approx_eq(mask_ui.strength, None) {
                 commands.queue(undo::PushAction::from(
                     layer::UpdateMaskAction::update_strength(
                         mask.id(),
@@ -396,7 +392,7 @@ fn update_mask_ui_system(
                 if !timer.is_finished() {
                     timer.tick(time.delta());
                     if timer.just_finished()
-                        && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
+                        && !original_center.distance(*center).approx_eq(0.0, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_center(
@@ -407,11 +403,7 @@ fn update_mask_ui_system(
                         ));
                     }
                     if timer.just_finished()
-                        && !approx_eq(
-                            *original_falloff_radius,
-                            *falloff_radius,
-                            ONE_IN_TEN_THOUSAND,
-                        )
+                        && !original_falloff_radius.approx_eq(*falloff_radius, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_falloff_radius(
@@ -422,7 +414,7 @@ fn update_mask_ui_system(
                         ));
                     }
                     if timer.just_finished()
-                        && !approx_eq(*original_irregularity, *irregularity, ONE_IN_TEN_THOUSAND)
+                        && !original_irregularity.approx_eq(*irregularity, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_irregularity(
@@ -432,9 +424,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_radius, *radius, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_radius.approx_eq(*radius, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_radius(
                                 mask.id(),
@@ -443,9 +433,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_rotation, *rotation, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_rotation.approx_eq(*rotation, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_rotation(
                                 mask.id(),
@@ -454,9 +442,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_smoothness, *smoothness, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_smoothness.approx_eq(*smoothness, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_smoothness(
                                 mask.id(),
@@ -492,7 +478,7 @@ fn update_mask_ui_system(
                     timer.tick(time.delta());
 
                     if timer.just_finished()
-                        && !approx_eq(original_center.distance(*center), 0.0, ONE_IN_TEN_THOUSAND)
+                        && !original_center.distance(*center).approx_eq(0.0, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_center(
@@ -503,11 +489,7 @@ fn update_mask_ui_system(
                         ));
                     }
                     if timer.just_finished()
-                        && !approx_eq(
-                            *original_falloff_radius,
-                            *falloff_radius,
-                            ONE_IN_TEN_THOUSAND,
-                        )
+                        && !original_falloff_radius.approx_eq(*falloff_radius, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_falloff_radius(
@@ -518,7 +500,7 @@ fn update_mask_ui_system(
                         ));
                     }
                     if timer.just_finished()
-                        && !approx_eq(*original_irregularity, *irregularity, ONE_IN_TEN_THOUSAND)
+                        && !original_irregularity.approx_eq(*irregularity, None)
                     {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_irregularity(
@@ -528,9 +510,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_size, *size, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_size.approx_eq(*size, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_size(
                                 mask.id(),
@@ -539,9 +519,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_rotation, *rotation, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_rotation.approx_eq(*rotation, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_rotation(
                                 mask.id(),
@@ -550,9 +528,7 @@ fn update_mask_ui_system(
                             ),
                         ));
                     }
-                    if timer.just_finished()
-                        && !approx_eq(*original_smoothness, *smoothness, ONE_IN_TEN_THOUSAND)
-                    {
+                    if timer.just_finished() && !original_smoothness.approx_eq(*smoothness, None) {
                         commands.queue(undo::PushAction::from(
                             layer::UpdateMaskSourceAction::update_smoothness(
                                 mask.id(),

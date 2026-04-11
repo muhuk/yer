@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 
 use crate::id::LayerId;
-use crate::math::approx_eq;
+use crate::math::ApproxEq;
 use crate::undo::{Action, ReflectAction};
 
 use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
@@ -165,10 +165,9 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .map(|(_, mut height_map)| match *height_map {
                 HeightMap::Bitmap { .. } => todo!(),
                 HeightMap::Constant(ref mut height) => {
-                    debug_assert!(approx_eq(
-                        *height,
+                    debug_assert!(height.approx_eq(
                         self.old_height,
-                        0.001 // 0.1%
+                        Some(0.001) // 0.1%
                     ));
                     *height = self.new_height;
                 }

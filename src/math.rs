@@ -20,7 +20,37 @@ use bevy::math::{Rot2, Vec2};
 use bevy::reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
-pub const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
+const ONE_IN_TEN_THOUSAND: f32 = 0.0001f32;
+
+pub trait ApproxEq: Sized {
+    type Ratio;
+
+    const DEFAULT_RATIO: Self::Ratio;
+
+    fn approx_eq(&self, other: Self, ratio: Option<Self::Ratio>) -> bool;
+}
+
+impl ApproxEq for f32 {
+    type Ratio = f32;
+
+    const DEFAULT_RATIO: Self::Ratio = ONE_IN_TEN_THOUSAND;
+
+    fn approx_eq(&self, other: Self, ratio: Option<f32>) -> bool {
+        let ratio = ratio.unwrap_or(Self::DEFAULT_RATIO);
+        let max_difference = f32::max(f32::max(self.abs(), other.abs()) * ratio, f32::EPSILON);
+        (self - other).abs() < max_difference
+    }
+}
+
+impl ApproxEq for Vec2 {
+    type Ratio = f32;
+
+    const DEFAULT_RATIO: Self::Ratio = ONE_IN_TEN_THOUSAND;
+
+    fn approx_eq(&self, other: Self, ratio: Option<Self::Ratio>) -> bool {
+        self.x.approx_eq(other.x, ratio) && self.y.approx_eq(other.y, ratio)
+    }
+}
 
 // We cannot just return a single f32.
 //
@@ -54,7 +84,7 @@ impl Alpha {
             factor >= 0.0 && factor <= 1.0,
             "factor must be between 0.0 and 1.0."
         );
-        if approx_eq(factor, 1.0, ONE_IN_TEN_THOUSAND) {
+        if factor.approx_eq(1.0, None) {
             Self::Opaque
         } else {
             Self::Transparent(factor)
@@ -133,19 +163,10 @@ impl Transform2D {
     }
 }
 
-pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
-    let max_difference = f32::max(f32::max(a.abs(), b.abs()) * ratio, f32::EPSILON);
-    (a - b).abs() < max_difference
-}
-
 pub fn clamp(x: f32, min: f32, max: f32) -> f32 {
     debug_assert!(min < max);
     // Poetry
     max.min(min.max(x))
-}
-
-pub fn vec2_approx_eq(a: Vec2, b: Vec2, ratio: f32) -> bool {
-    approx_eq(a.x, b.x, ratio) && approx_eq(a.y, b.y, ratio)
 }
 
 #[cfg(test)]
@@ -158,16 +179,12 @@ mod tests {
             translation: Vec2::new(2.0, 5.0),
             rotation: 90.0, // degrees
         };
-        assert!(vec2_approx_eq(
-            transform.apply(Vec2::X),
-            Vec2::new(2.0, 6.0),
-            ONE_IN_TEN_THOUSAND
-        ));
-        assert!(vec2_approx_eq(
-            transform.apply(Vec2::NEG_Y),
-            Vec2::new(3.0, 5.0),
-            ONE_IN_TEN_THOUSAND
-        ));
+        assert!(transform
+            .apply(Vec2::X)
+            .approx_eq(Vec2::new(-5.0, 1.0), None));
+        assert!(transform
+            .apply(Vec2::NEG_Y)
+            .approx_eq(Vec2::new(-6.0, 2.0), None));
     }
 
     #[test]
@@ -194,14 +211,14 @@ mod tests {
         {
             let mut mixed = a.clone();
             mixed.mix_in_place(&b);
-            assert!(approx_eq(mixed.height(), b.height(), ONE_IN_TEN_THOUSAND));
+            assert!(mixed.height().approx_eq(b.height(), None));
             assert!(mixed.alpha().is_opaque());
         }
 
         {
             let mut mixed = c.clone();
             mixed.mix_in_place(&b);
-            assert!(approx_eq(mixed.height(), b.height(), ONE_IN_TEN_THOUSAND));
+            assert!(mixed.height().approx_eq(b.height(), None));
             assert!(mixed.alpha().is_opaque());
         }
 
@@ -210,11 +227,9 @@ mod tests {
         {
             let mut mixed = a.clone();
             mixed.mix_in_place(&c);
-            assert!(approx_eq(
-                mixed.height(),
-                (a.height() + c.height()) / 2.0,
-                ONE_IN_TEN_THOUSAND
-            ));
+            assert!(mixed
+                .height()
+                .approx_eq((a.height() + c.height()) / 2.0, None));
             assert!(mixed.alpha().is_opaque());
         }
 
@@ -223,7 +238,7 @@ mod tests {
         {
             let mut mixed = d.clone();
             mixed.mix_in_place(&c);
-            assert!(approx_eq(mixed.height(), 6.15, ONE_IN_TEN_THOUSAND));
+            assert!(mixed.height().approx_eq(6.15, None));
             assert_eq!(mixed.alpha(), Alpha::from_factor(0.7));
         }
     }

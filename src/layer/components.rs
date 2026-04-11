@@ -24,7 +24,7 @@ use image::{DynamicImage, GenericImageView, ImageFormat, Pixel};
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
-use crate::math::{approx_eq, Alpha, Sample, Sampler2D, Transform2D, ONE_IN_TEN_THOUSAND};
+use crate::math::{Alpha, ApproxEq, Sample, Sampler2D, Transform2D};
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
@@ -274,7 +274,7 @@ impl BitmapRepeatMode {
 
     fn normalize(x: f32, boundary: f32) -> f32 {
         let mut n = x;
-        while n > boundary || approx_eq(n, boundary, ONE_IN_TEN_THOUSAND) {
+        while n > boundary || n.approx_eq(boundary, None) {
             n -= boundary;
         }
         while n < 0.0 {
@@ -358,7 +358,7 @@ mod tests {
     use image::ImageReader;
     use rmp_serde;
 
-    use crate::math::{vec2_approx_eq, ONE_IN_TEN_THOUSAND};
+    use crate::math::ApproxEq;
 
     use super::*;
 
@@ -411,11 +411,7 @@ mod tests {
 
         for (input, output) in CASES.iter() {
             eprintln!("{:?}", mode.apply(*input, SIZE));
-            assert!(vec2_approx_eq(
-                mode.apply(*input, SIZE),
-                *output,
-                ONE_IN_TEN_THOUSAND
-            ));
+            assert!(mode.apply(*input, SIZE).approx_eq(*output, None));
         }
     }
 }

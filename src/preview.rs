@@ -616,7 +616,7 @@ mod tests {
 
     use super::*;
     use crate::layer;
-    use crate::math::approx_eq;
+    use crate::math::ApproxEq;
 
     #[test]
     fn compute_preview_returns_a_result_and_gets_finished() {
@@ -726,16 +726,15 @@ mod tests {
             Some(&previous_preview),
         ));
         assert_eq!(preview.samples[0].1, PREVIOUS_HEIGHT);
-        assert!(approx_eq(
-            preview.samples[preview.samples.len() - 1].1,
+        assert!(preview.samples[preview.samples.len() - 1].1.approx_eq(
             PREVIOUS_HEIGHT,
-            0.001 // 0.1%
+            Some(0.001) // 0.1%
         ));
         assert_eq!(
             preview
                 .samples
                 .iter()
-                .filter(|(_, h)| approx_eq(*h, PREVIOUS_HEIGHT, 0.001))
+                .filter(|(_, h)| h.approx_eq(PREVIOUS_HEIGHT, Some(0.001)))
                 .count(),
             previous_preview.samples.len()
         );
