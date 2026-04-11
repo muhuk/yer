@@ -200,9 +200,9 @@ impl PreviewGrid2D {
         match mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION) {
             Some(VertexAttributeValues::Float32x3(positions)) => {
                 for (idx, p) in positions.iter_mut().enumerate() {
-                    // Preview mesh is Z-up.
+                    // Preview mesh is Z-up and Y is inverted
                     p[0] = self.samples[idx].0.x;
-                    p[1] = self.samples[idx].0.y;
+                    p[1] = self.samples[idx].0.y * -1.0;
                     p[2] = self.samples[idx].1;
                 }
             }
@@ -566,18 +566,16 @@ async fn sample_layers(
     let k: u32 = 2u32.pow(subdivisions.get().into()) + 1;
     let start: Vec2 = {
         let hs: f32 = preview_region.size / 2.0;
-        // Y is inverted.
-        preview_region.center + Vec2::new(-hs, hs)
+        preview_region.center - Vec2::new(hs, hs)
     };
     let gap: Vec2 = {
         let g: f32 = preview_region.size / (k - 1) as f32;
-        Vec2::new(g, -g)
+        Vec2::new(g, g)
     };
 
     let mut samples: Vec<(Vec2, f32)> = vec![];
     for y in 0..k {
         for x in 0..k {
-            // Y is inverted.
             let p = start + Vec2::new(x as f32, y as f32) * gap;
             if previous_preview.is_some() && even(y) && even(x) {
                 if let Some(PreviewGrid2D {

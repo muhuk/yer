@@ -28,7 +28,8 @@ pub use actions::{
     SwitchLayerPositionsAction, UpdateLayerAction,
 };
 pub use components::{
-    HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization, HEIGHT_RANGE,
+    BitmapRepeatMode, HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization,
+    HEIGHT_RANGE,
 };
 pub use mask::{
     CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskCompositionMode, MaskOrder,
@@ -104,6 +105,44 @@ impl Sampler2D for LayerSampler {
 
         sample
     }
+}
+
+// FIXME: Remove this.
+pub fn create_test_bitmap_layer(world: &mut World) {
+    use std::path::PathBuf;
+
+    const TEST_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
+
+    let file_path: PathBuf = {
+        let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        file_path.push(TEST_FILE_PATH);
+        file_path
+    };
+
+    let (image_format, dynamic_image) = {
+        let reader = image::ImageReader::open(&file_path).unwrap();
+        (reader.format().unwrap(), reader.decode().unwrap())
+    };
+
+    let bitmap = components::Bitmap::Embedded {
+        image: (image_format, dynamic_image),
+        original_path: file_path,
+    };
+
+    let layer_order = LayerOrder(100_000);
+
+    let layer_bundle = LayerBundle {
+        name: Name::new("Test Bitmap Layer"),
+        layer: Layer::default(),
+        height_map: HeightMap::Bitmap {
+            // FIXME: Implement loading of image
+            bitmap,
+            transform: crate::math::Transform2D::default(),
+            repeat_mode: BitmapRepeatMode::Extend,
+        },
+    };
+
+    world.spawn((layer_order, layer_bundle));
 }
 
 /// This is intended to be called to create the initial layer only.  It does

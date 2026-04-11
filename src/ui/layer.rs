@@ -134,13 +134,16 @@ impl<'w, 's> Masks<'w, 's> {
 
 #[derive(Component, Debug, Reflect)]
 pub(super) enum HeightMapUi {
+    Bitmap { timer: Timer },
     Constant { height: f32, timer: Timer },
 }
 
 impl From<&layer::HeightMap> for HeightMapUi {
     fn from(value: &layer::HeightMap) -> Self {
         match value {
-            layer::HeightMap::Bitmap { .. } => todo!(),
+            layer::HeightMap::Bitmap { .. } => Self::Bitmap {
+                timer: Timer::new(LATENCY, TimerMode::Once),
+            },
             layer::HeightMap::Constant(height) => Self::Constant {
                 height: *height,
                 timer: Timer::new(LATENCY, TimerMode::Once),
@@ -309,6 +312,9 @@ fn update_height_map_ui_system(
 ) {
     for (layer, height_map, mut height_map_ui) in layers.iter_mut() {
         match *height_map_ui {
+            HeightMapUi::Bitmap { .. } => {
+                warn_once!("FIXME: Bitmap layer UI is not implemented.");
+            }
             HeightMapUi::Constant {
                 height,
                 ref mut timer,
@@ -316,7 +322,9 @@ fn update_height_map_ui_system(
                 if !timer.is_finished() {
                     timer.tick(time.delta());
                     match height_map {
-                        layer::HeightMap::Bitmap { .. } => todo!(),
+                        layer::HeightMap::Bitmap { .. } => {
+                            unreachable!();
+                        }
                         layer::HeightMap::Constant(original_height) => {
                             if timer.just_finished()
                                 && !approx_eq(*original_height, height, ONE_IN_TEN_THOUSAND)
@@ -568,14 +576,20 @@ fn reset_height_map_ui_system(
 ) {
     for (height_map, mut height_map_ui) in layers.iter_mut() {
         match height_map {
-            layer::HeightMap::Bitmap { .. } => todo!(),
+            layer::HeightMap::Bitmap { .. } => {
+                warn_once!("FIXME: Bitmap layer UI is not implemented.");
+            }
             layer::HeightMap::Constant(original_height) => {
-                let HeightMapUi::Constant {
+                if let HeightMapUi::Constant {
                     ref mut height,
                     ref mut timer,
-                } = *height_map_ui;
-                *height = *original_height;
-                timer.pause();
+                } = *height_map_ui
+                {
+                    *height = *original_height;
+                    timer.pause();
+                } else {
+                    unreachable!();
+                }
             }
         }
     }
@@ -801,6 +815,9 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
     ui.horizontal(|ui| {
         ui.label("Height:");
         match height_map_ui {
+            HeightMapUi::Bitmap { timer } => {
+                warn_once!("FIXME: Bitmap layer UI is not implemented.");
+            }
             HeightMapUi::Constant { height, timer } => {
                 ui.with_layout(
                     egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
@@ -829,6 +846,13 @@ pub fn draw_ui_for_layers(
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
+
+        if ui.button("Test").clicked() {
+            info!("Adding bitmap layer.");
+
+            commands.queue(crate::layer::create_test_bitmap_layer);
+        }
+
         if ui.button("New Layer").clicked() {
             let top_layer_id: Option<LayerId> = layers_query
                 .layers
@@ -907,6 +931,9 @@ fn draw_ui_for_layer(
             let actual_height: f32 = ui
                 .vertical_centered_justified(|ui| {
                     match *layer_query_item.height_map_ui {
+                        HeightMapUi::Bitmap { .. } => {
+                            warn_once!("FIXME: Bitmap layer UI is not implemented.");
+                        }
                         HeightMapUi::Constant { .. } => {
                             draw_ui_for_layer_common_top(
                                 commands,

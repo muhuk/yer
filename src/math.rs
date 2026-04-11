@@ -16,7 +16,7 @@
 
 use std::f32;
 
-use bevy::math::Vec2;
+use bevy::math::{Rot2, Vec2};
 use bevy::reflect::Reflect;
 use serde::{Deserialize, Serialize};
 
@@ -110,6 +110,29 @@ pub trait Sampler2D: Send + Sync {
     fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample;
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
+pub struct Transform2D {
+    translation: Vec2,
+    rotation: f32,
+}
+
+impl Transform2D {
+    pub fn apply(&self, position: Vec2) -> Vec2 {
+        //self.translate(self.rotate(position))
+        self.rotate(self.translate(position))
+    }
+
+    #[inline]
+    fn rotate(&self, position: Vec2) -> Vec2 {
+        Rot2::degrees(-self.rotation) * position
+    }
+
+    #[inline]
+    fn translate(&self, position: Vec2) -> Vec2 {
+        position - self.translation
+    }
+}
+
 pub fn approx_eq(a: f32, b: f32, ratio: f32) -> bool {
     let max_difference = f32::max(f32::max(a.abs(), b.abs()) * ratio, f32::EPSILON);
     (a - b).abs() < max_difference
@@ -121,42 +144,28 @@ pub fn clamp(x: f32, min: f32, max: f32) -> f32 {
     max.min(min.max(x))
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
-pub struct Transform2D {
-    translation: Vec2,
-    rotation: f32,
-}
-
-impl Transform2D {
-    pub fn apply(&self, position: Vec2) -> Vec2 {
-        Vec2::from_angle(self.rotation).rotate(position + self.translation)
-    }
+pub fn vec2_approx_eq(a: Vec2, b: Vec2, ratio: f32) -> bool {
+    approx_eq(a.x, b.x, ratio) && approx_eq(a.y, b.y, ratio)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::f32::consts::TAU;
-
     use super::*;
-
-    fn vec2_approx_eq(a: Vec2, b: Vec2, ratio: f32) -> bool {
-        approx_eq(a.x, b.x, ratio) && approx_eq(a.y, b.y, ratio)
-    }
 
     #[test]
     fn apply_transform_2d() {
         let transform = Transform2D {
             translation: Vec2::new(2.0, 5.0),
-            rotation: TAU * 0.25, // 90 degrees
+            rotation: 90.0, // degrees
         };
         assert!(vec2_approx_eq(
-            transform.apply(Vec2::ZERO),
-            Vec2::new(-5.0, 2.0),
+            transform.apply(Vec2::X),
+            Vec2::new(2.0, 6.0),
             ONE_IN_TEN_THOUSAND
         ));
         assert!(vec2_approx_eq(
-            transform.apply(Vec2::new(3.0, 0.0)),
-            Vec2::new(-5.0, 5.0),
+            transform.apply(Vec2::NEG_Y),
+            Vec2::new(3.0, 5.0),
             ONE_IN_TEN_THOUSAND
         ));
     }

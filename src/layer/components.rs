@@ -24,7 +24,7 @@ use image::{DynamicImage, GenericImageView, ImageFormat, Pixel};
 use serde::{Deserialize, Serialize};
 
 use crate::id::LayerId;
-use crate::math::{Alpha, Sample, Sampler2D, Transform2D};
+use crate::math::{approx_eq, Alpha, Sample, Sampler2D, Transform2D, ONE_IN_TEN_THOUSAND};
 
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
@@ -126,7 +126,12 @@ impl Sampler2D for HeightMap {
                 bitmap,
                 transform,
                 repeat_mode,
-            } => bitmap.sample(transform.apply(position), *repeat_mode),
+            } => {
+                let offset = bitmap.size().as_vec2() * 0.5;
+                // FIXME: Remove 20.0 multiplier, use height param.
+                let value = bitmap.sample(transform.apply(position) + offset, *repeat_mode) * 20.0;
+                Sample::new(value, Alpha::Opaque)
+            }
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
     }
@@ -210,32 +215,25 @@ pub enum Bitmap {
 }
 
 impl Bitmap {
-    pub fn sample(&self, position: Vec2, repeat_mode: BitmapRepeatMode) -> Sample {
+    const NORMALIZE_HEIGHT: f32 = 1.0 / 256.0;
+
+    pub fn sample(&self, position: Vec2, repeat_mode: BitmapRepeatMode) -> f32 {
         // FIXME: Apply non-uniform scaling.
 
-        let size = self.size();
-        let image_position = match repeat_mode {
-            BitmapRepeatMode::Extend => Vec2::new(
-                position.x.min(size.x).max(0.0),
-                position.y.min(size.y).max(0.0),
-            ),
-            BitmapRepeatMode::Fade => unimplemented!(),
-            BitmapRepeatMode::Repeat => Vec2::new(position.x % size.x, position.y % size.y),
-        };
+        let image_position = repeat_mode.apply(position, self.size());
 
         // TODO: We need a setting for which channel to sample in Bitmap.
         //       Currently we are assuming it is grayscale.
-        let value: f32 = self
-            .image()
-            .1
-            .get_pixel(
-                image_position.x.round() as u32,
-                image_position.y.round() as u32,
-            )
-            .to_luma()
-            .0[0]
-            .into();
-        Sample::new(value, Alpha::Opaque)
+        f32::from(
+            self.image()
+                .1
+                .get_pixel(
+                    image_position.x.round() as u32,
+                    image_position.y.round() as u32,
+                )
+                .to_luma()
+                .0[0],
+        ) * Self::NORMALIZE_HEIGHT
     }
 
     fn image(&self) -> &Image {
@@ -245,9 +243,9 @@ impl Bitmap {
         }
     }
 
-    fn size(&self) -> Vec2 {
+    fn size(&self) -> UVec2 {
         let (width, height) = self.image().1.dimensions();
-        Vec2::new(width as f32, height as f32)
+        UVec2::new(width, height)
     }
 }
 
@@ -257,6 +255,33 @@ pub enum BitmapRepeatMode {
     Fade,
     #[default]
     Repeat,
+}
+
+impl BitmapRepeatMode {
+    pub fn apply(&self, position: Vec2, size: UVec2) -> Vec2 {
+        match self {
+            Self::Extend => Vec2::new(
+                position.x.max(0.0).min((size.x - 1) as f32),
+                position.y.max(0.0).min((size.y - 1) as f32),
+            ),
+            Self::Fade => unimplemented!(),
+            Self::Repeat => Vec2::new(
+                Self::normalize(position.x, size.x as f32),
+                Self::normalize(position.y, size.y as f32),
+            ),
+        }
+    }
+
+    fn normalize(x: f32, boundary: f32) -> f32 {
+        let mut n = x;
+        while n > boundary || approx_eq(n, boundary, ONE_IN_TEN_THOUSAND) {
+            n -= boundary;
+        }
+        while n < 0.0 {
+            n += boundary;
+        }
+        n
+    }
 }
 
 fn layer_order_on_remove_hook(mut world: DeferredWorld, HookContext { .. }: HookContext) {
@@ -333,11 +358,13 @@ mod tests {
     use image::ImageReader;
     use rmp_serde;
 
+    use crate::math::{vec2_approx_eq, ONE_IN_TEN_THOUSAND};
+
     use super::*;
 
     #[test]
     fn bitmap_serialization_roundtrip() {
-        const TEST_FILE_PATH: &str = "test_assets/soft_circle_mask_grayscale.png";
+        const TEST_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
 
         let file_path: PathBuf = {
             let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -359,5 +386,36 @@ mod tests {
         let deserialized: Bitmap = rmp_serde::from_slice(serialized.as_slice()).unwrap();
 
         assert_eq!(deserialized, bitmap);
+    }
+
+    #[test]
+    fn bitmap_repeat_mode_repeating() {
+        // (input,  output)
+        const CASES: &[(Vec2, Vec2)] = &[
+            // Within boundaries, unchanged.
+            (Vec2::new(24.0, 18.0), Vec2::new(24.0, 18.0)),
+            // Out of boundaries in positive direction.
+            (Vec2::new(68.0, 62.0), Vec2::new(4.0, 62.0)),
+            (Vec2::new(3.0, 80.0), Vec2::new(3.0, 16.0)),
+            // Exact boundary is converted to 0.0
+            (Vec2::new(7.0, 128.0), Vec2::new(7.0, 0.0)),
+            (Vec2::new(128.0, 8.0), Vec2::new(0.0, 8.0)),
+            (Vec2::new(256.0, 192.0), Vec2::new(0.0, 0.0)),
+            // Out of boundaries in negative direction.
+            (Vec2::new(-4.0, -61.5), Vec2::new(60.0, 2.5)),
+            (Vec2::new(-129.0, -0.995), Vec2::new(63.0, 63.005)),
+        ];
+        const SIZE: UVec2 = UVec2::new(64, 64);
+
+        let mode = BitmapRepeatMode::Repeat;
+
+        for (input, output) in CASES.iter() {
+            eprintln!("{:?}", mode.apply(*input, SIZE));
+            assert!(vec2_approx_eq(
+                mode.apply(*input, SIZE),
+                *output,
+                ONE_IN_TEN_THOUSAND
+            ));
+        }
     }
 }
