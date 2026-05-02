@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 
 use crate::id::LayerId;
-use crate::math::ApproxEq;
+use crate::math::{ApproxEq, Transform2D};
 use crate::undo::{Action, ReflectAction};
 
 use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
@@ -140,6 +140,49 @@ impl Action for DeleteLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
+pub struct HeightMapBitmapUpdateTransformAction {
+    layer_id: LayerId,
+    old_transform: Transform2D,
+    new_transform: Transform2D,
+}
+
+impl HeightMapBitmapUpdateTransformAction {
+    pub fn new(layer_id: LayerId, old_transform: Transform2D, new_transform: Transform2D) -> Self {
+        Self {
+            layer_id,
+            old_transform,
+            new_transform,
+        }
+    }
+}
+
+impl Action for HeightMapBitmapUpdateTransformAction {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<(&Layer, &mut HeightMap)>()
+            .iter_mut(world)
+            .find(|(layer, _)| layer.id() == self.layer_id)
+            .map(|(_, mut height_map)| match height_map.as_mut() {
+                HeightMap::Bitmap { transform, .. } => {
+                    *transform = self.new_transform.clone();
+                }
+                HeightMap::Constant(..) => unreachable!(),
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_transform: self.new_transform.clone(),
+            new_transform: self.old_transform.clone(),
+        };
+        reverse_action.apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
 pub struct HeightMapConstantUpdateHeightAction {
     layer_id: LayerId,
     old_height: f32,
@@ -163,7 +206,7 @@ impl Action for HeightMapConstantUpdateHeightAction {
             .iter_mut(world)
             .find(|(layer, _)| layer.id() == self.layer_id)
             .map(|(_, mut height_map)| match *height_map {
-                HeightMap::Bitmap { .. } => todo!(),
+                HeightMap::Bitmap { .. } => unreachable!(),
                 HeightMap::Constant(ref mut height) => {
                     debug_assert!(height.approx_eq(
                         self.old_height,

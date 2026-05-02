@@ -24,8 +24,9 @@ mod components;
 mod mask;
 
 pub use actions::{
-    CreateLayerAction, DeleteLayerAction, HeightMapConstantUpdateHeightAction, RenameLayerAction,
-    SwitchLayerPositionsAction, UpdateLayerAction,
+    CreateLayerAction, DeleteLayerAction, HeightMapBitmapUpdateTransformAction,
+    HeightMapConstantUpdateHeightAction, RenameLayerAction, SwitchLayerPositionsAction,
+    UpdateLayerAction,
 };
 pub use components::{
     BitmapRepeatMode, HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization,

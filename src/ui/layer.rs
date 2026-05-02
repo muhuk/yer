@@ -23,7 +23,7 @@ use bevy_egui::egui;
 
 use crate::id::{LayerId, MaskId};
 use crate::layer;
-use crate::math::ApproxEq;
+use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
 use crate::undo;
 
@@ -134,14 +134,31 @@ impl<'w, 's> Masks<'w, 's> {
 
 #[derive(Component, Debug, Reflect)]
 pub(super) enum HeightMapUi {
-    Bitmap { timer: Timer },
-    Constant { height: f32, timer: Timer },
+    Bitmap {
+        // TODO: Enable this after converting to ref-images.
+        //
+        // #[reflect(ignore)]
+        // bitmap: layer::Image,
+        transform: Transform2D,
+        repeat_mode: layer::BitmapRepeatMode,
+        timer: Timer,
+    },
+    Constant {
+        height: f32,
+        timer: Timer,
+    },
 }
 
 impl From<&layer::HeightMap> for HeightMapUi {
     fn from(value: &layer::HeightMap) -> Self {
         match value {
-            layer::HeightMap::Bitmap { .. } => Self::Bitmap {
+            layer::HeightMap::Bitmap {
+                transform,
+                repeat_mode,
+                ..
+            } => Self::Bitmap {
+                transform: transform.clone(),
+                repeat_mode: *repeat_mode,
                 timer: Timer::new(LATENCY, TimerMode::Once),
             },
             layer::HeightMap::Constant(height) => Self::Constant {
@@ -311,27 +328,49 @@ fn update_height_map_ui_system(
     mut layers: Query<(&layer::Layer, &layer::HeightMap, &mut HeightMapUi)>,
 ) {
     for (layer, height_map, mut height_map_ui) in layers.iter_mut() {
-        match *height_map_ui {
-            HeightMapUi::Bitmap { .. } => {
-                warn_once!("FIXME: Bitmap layer UI is not implemented.");
-            }
-            HeightMapUi::Constant {
-                height,
-                ref mut timer,
+        match height_map_ui.as_mut() {
+            HeightMapUi::Bitmap {
+                transform,
+                repeat_mode,
+                timer,
             } => {
                 if !timer.is_finished() {
                     timer.tick(time.delta());
                     match height_map {
-                        layer::HeightMap::Bitmap { .. } => {
-                            unreachable!();
+                        layer::HeightMap::Bitmap {
+                            transform: original_transform,
+                            repeat_mode: original_repeat_mode,
+                            ..
+                        } => {
+                            if timer.just_finished() && transform != original_transform {
+                                commands.queue(undo::PushAction::from(
+                                    layer::HeightMapBitmapUpdateTransformAction::new(
+                                        layer.id(),
+                                        original_transform.clone(),
+                                        transform.clone(),
+                                    ),
+                                ));
+                            }
+
+                            // TODO: Handle repeat_mode changes.
                         }
+                        layer::HeightMap::Constant(_) => unreachable!(),
+                    }
+                }
+            }
+            HeightMapUi::Constant { height, timer } => {
+                if !timer.is_finished() {
+                    timer.tick(time.delta());
+                    match height_map {
+                        layer::HeightMap::Bitmap { .. } => unreachable!(),
+
                         layer::HeightMap::Constant(original_height) => {
-                            if timer.just_finished() && !original_height.approx_eq(height, None) {
+                            if timer.just_finished() && !original_height.approx_eq(*height, None) {
                                 commands.queue(undo::PushAction::from(
                                     layer::HeightMapConstantUpdateHeightAction::new(
                                         layer.id(),
                                         *original_height,
-                                        height,
+                                        *height,
                                     ),
                                 ));
                             }
@@ -552,15 +591,27 @@ fn reset_height_map_ui_system(
 ) {
     for (height_map, mut height_map_ui) in layers.iter_mut() {
         match height_map {
-            layer::HeightMap::Bitmap { .. } => {
-                warn_once!("FIXME: Bitmap layer UI is not implemented.");
+            layer::HeightMap::Bitmap {
+                // bitmap: original_bitmap,
+                transform: original_transform,
+                repeat_mode: original_repeat_mode,
+                ..
+            } => {
+                if let HeightMapUi::Bitmap {
+                    transform,
+                    repeat_mode,
+                    timer,
+                } = height_map_ui.as_mut()
+                {
+                    *transform = original_transform.clone();
+                    *repeat_mode = *original_repeat_mode;
+                    timer.pause();
+                } else {
+                    unreachable!()
+                }
             }
             layer::HeightMap::Constant(original_height) => {
-                if let HeightMapUi::Constant {
-                    ref mut height,
-                    ref mut timer,
-                } = *height_map_ui
-                {
+                if let HeightMapUi::Constant { height, timer } = height_map_ui.as_mut() {
                     *height = *original_height;
                     timer.pause();
                 } else {
@@ -787,14 +838,32 @@ fn draw_ui_for_layer_common_top(
     };
 }
 
-fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
-    ui.horizontal(|ui| {
-        ui.label("Height:");
-        match height_map_ui {
-            HeightMapUi::Bitmap { timer } => {
-                warn_once!("FIXME: Bitmap layer UI is not implemented.");
+fn draw_ui_for_bitmap_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
+    warn_once!("FIXME: Bitmap layer UI is not implemented.");
+
+    match height_map_ui {
+        HeightMapUi::Bitmap {
+            transform,
+            repeat_mode,
+            timer,
+        } => {
+            if let Some(new_transform) = draw_ui_for_transform_2d(ui, transform) {
+                *transform = new_transform;
+                timer.unpause();
+                timer.reset();
             }
-            HeightMapUi::Constant { height, timer } => {
+        }
+        HeightMapUi::Constant { .. } => unreachable!(),
+    }
+}
+
+fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
+    match height_map_ui {
+        HeightMapUi::Bitmap { .. } => unreachable!(),
+        HeightMapUi::Constant { height, timer } => {
+            ui.horizontal(|ui| {
+                ui.label("Height:");
+
                 ui.with_layout(
                     egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
                     |ui| {
@@ -807,9 +876,9 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
                         }
                     },
                 );
-            }
+            });
         }
-    });
+    }
 }
 
 /// Draw the UI for the stack of layers in the project.
@@ -826,6 +895,7 @@ pub fn draw_ui_for_layers(
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
 
+            // TODO: Convert this to CreateLayeraction.
             commands.queue(crate::layer::create_test_bitmap_layer);
         }
 
@@ -906,9 +976,24 @@ fn draw_ui_for_layer(
             }
             let actual_height: f32 = ui
                 .vertical_centered_justified(|ui| {
-                    match *layer_query_item.height_map_ui {
+                    match layer_query_item.height_map_ui.as_ref() {
                         HeightMapUi::Bitmap { .. } => {
-                            warn_once!("FIXME: Bitmap layer UI is not implemented.");
+                            draw_ui_for_layer_common_top(
+                                commands,
+                                ui,
+                                layer_query_item,
+                                masks_query,
+                                parent_layer_id,
+                            );
+                            ui.separator();
+                            draw_ui_for_bitmap_layer(ui, layer_query_item.height_map_ui.as_mut());
+                            ui.separator();
+                            draw_ui_for_layer_common_bottom(
+                                commands,
+                                masks_query,
+                                layer_query_item,
+                                ui,
+                            );
                         }
                         HeightMapUi::Constant { .. } => {
                             draw_ui_for_layer_common_top(
@@ -1187,4 +1272,43 @@ fn draw_ui_for_mask(
             });
         }
     });
+}
+
+fn draw_ui_for_transform_2d(ui: &mut egui::Ui, transform: &Transform2D) -> Option<Transform2D> {
+    let new_translation = ui
+        .horizontal(|ui| {
+            ui.label("Translation:");
+            let translation_x = draw_ui_editable_f32(None, None, ui, transform.translation.x);
+            let translation_y = draw_ui_editable_f32(None, None, ui, transform.translation.y);
+
+            match (translation_x, translation_y) {
+                (Some(translation_x), Some(translation_y)) => {
+                    Some(Vec2::new(translation_x, translation_y))
+                }
+                (Some(translation_x), None) => {
+                    Some(Vec2::new(translation_x, transform.translation.y))
+                }
+                (None, Some(translation_y)) => {
+                    Some(Vec2::new(transform.translation.x, translation_y))
+                }
+                (None, None) => None,
+            }
+        })
+        .inner;
+
+    let new_rotation = ui
+        .horizontal(|ui| {
+            ui.label("Rotation:");
+            draw_ui_editable_f32(None, None, ui, transform.rotation)
+        })
+        .inner;
+
+    if new_translation.is_some() || new_rotation.is_some() {
+        Some(Transform2D {
+            translation: new_translation.unwrap_or(transform.translation),
+            rotation: new_rotation.unwrap_or(transform.rotation),
+        })
+    } else {
+        None
+    }
 }

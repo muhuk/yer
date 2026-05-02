@@ -142,8 +142,8 @@ impl Default for Sample {
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Reflect, Serialize)]
 pub struct Transform2D {
-    translation: Vec2,
-    rotation: f32,
+    pub translation: Vec2,
+    pub rotation: f32,
 }
 
 impl Transform2D {
