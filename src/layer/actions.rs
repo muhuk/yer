@@ -32,9 +32,9 @@ pub struct CreateLayerAction {
 }
 
 impl CreateLayerAction {
-    pub fn new(parent_id: Option<LayerId>) -> Self {
+    pub fn new(layer_bundle: LayerBundle, parent_id: Option<LayerId>) -> Self {
         Self {
-            layer_bundle: LayerBundle::default(),
+            layer_bundle,
             masks: vec![],
             parent_id,
         }
@@ -408,7 +408,10 @@ mod tests {
         assert_layer_count!(app, 0);
         app.world_mut()
             .commands()
-            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
+            .queue(undo::PushAction::from(CreateLayerAction::new(
+                LayerBundle::new_constant(),
+                None,
+            )));
         app.update();
         assert_layer_count!(app, 1);
     }
@@ -439,9 +442,10 @@ mod tests {
             .collect();
         app.world_mut()
             .commands()
-            .queue(undo::PushAction::from(CreateLayerAction::new(Some(
-                initial_ids[0],
-            ))));
+            .queue(undo::PushAction::from(CreateLayerAction::new(
+                LayerBundle::new_constant(),
+                Some(initial_ids[0]),
+            )));
         app.update();
         assert_layer_count!(app, 3);
 
@@ -466,10 +470,16 @@ mod tests {
 
         app.world_mut()
             .commands()
-            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
+            .queue(undo::PushAction::from(CreateLayerAction::new(
+                LayerBundle::new_constant(),
+                None,
+            )));
         app.world_mut()
             .commands()
-            .queue(undo::PushAction::from(CreateLayerAction::new(None)));
+            .queue(undo::PushAction::from(CreateLayerAction::new(
+                LayerBundle::new_constant(),
+                None,
+            )));
         app.update();
         let layer_id_ordered: Vec<LayerId> = {
             let world = app.world_mut();

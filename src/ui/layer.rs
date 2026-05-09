@@ -907,6 +907,7 @@ pub fn draw_ui_for_layers(
                 .last()
                 .map(|l| l.layer.id());
             commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
+                layer::LayerBundle::new_constant(),
                 top_layer_id,
             )));
         }

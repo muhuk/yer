@@ -62,6 +62,29 @@ pub struct LayerBundle {
 }
 
 impl LayerBundle {
+    // FIXME: use an image reference
+    pub fn new_bitmap(bitmap: Bitmap) -> Self {
+        let layer = Layer::default();
+        Self {
+            name: layer.name_component(),
+            layer,
+            height_map: HeightMap::Bitmap {
+                bitmap,
+                transform: Transform2D::default(),
+                repeat_mode: BitmapRepeatMode::default(),
+            },
+        }
+    }
+
+    pub fn new_constant() -> Self {
+        let layer = Layer::default();
+        Self {
+            name: layer.name_component(),
+            layer,
+            height_map: HeightMap::default(),
+        }
+    }
+
     pub fn extract_all(world: &mut World) -> Vec<Self> {
         let mut layer_bundles = vec![];
         for (layer, name, height_map) in world
@@ -86,17 +109,6 @@ impl LayerBundle {
             .for_each(|(idx, layer_bundle)| {
                 world.spawn((layer_bundle, LayerOrder(idx as u32 * LAYER_SPACING)));
             });
-    }
-}
-
-impl Default for LayerBundle {
-    fn default() -> Self {
-        let layer = Layer::default();
-        Self {
-            name: layer.name_component(),
-            layer,
-            height_map: HeightMap::default(),
-        }
     }
 }
 

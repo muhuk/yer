@@ -130,7 +130,12 @@ pub fn create_test_bitmap_layer(world: &mut World) {
         original_path: file_path,
     };
 
-    let layer_order = LayerOrder(100_000);
+    let top_layer_id: Option<crate::id::LayerId> = world
+        .query::<(&Layer, &LayerOrder)>()
+        .iter(world)
+        .sort::<&LayerOrder>()
+        .last()
+        .map(|(l, _)| l.id());
 
     let layer_bundle = LayerBundle {
         name: Name::new("Test Bitmap Layer"),
@@ -143,7 +148,12 @@ pub fn create_test_bitmap_layer(world: &mut World) {
         },
     };
 
-    world.spawn((layer_order, layer_bundle));
+    world
+        .commands()
+        .queue(crate::undo::PushAction::from(CreateLayerAction::new(
+            layer_bundle,
+            top_layer_id,
+        )));
 }
 
 /// This is intended to be called to create the initial layer only.  It does
