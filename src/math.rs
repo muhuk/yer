@@ -58,7 +58,9 @@ impl ApproxEq for Vec2 {
 //
 // Design this in a way we can return additional channels.
 pub trait Sampler2D: Send + Sync {
-    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample;
+    type Context;
+
+    fn sample(&self, position: Vec2, base_sample: &Sample, context: &Self::Context) -> Sample;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

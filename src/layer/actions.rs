@@ -380,10 +380,7 @@ mod tests {
     use super::*;
     use crate::undo;
 
-    use uuid::{uuid, Uuid};
-
-    const A: Uuid = uuid!("0192bf46-8e52-7dc5-b6f5-05bc9ae3aaa3");
-    const B: Uuid = uuid!("0192bf47-0c63-79a3-983c-92445e2b56a9");
+    use uuid::uuid;
 
     macro_rules! assert_layer_count {
         ($app:expr, $expected:expr) => {
@@ -420,6 +417,9 @@ mod tests {
     fn add_new_layer_in_between() {
         const FIRST_LAYER_ORDER: u32 = 3000;
 
+        let a: LayerId = uuid!("0192bf46-8e52-7dc5-b6f5-05bc9ae3aaa3").into();
+        let b: LayerId = uuid!("0192bf47-0c63-79a3-983c-92445e2b56a9").into();
+
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, LayerPlugin));
         app.finish();
@@ -427,13 +427,13 @@ mod tests {
         app.update();
 
         app.world_mut().commands().spawn_batch([
-            (Layer::new(A), LayerOrder(FIRST_LAYER_ORDER)),
-            (Layer::new(B), LayerOrder(FIRST_LAYER_ORDER + LAYER_SPACING)),
+            (Layer::new(a), LayerOrder(FIRST_LAYER_ORDER)),
+            (Layer::new(b), LayerOrder(FIRST_LAYER_ORDER + LAYER_SPACING)),
         ]);
         app.update();
         assert_layer_count!(app, 2);
 
-        let initial_ids: Vec<Uuid> = app
+        let initial_ids: Vec<LayerId> = app
             .world_mut()
             .query::<(&Layer, &LayerOrder)>()
             .iter(app.world())
@@ -449,7 +449,7 @@ mod tests {
         app.update();
         assert_layer_count!(app, 3);
 
-        let new_ids: Vec<Uuid> = app
+        let new_ids: Vec<LayerId> = app
             .world_mut()
             .query::<(&Layer, &LayerOrder)>()
             .iter(app.world())

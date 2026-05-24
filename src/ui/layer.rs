@@ -21,6 +21,7 @@ use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::prelude::*;
 use bevy_egui::egui;
 
+use crate::bitmap::BitmapServer;
 use crate::id::{LayerId, MaskId};
 use crate::layer;
 use crate::math::{ApproxEq, Transform2D};
@@ -883,6 +884,7 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
 
 /// Draw the UI for the stack of layers in the project.
 pub fn draw_ui_for_layers(
+    bitmap_server: &BitmapServer,
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
@@ -892,20 +894,26 @@ pub fn draw_ui_for_layers(
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
         ui.heading("Layers");
 
+        let top_layer_id: Option<LayerId> = layers_query
+            .layers
+            .iter()
+            .sort::<&layer::LayerOrder>()
+            .last()
+            .map(|l| l.layer.id());
+
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
 
-            // TODO: Convert this to CreateLayeraction.
-            commands.queue(crate::layer::create_test_bitmap_layer);
+            const TEST_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
+            commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
+                layer::LayerBundle::new_bitmap(
+                    bitmap_server.load(TEST_FILE_PATH, crate::bitmap::LoadMode::Linked),
+                ),
+                top_layer_id,
+            )));
         }
 
         if ui.button("New Layer").clicked() {
-            let top_layer_id: Option<LayerId> = layers_query
-                .layers
-                .iter()
-                .sort::<&layer::LayerOrder>()
-                .last()
-                .map(|l| l.layer.id());
             commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
                 layer::LayerBundle::new_constant(),
                 top_layer_id,

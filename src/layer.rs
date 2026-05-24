@@ -21,6 +21,7 @@ use crate::undo;
 
 mod actions;
 mod components;
+mod context;
 mod mask;
 
 pub use actions::{
@@ -32,6 +33,7 @@ pub use components::{
     BitmapRepeatMode, HeightMap, Layer, LayerBundle, LayerOrder, NeedsLayerOrderNormalization,
     HEIGHT_RANGE,
 };
+pub use context::LayerSamplerContext;
 pub use mask::{
     CreateMaskAction, DeleteMaskAction, Mask, MaskBundle, MaskCompositionMode, MaskOrder,
     MaskSource, UpdateMaskAction, UpdateMaskSourceAction,
@@ -92,8 +94,10 @@ pub struct LayerSampler {
 }
 
 impl Sampler2D for LayerSampler {
-    fn sample(&self, position: Vec2, base_sample: &Sample) -> Sample {
-        let mut sample = self.height_map.sample(position, base_sample);
+    type Context = LayerSamplerContext;
+
+    fn sample(&self, position: Vec2, base_sample: &Sample, context: &Self::Context) -> Sample {
+        let mut sample = self.height_map.sample(position, base_sample, context);
 
         // We need this condition to avoid multiplying the sample with zero.
         if !self.masks.is_empty() {
@@ -106,54 +110,6 @@ impl Sampler2D for LayerSampler {
 
         sample
     }
-}
-
-// FIXME: Remove this.
-pub fn create_test_bitmap_layer(world: &mut World) {
-    use std::path::PathBuf;
-
-    const TEST_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
-
-    let file_path: PathBuf = {
-        let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        file_path.push(TEST_FILE_PATH);
-        file_path
-    };
-
-    let (image_format, dynamic_image) = {
-        let reader = image::ImageReader::open(&file_path).unwrap();
-        (reader.format().unwrap(), reader.decode().unwrap())
-    };
-
-    let bitmap = components::Bitmap::Embedded {
-        image: (image_format, dynamic_image),
-        original_path: file_path,
-    };
-
-    let top_layer_id: Option<crate::id::LayerId> = world
-        .query::<(&Layer, &LayerOrder)>()
-        .iter(world)
-        .sort::<&LayerOrder>()
-        .last()
-        .map(|(l, _)| l.id());
-
-    let layer_bundle = LayerBundle {
-        name: Name::new("Test Bitmap Layer"),
-        layer: Layer::default(),
-        height_map: HeightMap::Bitmap {
-            // FIXME: Implement loading of image
-            bitmap,
-            transform: crate::math::Transform2D::default(),
-            repeat_mode: BitmapRepeatMode::Extend,
-        },
-    };
-
-    world
-        .commands()
-        .queue(crate::undo::PushAction::from(CreateLayerAction::new(
-            layer_bundle,
-            top_layer_id,
-        )));
 }
 
 /// This is intended to be called to create the initial layer only.  It does

@@ -20,6 +20,7 @@ use bevy::prelude::*;
 #[cfg(feature = "embed-assets")]
 use bevy_embedded_assets::{self, EmbeddedAssetPlugin};
 
+mod bitmap;
 mod constants;
 mod id;
 mod layer;
@@ -55,6 +56,7 @@ fn main() {
         MeshPickingPlugin,
     ));
     app.add_plugins((
+        bitmap::BitmapPlugin,
         layer::LayerPlugin,
         preferences::PreferencesPlugin {
             config_file_path: data_dir.join(constants::VERSION).join("config.toml"),

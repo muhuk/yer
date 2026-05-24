@@ -23,10 +23,13 @@ use bevy::prelude::*;
 use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
+use crate::bitmap::BitmapServer;
 use crate::layer;
 use crate::math::{Sample, Sampler2D};
 use crate::undo;
 use crate::viewport;
+
+type BoxedSampler2D = Box<dyn Sampler2D<Context = layer::LayerSamplerContext>>;
 
 pub const MAX_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(12) };
 pub const MIN_SUBDIVISIONS: NonZeroU8 = unsafe { NonZeroU8::new_unchecked(3) };
@@ -53,7 +56,7 @@ const SUBDIVISIONS_VERTS_TABLE: [u32; (MAX_SUBDIVISIONS.get() + 1) as usize] = {
     ns
 };
 
-type Layers = Arc<[Box<dyn Sampler2D>]>;
+type Layers = Arc<[BoxedSampler2D]>;
 
 pub struct PreviewPlugin;
 
@@ -99,12 +102,19 @@ struct Preview {
 impl Preview {
     fn start_new_task(
         &mut self,
+        sampler_context: layer::LayerSamplerContext,
         task_pool: &TaskPool,
         preview_entity: Entity,
         preview_region: PreviewRegion,
         layers: Layers,
     ) {
-        let task = ComputePreview::new(task_pool, preview_entity, preview_region, layers);
+        let task = ComputePreview::new(
+            sampler_context,
+            task_pool,
+            preview_entity,
+            preview_region,
+            layers,
+        );
         if let Some(previous_task) = self.task.replace(task) {
             // TODO: We might want to use the result of previous task while
             //       the new task is running.
@@ -278,7 +288,7 @@ impl Command for CalculatePreview {
             .map(|(e, p)| (e, p.clone()))
             .next()
             .unwrap();
-        let layers: Vec<Box<dyn Sampler2D>> = {
+        let layers: Vec<BoxedSampler2D> = {
             let entities_and_height_maps: Vec<(Entity, layer::HeightMap)> = world
                 .query::<(Entity, &layer::Layer, &layer::LayerOrder, &layer::HeightMap)>()
                 .iter(world)
@@ -310,12 +320,15 @@ impl Command for CalculatePreview {
                             (mask.unwrap().clone(), mask_source.unwrap().clone())
                         })
                         .collect();
-                    Box::new(layer::LayerSampler { height_map, masks }) as Box<dyn Sampler2D>
+                    Box::new(layer::LayerSampler { height_map, masks }) as BoxedSampler2D
                 })
                 .collect()
         };
         let task_pool = AsyncComputeTaskPool::get();
+        let bitmap_server = world.resource::<BitmapServer>().clone();
+        let sampler_context = layer::LayerSamplerContext { bitmap_server };
         world.resource_mut::<Preview>().start_new_task(
+            sampler_context,
             task_pool,
             entity,
             preview_region,
@@ -458,13 +471,15 @@ struct ComputePreview {
 
 impl ComputePreview {
     fn new(
+        sampler_context: layer::LayerSamplerContext,
         task_pool: &TaskPool,
         target_entity: Entity,
         preview_region: PreviewRegion,
         layers: Layers,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<PreviewGrid2D>();
-        let task: Task<()> = task_pool.spawn(Self::run(sender, preview_region, layers));
+        let task: Task<()> =
+            task_pool.spawn(Self::run(sampler_context, sender, preview_region, layers));
         Self {
             target_entity,
             task,
@@ -501,6 +516,7 @@ impl ComputePreview {
     }
 
     async fn run(
+        sampler_context: layer::LayerSamplerContext,
         sender: mpsc::Sender<PreviewGrid2D>,
         preview_region: PreviewRegion,
         layers: Layers,
@@ -514,8 +530,16 @@ impl ComputePreview {
                     preview.samples.len()
                 );
             }
-            preview =
-                Some(sample_layers(subdivisions, &preview_region, &layers, preview.as_ref()).await);
+            preview = Some(
+                sample_layers(
+                    &sampler_context,
+                    subdivisions,
+                    &preview_region,
+                    &layers,
+                    preview.as_ref(),
+                )
+                .await,
+            );
             sender.send(preview.clone().unwrap()).unwrap();
             subdivisions = subdivisions.checked_add(1).unwrap();
             future::yield_now().await;
@@ -551,6 +575,7 @@ fn even(x: u32) -> bool {
 }
 
 async fn sample_layers(
+    sampler_context: &layer::LayerSamplerContext,
     subdivisions: NonZeroU8,
     preview_region: &PreviewRegion,
     layers: &Layers,
@@ -598,7 +623,7 @@ async fn sample_layers(
             } else {
                 let mut sample = Sample::default();
                 for layer in layers.iter() {
-                    sample.mix_in_place(&layer.sample(p, &sample));
+                    sample.mix_in_place(&layer.sample(p, &sample, &sampler_context));
                 }
 
                 samples.push((p, sample.height()));
@@ -629,10 +654,16 @@ mod tests {
         assert_eq!(preview_region.subdivisions(), MIN_SUBDIVISIONS);
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sampler2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as BoxedSampler2D].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-        let mut compute_preview =
-            ComputePreview::new(task_pool, target_entity, preview_region, layers);
+        let sampler_context = layer::LayerSamplerContext::default();
+        let mut compute_preview = ComputePreview::new(
+            sampler_context,
+            task_pool,
+            target_entity,
+            preview_region,
+            layers,
+        );
         thread::sleep(Duration::from_millis(50));
         let first_result = compute_preview.poll();
         assert!(matches!(first_result, ComputePreviewResult::Result(..)));
@@ -649,10 +680,16 @@ mod tests {
 
         let height = 10.0f32;
         let layers: Layers =
-            vec![Box::new(layer::HeightMap::Constant(height)) as Box<dyn Sampler2D>].into();
+            vec![Box::new(layer::HeightMap::Constant(height)) as BoxedSampler2D].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-        let mut compute_preview =
-            ComputePreview::new(task_pool, target_entity, preview_region, layers);
+        let sampler_context = layer::LayerSamplerContext::default();
+        let mut compute_preview = ComputePreview::new(
+            sampler_context,
+            task_pool,
+            target_entity,
+            preview_region,
+            layers,
+        );
         thread::sleep(Duration::from_millis(50));
         let results = vec![
             compute_preview.poll(),
@@ -695,8 +732,16 @@ mod tests {
         let subdivisions = MIN_SUBDIVISIONS;
         let preview_region = PreviewRegion::default();
         let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(0.0))]);
+        let sampler_context = layer::LayerSamplerContext::default();
         assert_eq!(
-            block_on(sample_layers(subdivisions, &preview_region, &layers, None)).subdivisions,
+            block_on(sample_layers(
+                &sampler_context,
+                subdivisions,
+                &preview_region,
+                &layers,
+                None,
+            ))
+            .subdivisions,
             subdivisions.get(),
         );
     }
@@ -716,13 +761,16 @@ mod tests {
         let previous_layers: Layers =
             Arc::new([Box::new(layer::HeightMap::Constant(PREVIOUS_HEIGHT))]);
         let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(HEIGHT))]);
+        let sampler_context = layer::LayerSamplerContext::default();
         let previous_preview = block_on(sample_layers(
+            &sampler_context,
             previous_subdivisions,
             &preview_region,
             &previous_layers,
             None,
         ));
         let preview = block_on(sample_layers(
+            &sampler_context,
             subdivisions,
             &preview_region,
             &layers,

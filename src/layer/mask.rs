@@ -131,10 +131,6 @@ impl Mask {
     pub fn id(&self) -> MaskId {
         self.id
     }
-
-    pub(super) fn new_id() -> MaskId {
-        MaskId::now_v7()
-    }
 }
 
 impl Default for Mask {
@@ -143,7 +139,7 @@ impl Default for Mask {
             composition_mode: MaskCompositionMode::default(),
             is_enabled: true,
             strength: 1.0,
-            id: Self::new_id(),
+            id: MaskId::new(),
         }
     }
 }
