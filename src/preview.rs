@@ -325,8 +325,7 @@ impl Command for CalculatePreview {
                 .collect()
         };
         let task_pool = AsyncComputeTaskPool::get();
-        let bitmap_server = world.resource::<BitmapServer>().clone();
-        let sampler_context = layer::LayerSamplerContext { bitmap_server };
+        let sampler_context = layer::LayerSamplerContext::from_world(world);
         world.resource_mut::<Preview>().start_new_task(
             sampler_context,
             task_pool,
@@ -656,7 +655,7 @@ mod tests {
         let layers: Layers =
             vec![Box::new(layer::HeightMap::Constant(height)) as BoxedSampler2D].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-        let sampler_context = layer::LayerSamplerContext::default();
+        let sampler_context = layer::LayerSamplerContext::from_world(&mut World::new());
         let mut compute_preview = ComputePreview::new(
             sampler_context,
             task_pool,
@@ -682,7 +681,7 @@ mod tests {
         let layers: Layers =
             vec![Box::new(layer::HeightMap::Constant(height)) as BoxedSampler2D].into();
         let task_pool = AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
-        let sampler_context = layer::LayerSamplerContext::default();
+        let sampler_context = layer::LayerSamplerContext::from_world(&mut World::new());
         let mut compute_preview = ComputePreview::new(
             sampler_context,
             task_pool,
@@ -732,7 +731,7 @@ mod tests {
         let subdivisions = MIN_SUBDIVISIONS;
         let preview_region = PreviewRegion::default();
         let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(0.0))]);
-        let sampler_context = layer::LayerSamplerContext::default();
+        let sampler_context = layer::LayerSamplerContext::from_world(&mut World::new());
         assert_eq!(
             block_on(sample_layers(
                 &sampler_context,
@@ -761,7 +760,7 @@ mod tests {
         let previous_layers: Layers =
             Arc::new([Box::new(layer::HeightMap::Constant(PREVIOUS_HEIGHT))]);
         let layers: Layers = Arc::new([Box::new(layer::HeightMap::Constant(HEIGHT))]);
-        let sampler_context = layer::LayerSamplerContext::default();
+        let sampler_context = layer::LayerSamplerContext::from_world(&mut World::new());
         let previous_preview = block_on(sample_layers(
             &sampler_context,
             previous_subdivisions,

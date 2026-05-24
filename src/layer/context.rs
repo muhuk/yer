@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
+use bevy::prelude::*;
+
 use crate::bitmap::BitmapServer;
 
-#[derive(Debug, Default)]
+#[derive(Debug, FromWorld)]
 pub struct LayerSamplerContext {
     pub bitmap_server: BitmapServer,
 }

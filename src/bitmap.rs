@@ -41,7 +41,7 @@ impl Plugin for BitmapPlugin {
 
 // RESOURCES
 
-#[derive(Clone, Debug, Default, Deserialize, Reflect, Resource, Serialize)]
+#[derive(Clone, Debug, Deserialize, FromWorld, Reflect, Resource, Serialize)]
 #[reflect(Clone, Resource)]
 pub struct BitmapServer {
     data: Arc<BitmapServerData>,
