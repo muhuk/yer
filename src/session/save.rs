@@ -124,9 +124,6 @@ mod tests {
         };
         let save_result = save_data.to_bytes();
         assert!(save_result.is_ok());
-        // if let Ok(ref save_result) = save_result {
-        //     println!("Size = {}", save_result.len());
-        // }
         let load_result = SaveContainer::from_bytes(&save_result.unwrap());
         assert!(load_result.is_ok());
         assert_eq!(save_data, load_result.unwrap());
