@@ -16,7 +16,7 @@
 
 use std::io::{BufReader, BufWriter, Cursor};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
@@ -26,6 +26,7 @@ use serde::{
     ser::{self, Serializer},
     Deserialize, Serialize,
 };
+use thiserror::Error;
 
 use crate::id::BitmapId;
 
@@ -41,44 +42,30 @@ impl Plugin for BitmapPlugin {
 
 // RESOURCES
 
-#[derive(Clone, Debug, Deserialize, FromWorld, Reflect, Resource, Serialize)]
+#[derive(Clone, Debug, Deserialize, Reflect, Resource, Serialize)]
 #[reflect(Clone, Resource)]
 pub struct BitmapServer {
     data: Arc<BitmapServerData>,
 }
 
 impl BitmapServer {
-    pub fn get(&self, handle: &BitmapHandle) -> Option<Arc<Image>> {
-        let maybe_embedded_or_linked = self
-            .data
-            .images
-            .read()
-            .map(|images| {
-                images
-                    .iter()
-                    .find(|&data| data.handle() == *handle)
-                    .map(|data| match data {
-                        BitmapData::Embedded { .. } => true,
-                        BitmapData::Linked { .. } => false,
-                    })
-            })
-            .ok()
-            .flatten();
-
-        match maybe_embedded_or_linked {
-            None => {
-                // TODO: Create a proper result type for this.
-                //       Do not handle 2 error cases in one.
-                //
-                //       Do not use bools too.
-                error!("Invalid handle or we cannot access images.");
-                None
-            }
-            // Embedded
-            Some(true) => unimplemented!(),
-            // Linked
-            Some(false) => Some(
-                self.data
+    pub fn get(&self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapGetError> {
+        {
+            let images = self.data.images.read()?;
+            match images
+                .iter()
+                .find(|&data| data.handle() == *handle)
+                .map(|data| match data {
+                    BitmapData::Embedded { .. } => true,
+                    BitmapData::Linked { .. } => false,
+                }) {
+                // TODO: Consider using a weak handle for the id.
+                None => return Err(BitmapGetError::InvalidHandle(handle.clone())),
+                // Embedded
+                Some(true) => unimplemented!(),
+                // Linked
+                Some(false) => Ok(self
+                    .data
                     .linked_image_data
                     .read()
                     .unwrap()
@@ -86,8 +73,8 @@ impl BitmapServer {
                     // TODO: hashmap should have this key, but in case it does
                     //       not, handle this case.
                     .unwrap()
-                    .clone(),
-            ),
+                    .clone()),
+            }
         }
     }
 
@@ -129,7 +116,35 @@ impl BitmapServer {
     }
 }
 
+// We need a manual implementation of FromWorld as deriving it will
+// be like calling Default::default and not returning a clone of the
+// resource stored in the world.
+impl FromWorld for BitmapServer {
+    fn from_world(world: &mut World) -> Self {
+        world
+            .get_resource::<Self>()
+            .cloned()
+            .unwrap_or_else(|| BitmapServer {
+                data: Arc::new(BitmapServerData::default()),
+            })
+    }
+}
+
 // LIB
+
+#[derive(Debug, Error)]
+pub enum BitmapGetError {
+    #[error("cannot access BitmapServerData.images")]
+    CannotAccessImages,
+    #[error("invalid handle: {0:?}")]
+    InvalidHandle(BitmapHandle),
+}
+
+impl<T> From<PoisonError<T>> for BitmapGetError {
+    fn from(_value: PoisonError<T>) -> Self {
+        Self::CannotAccessImages
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Reflect, Serialize)]
 pub struct BitmapHandle {
@@ -162,6 +177,17 @@ impl BitmapData {
             Self::Linked { handle, .. } => handle.clone(),
         }
     }
+}
+
+#[derive(Debug, Default, Deserialize, Reflect, Serialize)]
+struct BitmapServerData {
+    #[reflect(ignore)]
+    images: RwLock<Vec<BitmapData>>,
+    #[reflect(ignore)]
+    embedded_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
+    #[serde(skip)]
+    #[reflect(ignore)]
+    linked_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
 }
 
 #[derive(Debug, PartialEq, Reflect)]
@@ -249,17 +275,6 @@ impl<'de> Visitor<'de> for ImageVisitor {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Reflect, Serialize)]
-struct BitmapServerData {
-    #[reflect(ignore)]
-    images: RwLock<Vec<BitmapData>>,
-    #[reflect(ignore)]
-    embedded_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
-    #[serde(skip)]
-    #[reflect(ignore)]
-    linked_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
-}
-
 fn default_image_format() -> ImageFormat {
     ImageFormat::Png
 }
@@ -322,7 +337,7 @@ mod tests {
 
         let bitmap_server = app.world().resource::<BitmapServer>();
         let handle: BitmapHandle = bitmap_server.load(&file_path, LoadMode::Linked);
-        let maybe_image: Option<Arc<Image>> = bitmap_server.get(&handle);
-        assert!(maybe_image.is_some())
+        let maybe_image: Result<Arc<Image>, BitmapGetError> = bitmap_server.get(&handle);
+        assert!(maybe_image.is_ok())
     }
 }

@@ -187,12 +187,12 @@ fn draw_ui_dialogs_system(
                                     .sort::<&crate::layer::LayerOrder>()
                                     .last()
                                     .map(|l| l.layer.id());
+                                let handle =
+                                    bitmap_server.load(path, crate::bitmap::LoadMode::Linked);
+                                debug!("Loading image: {handle:?}.");
                                 commands.queue(crate::undo::PushAction::from(
                                     crate::layer::CreateLayerAction::new(
-                                        crate::layer::LayerBundle::new_bitmap(
-                                            bitmap_server
-                                                .load(path, crate::bitmap::LoadMode::Linked),
-                                        ),
+                                        crate::layer::LayerBundle::new_bitmap(handle),
                                         top_layer_id,
                                     ),
                                 ));
@@ -245,7 +245,6 @@ fn draw_ui_dialogs_system(
 
 fn draw_ui_panels_system(
     mut app_exit_events: MessageWriter<AppExit>,
-    bitmap_server: Res<BitmapServer>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
@@ -293,7 +292,6 @@ fn draw_ui_panels_system(
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 if let Some(colors) = theme_colors.get(&theme.colors) {
                     layer::draw_ui_for_layers(
-                        &bitmap_server,
                         &mut commands,
                         colors,
                         ui,

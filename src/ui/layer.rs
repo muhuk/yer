@@ -885,7 +885,6 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
 
 /// Draw the UI for the stack of layers in the project.
 pub fn draw_ui_for_layers(
-    bitmap_server: &BitmapServer,
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
