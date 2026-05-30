@@ -34,7 +34,10 @@ mod file_dialog;
 mod layer;
 mod preferences_dialog;
 mod preview;
+mod state;
 mod toolbar;
+
+use state::UiState;
 
 // PLUGIN
 
@@ -48,6 +51,7 @@ impl Plugin for UiPlugin {
                 egui_ext::UiBevyExtPlugin,
                 file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
+                state::UiStatePlugin,
             ))
             .init_state::<UiState>()
             .add_systems(
@@ -63,6 +67,10 @@ impl Plugin for UiPlugin {
                 show_load_file_dialog_system,
             )
             .add_systems(
+                OnEnter(UiState::ShowingLoadImageDialog),
+                show_load_image_dialog_system,
+            )
+            .add_systems(
                 OnEnter(UiState::ShowingPreferencesDialog),
                 show_preferences_dialog_system,
             )
@@ -74,23 +82,6 @@ impl Plugin for UiPlugin {
         #[cfg(feature = "inspector")]
         app.add_plugins(DefaultInspectorConfigPlugin)
             .add_systems(EguiPrimaryContextPass, inspector_ui_system);
-    }
-}
-
-// RESOURCES
-
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Reflect, States)]
-enum UiState {
-    #[default]
-    Interactive,
-    ShowingLoadFileDialog,
-    ShowingPreferencesDialog,
-    ShowingSaveFileDialog,
-}
-
-impl UiState {
-    fn is_interactive(&self) -> bool {
-        matches!(self, UiState::Interactive)
     }
 }
 
@@ -149,9 +140,12 @@ fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
 }
 
 fn draw_ui_dialogs_system(
+    bitmap_server: Res<BitmapServer>,
     mut commands: Commands,
     mut contexts: EguiContexts,
+    layers_query: crate::ui::layer::Layers,
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
+    mut load_image_dialogs: Query<&mut file_dialog::LoadImageDialog>,
     mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
     theme: Res<theme::Theme>,
@@ -175,6 +169,35 @@ fn draw_ui_dialogs_system(
                                 // Currently there is no cleanup necessary.  If there is
                                 // need for cleanup in the future it should ideally be
                                 // handled by a OnExit(state) system.
+                                ui_state_next.set(UiState::Interactive);
+                            }
+                        }
+                    }
+                }
+                UiState::ShowingLoadImageDialog => {
+                    if let Ok(mut dialog) = load_image_dialogs.single_mut() {
+                        match dialog.show(ctx) {
+                            file_dialog::DialogState::Open => (),
+                            file_dialog::DialogState::Selected(path) => {
+                                ui_state_next.set(UiState::Interactive);
+
+                                let top_layer_id: Option<crate::id::LayerId> = layers_query
+                                    .layers
+                                    .iter()
+                                    .sort::<&crate::layer::LayerOrder>()
+                                    .last()
+                                    .map(|l| l.layer.id());
+                                commands.queue(crate::undo::PushAction::from(
+                                    crate::layer::CreateLayerAction::new(
+                                        crate::layer::LayerBundle::new_bitmap(
+                                            bitmap_server
+                                                .load(path, crate::bitmap::LoadMode::Linked),
+                                        ),
+                                        top_layer_id,
+                                    ),
+                                ));
+                            }
+                            file_dialog::DialogState::Cancelled => {
                                 ui_state_next.set(UiState::Interactive);
                             }
                         }
@@ -233,7 +256,7 @@ fn draw_ui_panels_system(
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
     undo_stack: Res<undo::UndoStack>,
-    mut ui_state_next: ResMut<NextState<UiState>>,
+    mut next_ui_state: ResMut<NextState<UiState>>,
 ) -> Result<(), BevyError> {
     let ctx = contexts.ctx_mut()?;
 
@@ -243,9 +266,9 @@ fn draw_ui_panels_system(
             &mut app_exit_events,
             &mut commands,
             &layers_query,
+            &mut next_ui_state,
             session.as_ref(),
             undo_stack.as_ref(),
-            &mut ui_state_next,
         );
     });
 
@@ -275,6 +298,7 @@ fn draw_ui_panels_system(
                         colors,
                         ui,
                         &mut layers_query,
+                        &mut next_ui_state,
                         &mut masks_query,
                     );
                 } else {
@@ -308,6 +332,15 @@ fn show_load_file_dialog_system(world: &mut World) {
         Name::new("Load File Dialog"),
         dialog,
         DespawnOnExit(UiState::ShowingLoadFileDialog),
+    ));
+}
+
+fn show_load_image_dialog_system(world: &mut World) {
+    let dialog = file_dialog::LoadImageDialog::from_world(world);
+    world.spawn((
+        Name::new("Load Image Dialog"),
+        dialog,
+        DespawnOnExit(UiState::ShowingLoadImageDialog),
     ));
 }
 
@@ -361,9 +394,9 @@ fn draw_ui_menu(
     app_exit_events: &mut MessageWriter<AppExit>,
     commands: &mut Commands,
     layers_query: &layer::Layers,
+    next_ui_state: &mut ResMut<NextState<UiState>>,
     session: &session::Session,
     undo_stack: &undo::UndoStack,
-    ui_state_next: &mut ResMut<NextState<UiState>>,
 ) {
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("File", |ui| {
@@ -372,19 +405,19 @@ fn draw_ui_menu(
                 ui.close();
             }
             if ui.button("Open...").clicked() {
-                ui_state_next.set(UiState::ShowingLoadFileDialog);
+                next_ui_state.set(UiState::ShowingLoadFileDialog);
                 ui.close();
             }
             if ui.button("Save").clicked() {
                 if session.has_save_file() {
                     commands.queue(session::SaveSession(None));
                 } else {
-                    ui_state_next.set(UiState::ShowingSaveFileDialog);
+                    next_ui_state.set(UiState::ShowingSaveFileDialog);
                 }
                 ui.close();
             }
             if ui.button("Save As...").clicked() {
-                ui_state_next.set(UiState::ShowingSaveFileDialog);
+                next_ui_state.set(UiState::ShowingSaveFileDialog);
                 ui.close();
             }
             ui.separator();
@@ -413,7 +446,7 @@ fn draw_ui_menu(
             }
             ui.separator();
             if ui.button("Edit Preferences").clicked() {
-                ui_state_next.set(UiState::ShowingPreferencesDialog);
+                next_ui_state.set(UiState::ShowingPreferencesDialog);
                 ui.close();
             }
         });

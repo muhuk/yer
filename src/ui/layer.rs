@@ -29,6 +29,7 @@ use crate::theme;
 use crate::undo;
 
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
+use super::state::UiState;
 
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
@@ -90,7 +91,7 @@ impl<'w, 's> LayerQueryItem<'w, 's> {
 #[derive(Deref, DerefMut, SystemParam)]
 pub(super) struct Layers<'w, 's> {
     #[deref]
-    layers: Query<'w, 's, LayerQuery>,
+    pub layers: Query<'w, 's, LayerQuery>,
 }
 
 #[derive(QueryData)]
@@ -889,6 +890,7 @@ pub fn draw_ui_for_layers(
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
     layers_query: &mut Layers,
+    next_ui_state: &mut NextState<UiState>,
     masks_query: &mut Masks,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
@@ -903,14 +905,7 @@ pub fn draw_ui_for_layers(
 
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
-
-            const TEST_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
-            commands.queue(undo::PushAction::from(layer::CreateLayerAction::new(
-                layer::LayerBundle::new_bitmap(
-                    bitmap_server.load(TEST_FILE_PATH, crate::bitmap::LoadMode::Linked),
-                ),
-                top_layer_id,
-            )));
+            next_ui_state.set(UiState::ShowingLoadImageDialog);
         }
 
         if ui.button("New Layer").clicked() {
