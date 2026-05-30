@@ -23,7 +23,6 @@ use bevy::prelude::*;
 use bevy::tasks::{futures_lite::future, AsyncComputeTaskPool, Task, TaskPool};
 use serde::{Deserialize, Serialize};
 
-use crate::bitmap::BitmapServer;
 use crate::layer;
 use crate::math::{Sample, Sampler2D};
 use crate::undo;

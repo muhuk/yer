@@ -21,14 +21,15 @@ use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::prelude::*;
 use bevy_egui::egui;
 
+use crate::bitmap::BitmapServer;
 use crate::id::{LayerId, MaskId};
 use crate::layer;
 use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
-use crate::ui::file_dialog::LoadImageDialog;
 use crate::undo;
 
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
+use super::file_dialog::{DialogClosed, DialogResult, LoadImageDialog};
 use super::state::UiState;
 
 const LATENCY: Duration = Duration::from_millis(100);
@@ -281,6 +282,38 @@ impl Command for SelectLayer {
             world.entity_mut(entity).remove::<Selected>();
         }
         world.entity_mut(self.0).insert(Selected);
+    }
+}
+
+// OBSERVERS
+
+fn finalize_add_bitmap_layer_observer(
+    closed: On<DialogClosed>,
+    mut commands: Commands,
+    bitmap_server: Res<BitmapServer>,
+    layers_query: Layers,
+    mut ui_state_next: ResMut<NextState<UiState>>,
+) {
+    match &closed.result {
+        DialogResult::PickedFile(path) => {
+            ui_state_next.set(UiState::Interactive);
+
+            let top_layer_id: Option<crate::id::LayerId> = layers_query
+                .layers
+                .iter()
+                .sort::<&crate::layer::LayerOrder>()
+                .last()
+                .map(|l| l.layer.id());
+            let handle = bitmap_server.load(path, crate::bitmap::LoadMode::Linked);
+            debug!("Loading image: {handle:?}.");
+            commands.queue(crate::undo::PushAction::from(
+                crate::layer::CreateLayerAction::new(
+                    crate::layer::LayerBundle::new_bitmap(handle),
+                    top_layer_id,
+                ),
+            ));
+        }
+        _ => (),
     }
 }
 
@@ -904,15 +937,11 @@ pub fn draw_ui_for_layers(
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
             commands.queue(|world: &mut World| {
-                let dialog = LoadImageDialog::from_world(world);
-                world.spawn((
-                    Name::new("Load Image Dialog"),
-                    dialog,
-                    DespawnOnExit(UiState::ShowingLoadImageDialog),
-                ));
+                let entity = LoadImageDialog::spawn(world);
                 world
-                    .resource_mut::<NextState<UiState>>()
-                    .set(UiState::ShowingLoadImageDialog);
+                    .commands()
+                    .entity(entity)
+                    .observe(finalize_add_bitmap_layer_observer);
             });
         }
 

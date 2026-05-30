@@ -22,7 +22,9 @@ use bevy_egui::egui::{Color32, Context};
 use egui_file_dialog;
 
 use crate::theme::{Theme, ThemeColors};
-use crate::ui::egui_ext::ToColor32;
+
+use super::egui_ext::ToColor32;
+use super::state::UiState;
 
 static DEFAULT_FILE_NAME: &str = "untitled.yer";
 static FILE_FILTER_IMAGE_FILES_NAME: &str = "Image Files";
@@ -41,6 +43,14 @@ impl Plugin for UiFileDialogPlugin {
     }
 }
 
+// EVENTS
+
+#[derive(Debug, EntityEvent)]
+pub struct DialogClosed {
+    pub entity: Entity,
+    pub result: DialogResult,
+}
+
 // COMPONENTS
 
 #[derive(Component, Reflect)]
@@ -51,11 +61,13 @@ pub(super) struct LoadFileDialog {
 }
 
 impl LoadFileDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> DialogState {
+    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
         match self.file_dialog.update(ctx).state() {
-            egui_file_dialog::DialogState::Open => DialogState::Open,
-            egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
-            egui_file_dialog::DialogState::Picked(path) => DialogState::Selected(path.into()),
+            egui_file_dialog::DialogState::Open => None,
+            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
+            egui_file_dialog::DialogState::Picked(path) => {
+                Some(DialogResult::PickedFile(path.into()))
+            }
             _ => unreachable!(),
         }
     }
@@ -91,13 +103,30 @@ pub(super) struct LoadImageDialog {
 }
 
 impl LoadImageDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> DialogState {
+    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
         match self.file_dialog.update(ctx).state() {
-            egui_file_dialog::DialogState::Open => DialogState::Open,
-            egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
-            egui_file_dialog::DialogState::Picked(path) => DialogState::Selected(path.into()),
+            egui_file_dialog::DialogState::Open => None,
+            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
+            egui_file_dialog::DialogState::Picked(path) => {
+                Some(DialogResult::PickedFile(path.into()))
+            }
             _ => unreachable!(),
         }
+    }
+
+    pub(super) fn spawn(world: &mut World) -> Entity {
+        let dialog = LoadImageDialog::from_world(world);
+        let entity = world
+            .spawn((
+                Name::new("Load Image Dialog"),
+                dialog,
+                DespawnOnExit(UiState::ShowingLoadImageDialog),
+            ))
+            .id();
+        world
+            .resource_mut::<NextState<UiState>>()
+            .set(UiState::ShowingLoadImageDialog);
+        entity
     }
 }
 
@@ -131,12 +160,12 @@ pub(super) struct SaveFileDialog {
 }
 
 impl SaveFileDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> DialogState {
+    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
         match self.file_dialog.update(ctx).state() {
-            egui_file_dialog::DialogState::Open => DialogState::Open,
-            egui_file_dialog::DialogState::Cancelled => DialogState::Cancelled,
+            egui_file_dialog::DialogState::Open => None,
+            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
             egui_file_dialog::DialogState::Picked(path) => {
-                DialogState::Selected(sanitize_path(path.into()))
+                Some(DialogResult::PickedFile(sanitize_path(path.into())))
             }
             _ => unreachable!(),
         }
@@ -158,10 +187,10 @@ impl Default for SaveFileDialog {
 
 // LIB
 
-pub enum DialogState {
-    Open,
-    Selected(PathBuf),
+#[derive(Debug)]
+pub enum DialogResult {
     Cancelled,
+    PickedFile(PathBuf),
 }
 
 fn sanitize_path(path: PathBuf) -> PathBuf {

@@ -22,7 +22,6 @@ use bevy_egui::{EguiContext, PrimaryEguiContext};
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
-use crate::bitmap::BitmapServer;
 use crate::constants;
 use crate::layer as crate_layer;
 use crate::session;
@@ -124,12 +123,10 @@ fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
 }
 
 fn draw_ui_dialogs_system(
-    bitmap_server: Res<BitmapServer>,
     mut commands: Commands,
     mut contexts: EguiContexts,
-    layers_query: crate::ui::layer::Layers,
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
-    mut load_image_dialogs: Query<&mut file_dialog::LoadImageDialog>,
+    mut load_image_dialogs: Query<(Entity, &mut file_dialog::LoadImageDialog)>,
     mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
     mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
     theme: Res<theme::Theme>,
@@ -144,12 +141,12 @@ fn draw_ui_dialogs_system(
                 UiState::ShowingLoadFileDialog => {
                     if let Ok(mut dialog) = load_file_dialogs.single_mut() {
                         match dialog.show(ctx) {
-                            file_dialog::DialogState::Open => (),
-                            file_dialog::DialogState::Selected(path) => {
+                            None => (),
+                            Some(file_dialog::DialogResult::PickedFile(path)) => {
                                 ui_state_next.set(UiState::Interactive);
                                 commands.queue(session::LoadSession(path));
                             }
-                            file_dialog::DialogState::Cancelled => {
+                            Some(file_dialog::DialogResult::Cancelled) => {
                                 // Currently there is no cleanup necessary.  If there is
                                 // need for cleanup in the future it should ideally be
                                 // handled by a OnExit(state) system.
@@ -159,29 +156,11 @@ fn draw_ui_dialogs_system(
                     }
                 }
                 UiState::ShowingLoadImageDialog => {
-                    if let Ok(mut dialog) = load_image_dialogs.single_mut() {
+                    if let Ok((entity, mut dialog)) = load_image_dialogs.single_mut() {
                         match dialog.show(ctx) {
-                            file_dialog::DialogState::Open => (),
-                            file_dialog::DialogState::Selected(path) => {
-                                ui_state_next.set(UiState::Interactive);
-
-                                let top_layer_id: Option<crate::id::LayerId> = layers_query
-                                    .layers
-                                    .iter()
-                                    .sort::<&crate::layer::LayerOrder>()
-                                    .last()
-                                    .map(|l| l.layer.id());
-                                let handle =
-                                    bitmap_server.load(path, crate::bitmap::LoadMode::Linked);
-                                debug!("Loading image: {handle:?}.");
-                                commands.queue(crate::undo::PushAction::from(
-                                    crate::layer::CreateLayerAction::new(
-                                        crate::layer::LayerBundle::new_bitmap(handle),
-                                        top_layer_id,
-                                    ),
-                                ));
-                            }
-                            file_dialog::DialogState::Cancelled => {
+                            None => (),
+                            Some(result) => {
+                                commands.trigger(file_dialog::DialogClosed { entity, result });
                                 ui_state_next.set(UiState::Interactive);
                             }
                         }
@@ -208,12 +187,12 @@ fn draw_ui_dialogs_system(
                 UiState::ShowingSaveFileDialog => {
                     if let Ok(mut dialog) = save_file_dialogs.single_mut() {
                         match dialog.show(ctx) {
-                            file_dialog::DialogState::Open => (),
-                            file_dialog::DialogState::Selected(path) => {
+                            None => (),
+                            Some(file_dialog::DialogResult::PickedFile(path)) => {
                                 ui_state_next.set(UiState::Interactive);
                                 commands.queue(session::SaveSession(Some(path)));
                             }
-                            file_dialog::DialogState::Cancelled => {
+                            Some(file_dialog::DialogResult::Cancelled) => {
                                 // Currently there is no cleanup necessary.  If there is
                                 // need for cleanup in the future it should ideally be
                                 // handled by a OnExit(state) system.
