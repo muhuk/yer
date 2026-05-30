@@ -61,22 +61,6 @@ impl Plugin for UiPlugin {
             .add_systems(
                 Update,
                 update_window_title_system.run_if(resource_exists_and_changed::<session::Session>),
-            )
-            .add_systems(
-                OnEnter(UiState::ShowingLoadFileDialog),
-                show_load_file_dialog_system,
-            )
-            .add_systems(
-                OnEnter(UiState::ShowingLoadImageDialog),
-                show_load_image_dialog_system,
-            )
-            .add_systems(
-                OnEnter(UiState::ShowingPreferencesDialog),
-                show_preferences_dialog_system,
-            )
-            .add_systems(
-                OnEnter(UiState::ShowingSaveFileDialog),
-                show_save_file_dialog_system,
             );
 
         #[cfg(feature = "inspector")]
@@ -296,7 +280,6 @@ fn draw_ui_panels_system(
                         colors,
                         ui,
                         &mut layers_query,
-                        &mut next_ui_state,
                         &mut masks_query,
                     );
                 } else {
@@ -322,43 +305,6 @@ fn draw_ui_panels_system(
         });
 
     Ok(())
-}
-
-fn show_load_file_dialog_system(world: &mut World) {
-    let dialog = file_dialog::LoadFileDialog::from_world(world);
-    world.spawn((
-        Name::new("Load File Dialog"),
-        dialog,
-        DespawnOnExit(UiState::ShowingLoadFileDialog),
-    ));
-}
-
-fn show_load_image_dialog_system(world: &mut World) {
-    let dialog = file_dialog::LoadImageDialog::from_world(world);
-    world.spawn((
-        Name::new("Load Image Dialog"),
-        dialog,
-        DespawnOnExit(UiState::ShowingLoadImageDialog),
-    ));
-}
-
-fn show_preferences_dialog_system(mut commands: Commands) {
-    commands.queue(|world: &mut World| {
-        let dialog = preferences_dialog::PreferencesDialog::from_world(world);
-        world.spawn((
-            Name::new("Preferences Dialog"),
-            dialog,
-            DespawnOnExit(UiState::ShowingPreferencesDialog),
-        ));
-    })
-}
-
-fn show_save_file_dialog_system(mut commands: Commands) {
-    commands.spawn((
-        Name::new("Save File Dialog"),
-        file_dialog::SaveFileDialog::default(),
-        DespawnOnExit(UiState::ShowingSaveFileDialog),
-    ));
 }
 
 fn update_window_title_system(
@@ -403,20 +349,41 @@ fn draw_ui_menu(
                 ui.close();
             }
             if ui.button("Open...").clicked() {
-                next_ui_state.set(UiState::ShowingLoadFileDialog);
+                commands.queue(|world: &mut World| {
+                    let dialog = file_dialog::LoadFileDialog::from_world(world);
+                    world.spawn((
+                        Name::new("Load File Dialog"),
+                        dialog,
+                        DespawnOnExit(UiState::ShowingLoadFileDialog),
+                    ));
+                    world
+                        .resource_mut::<NextState<UiState>>()
+                        .set(UiState::ShowingLoadFileDialog);
+                });
                 ui.close();
             }
-            if ui.button("Save").clicked() {
-                if session.has_save_file() {
-                    commands.queue(session::SaveSession(None));
-                } else {
+            {
+                let mut show_save_file_dialog = false;
+                if ui.button("Save").clicked() {
+                    if session.has_save_file() {
+                        commands.queue(session::SaveSession(None));
+                    } else {
+                        show_save_file_dialog = true;
+                    }
+                    ui.close();
+                }
+                if ui.button("Save As...").clicked() {
+                    show_save_file_dialog = true;
+                    ui.close();
+                }
+                if show_save_file_dialog {
+                    commands.spawn((
+                        Name::new("Save File Dialog"),
+                        file_dialog::SaveFileDialog::default(),
+                        DespawnOnExit(UiState::ShowingSaveFileDialog),
+                    ));
                     next_ui_state.set(UiState::ShowingSaveFileDialog);
                 }
-                ui.close();
-            }
-            if ui.button("Save As...").clicked() {
-                next_ui_state.set(UiState::ShowingSaveFileDialog);
-                ui.close();
             }
             ui.separator();
             if ui.button("Quit").clicked() {
@@ -444,7 +411,18 @@ fn draw_ui_menu(
             }
             ui.separator();
             if ui.button("Edit Preferences").clicked() {
-                next_ui_state.set(UiState::ShowingPreferencesDialog);
+                commands.queue(|world: &mut World| {
+                    let dialog = preferences_dialog::PreferencesDialog::from_world(world);
+                    world.spawn((
+                        Name::new("Preferences Dialog"),
+                        dialog,
+                        DespawnOnExit(UiState::ShowingPreferencesDialog),
+                    ));
+                    world
+                        .resource_mut::<NextState<UiState>>()
+                        .set(UiState::ShowingPreferencesDialog);
+                });
+
                 ui.close();
             }
         });

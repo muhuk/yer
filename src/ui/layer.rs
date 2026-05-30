@@ -21,11 +21,11 @@ use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::bitmap::BitmapServer;
 use crate::id::{LayerId, MaskId};
 use crate::layer;
 use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
+use crate::ui::file_dialog::LoadImageDialog;
 use crate::undo;
 
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
@@ -889,7 +889,6 @@ pub fn draw_ui_for_layers(
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
     layers_query: &mut Layers,
-    next_ui_state: &mut NextState<UiState>,
     masks_query: &mut Masks,
 ) {
     egui::containers::ScrollArea::vertical().show(ui, |ui| {
@@ -904,7 +903,17 @@ pub fn draw_ui_for_layers(
 
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
-            next_ui_state.set(UiState::ShowingLoadImageDialog);
+            commands.queue(|world: &mut World| {
+                let dialog = LoadImageDialog::from_world(world);
+                world.spawn((
+                    Name::new("Load Image Dialog"),
+                    dialog,
+                    DespawnOnExit(UiState::ShowingLoadImageDialog),
+                ));
+                world
+                    .resource_mut::<NextState<UiState>>()
+                    .set(UiState::ShowingLoadImageDialog);
+            });
         }
 
         if ui.button("New Layer").clicked() {
