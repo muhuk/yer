@@ -35,6 +35,7 @@ use super::state::UiState;
 const LATENCY: Duration = Duration::from_millis(100);
 const LAYER_SELECTION_BOX_WIDTH: f32 = 24.0f32;
 const MINUS_ONE_TO_ONE: RangeInclusive<f32> = -1.0..=1.0;
+const SCALE_LIMITS: RangeInclusive<f32> = 0.0001..=1000000.0;
 const ZERO_TO_POSITIVE_INFINITY: RangeInclusive<f32> = 0.0..=f32::INFINITY;
 const ZERO_TO_ONE: RangeInclusive<f32> = 0.0..=1.0;
 const ZERO_TO_ONE_INCREMENT: f32 = 0.0025;
@@ -1344,8 +1345,16 @@ fn draw_ui_for_transform_2d(ui: &mut egui::Ui, transform: &Transform2D) -> Optio
         })
         .inner;
 
-    if new_translation.is_some() || new_rotation.is_some() {
+    let new_scale = ui
+        .horizontal(|ui| {
+            ui.label("Scale:");
+            draw_ui_editable_f32(Some(SCALE_LIMITS), None, ui, transform.scale)
+        })
+        .inner;
+
+    if new_scale.is_some() || new_translation.is_some() || new_rotation.is_some() {
         Some(Transform2D {
+            scale: new_scale.unwrap_or(transform.scale),
             translation: new_translation.unwrap_or(transform.translation),
             rotation: new_rotation.unwrap_or(transform.rotation),
         })

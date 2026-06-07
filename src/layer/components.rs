@@ -145,8 +145,8 @@ impl Sampler2D for HeightMap {
                     // Flip Y to convert from Z-up world coordinates to Y-down image
                     // coordinates.
                     let image_position = UVec2::new(
-                        repeat_applied_position.x.round() as u32,
-                        image_size.y - 1 - repeat_applied_position.y.round() as u32,
+                        repeat_applied_position.x.floor() as u32,
+                        image_size.y - 1 - repeat_applied_position.y.floor() as u32,
                     );
 
                     // FIXME: Remove 20.0 multiplier, use height param.
