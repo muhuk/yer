@@ -23,7 +23,7 @@ use bevy_egui::egui;
 
 use crate::bitmap::BitmapServer;
 use crate::id::{LayerId, MaskId};
-use crate::layer;
+use crate::layer::{self, HeightMap};
 use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
 use crate::undo;
@@ -874,20 +874,39 @@ fn draw_ui_for_layer_common_top(
     };
 }
 
-fn draw_ui_for_bitmap_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi) {
-    warn_once!("FIXME: Bitmap layer UI is not implemented.");
-
+fn draw_ui_for_bitmap_layer(
+    ui: &mut egui::Ui,
+    bitmap_server: &BitmapServer,
+    height_map: &HeightMap,
+    height_map_ui: &mut HeightMapUi,
+) {
     match height_map_ui {
         HeightMapUi::Bitmap {
             transform,
             repeat_mode,
             timer,
         } => {
+            let size = {
+                if let HeightMap::Bitmap {
+                    bitmap_handle,
+                    transform,
+                    ..
+                } = height_map
+                {
+                    bitmap_server.get(bitmap_handle).unwrap().size().as_vec2() * transform.scale
+                } else {
+                    unreachable!()
+                }
+            };
+
             if let Some(new_transform) = draw_ui_for_transform_2d(ui, transform) {
                 *transform = new_transform;
                 timer.unpause();
                 timer.reset();
             }
+            ui.horizontal(|ui| {
+                ui.label(format!("Size: {:.2}×{:.2}", size.x, size.y));
+            });
         }
         HeightMapUi::Constant { .. } => unreachable!(),
     }
@@ -919,6 +938,7 @@ fn draw_ui_for_constant_layer(ui: &mut egui::Ui, height_map_ui: &mut HeightMapUi
 
 /// Draw the UI for the stack of layers in the project.
 pub fn draw_ui_for_layers(
+    bitmap_server: &BitmapServer,
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
@@ -969,6 +989,7 @@ pub fn draw_ui_for_layers(
             {
                 let parent_layer_id = layer_ids.get(idx + 1).cloned();
                 draw_ui_for_layer(
+                    bitmap_server,
                     commands,
                     theme_colors,
                     ui,
@@ -982,6 +1003,7 @@ pub fn draw_ui_for_layers(
 }
 
 fn draw_ui_for_layer(
+    bitmap_server: &BitmapServer,
     commands: &mut Commands,
     theme_colors: &theme::ThemeColors,
     ui: &mut egui::Ui,
@@ -1028,7 +1050,12 @@ fn draw_ui_for_layer(
                                 parent_layer_id,
                             );
                             ui.separator();
-                            draw_ui_for_bitmap_layer(ui, layer_query_item.height_map_ui.as_mut());
+                            draw_ui_for_bitmap_layer(
+                                ui,
+                                &bitmap_server,
+                                layer_query_item.height_map,
+                                layer_query_item.height_map_ui.as_mut(),
+                            );
                             ui.separator();
                             draw_ui_for_layer_common_bottom(
                                 commands,

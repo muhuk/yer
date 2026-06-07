@@ -22,6 +22,7 @@ use bevy_egui::{EguiContext, PrimaryEguiContext};
 #[cfg(feature = "inspector")]
 use bevy_inspector_egui::{bevy_inspector, DefaultInspectorConfigPlugin};
 
+use crate::bitmap::BitmapServer;
 use crate::constants;
 use crate::layer as crate_layer;
 use crate::session;
@@ -208,6 +209,7 @@ fn draw_ui_dialogs_system(
 
 fn draw_ui_panels_system(
     mut app_exit_events: MessageWriter<AppExit>,
+    bitmap_server: Res<BitmapServer>,
     mut commands: Commands,
     mut contexts: EguiContexts,
     egui_theme: Res<egui_ext::EguiTheme>,
@@ -255,6 +257,7 @@ fn draw_ui_panels_system(
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
                 if let Some(colors) = theme_colors.get(&theme.colors) {
                     layer::draw_ui_for_layers(
+                        &bitmap_server,
                         &mut commands,
                         colors,
                         ui,
