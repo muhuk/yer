@@ -70,26 +70,22 @@ pub enum Alpha {
 }
 
 impl Alpha {
-    pub fn factor(&self) -> f32 {
+    pub fn alpha(&self) -> f32 {
         match self {
             Self::Opaque => 1.0,
-            Self::Transparent(factor) => *factor,
+            Self::Transparent(alpha) => *alpha,
         }
     }
 
-    pub fn is_opaque(&self) -> bool {
-        *self == Self::Opaque
-    }
-
-    pub fn from_factor(factor: f32) -> Self {
+    pub fn from_alpha(alpha: f32) -> Self {
         assert!(
-            factor >= 0.0 && factor <= 1.0,
-            "factor must be between 0.0 and 1.0."
+            alpha >= 0.0 && alpha <= 1.0,
+            "alpha must be between 0.0 and 1.0."
         );
-        if factor.approx_eq(1.0, None) {
+        if alpha.approx_eq(1.0, None) {
             Self::Opaque
         } else {
-            Self::Transparent(factor)
+            Self::Transparent(alpha)
         }
     }
 }
@@ -105,8 +101,8 @@ impl Sample {
         Self { height, alpha }
     }
 
-    pub fn alpha(&self) -> Alpha {
-        self.alpha
+    pub fn alpha(&self) -> f32 {
+        self.alpha.alpha()
     }
 
     pub fn height(&self) -> f32 {
@@ -117,19 +113,33 @@ impl Sample {
     ///
     /// See [reference](https://en.wikipedia.org/wiki/Alpha_compositing#Description).
     pub fn mix_in_place(&mut self, other: &Self) {
-        let mix_factor = other.alpha.factor();
-        let new_alpha = Alpha::from_factor(mix_factor + self.alpha().factor() * (1.0 - mix_factor));
-        self.height =
-            other.height * mix_factor + self.height * self.alpha().factor() * (1.0 - mix_factor);
-        self.alpha = new_alpha;
+        match other.alpha {
+            Alpha::Opaque => {
+                self.height = other.height;
+                self.alpha = Alpha::Opaque;
+            }
+            Alpha::Transparent(mix_factor) => {
+                let new_alpha = Alpha::from_alpha(
+                    (mix_factor + self.alpha() * (1.0 - mix_factor)).clamp(0.0, 1.0),
+                );
+                self.height =
+                    other.height * mix_factor + self.height * self.alpha() * (1.0 - mix_factor);
+                self.alpha = new_alpha;
+            }
+        }
     }
 
-    pub fn multiply_alpha_mut(&mut self, factor: f32) {
+    pub fn multiply_alpha_mut(&mut self, alpha: f32) {
         assert!(
-            factor >= 0.0 && factor <= 1.0,
+            alpha >= 0.0 && alpha <= 1.0,
             "factor must be between 0.0 and 1.0."
         );
-        self.alpha = Alpha::from_factor(self.alpha.factor() * factor);
+        self.alpha = Alpha::from_alpha(self.alpha() * alpha);
+    }
+
+    #[cfg(test)]
+    pub fn is_opaque(&self) -> bool {
+        self.alpha == Alpha::Opaque
     }
 }
 
@@ -218,11 +228,11 @@ mod tests {
         };
         let c = Sample {
             height: 10.5,
-            alpha: Alpha::from_factor(0.5),
+            alpha: Alpha::from_alpha(0.5),
         };
         let d = Sample {
             height: 4.5,
-            alpha: Alpha::from_factor(0.4),
+            alpha: Alpha::from_alpha(0.4),
         };
 
         // If the 2nd operand is opaque, then the result is equal to 2nd
@@ -231,14 +241,14 @@ mod tests {
             let mut mixed = a.clone();
             mixed.mix_in_place(&b);
             assert!(mixed.height().approx_eq(b.height(), None));
-            assert!(mixed.alpha().is_opaque());
+            assert!(mixed.is_opaque());
         }
 
         {
             let mut mixed = c.clone();
             mixed.mix_in_place(&b);
             assert!(mixed.height().approx_eq(b.height(), None));
-            assert!(mixed.alpha().is_opaque());
+            assert!(mixed.is_opaque());
         }
 
         // If the 2nd operand is not opaque, but the 1st operand is opaque
@@ -249,7 +259,7 @@ mod tests {
             assert!(mixed
                 .height()
                 .approx_eq((a.height() + c.height()) / 2.0, None));
-            assert!(mixed.alpha().is_opaque());
+            assert!(mixed.is_opaque());
         }
 
         // If the 1st operand is not opaque, 2nd operand's values is mixed but
@@ -258,7 +268,7 @@ mod tests {
             let mut mixed = d.clone();
             mixed.mix_in_place(&c);
             assert!(mixed.height().approx_eq(6.15, None));
-            assert_eq!(mixed.alpha(), Alpha::from_factor(0.7));
+            assert_eq!(mixed.alpha(), 0.7);
         }
     }
 }

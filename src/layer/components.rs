@@ -30,6 +30,7 @@ use super::context::LayerSamplerContext;
 pub const HEIGHT_RANGE: RangeInclusive<f32> = -16000.0..=64000.0;
 pub const LAYER_SPACING: u32 = 100;
 
+const DEFAULT_FADE_AMOUNT: f32 = 0.5;
 const DEFAULT_LAYER_NAME: &str = "<unnamed>";
 
 // PLUGIN
@@ -63,6 +64,7 @@ impl LayerBundle {
             layer,
             height_map: HeightMap::Bitmap {
                 bitmap_handle,
+                fade_amount: DEFAULT_FADE_AMOUNT,
                 transform: Transform2D::default(),
                 repeat_mode: BitmapRepeatMode::default(),
             },
@@ -112,6 +114,7 @@ impl LayerBundle {
 pub enum HeightMap {
     Bitmap {
         bitmap_handle: BitmapHandle,
+        fade_amount: f32,
         transform: Transform2D,
         repeat_mode: BitmapRepeatMode,
     },
@@ -131,6 +134,7 @@ impl Sampler2D for HeightMap {
         match self {
             Self::Bitmap {
                 bitmap_handle,
+                fade_amount,
                 transform,
                 repeat_mode,
             } => {
@@ -139,21 +143,46 @@ impl Sampler2D for HeightMap {
                 let offset = image_size.as_vec2() * 0.5;
                 let transformed_position = transform.apply(position) + offset;
 
-                let value: f32 = {
+                let image_position = {
                     let repeat_applied_position =
                         repeat_mode.apply(transformed_position, image_size);
+
                     // Flip Y to convert from Z-up world coordinates to Y-down image
                     // coordinates.
-                    let image_position = UVec2::new(
+                    UVec2::new(
                         repeat_applied_position.x.floor() as u32,
                         image_size.y - 1 - repeat_applied_position.y.floor() as u32,
-                    );
+                    )
+                };
 
+                let value: f32 = {
                     // FIXME: Remove 20.0 multiplier, use height param.
                     image.get_pixel_luma(image_position) * 20.0
                 };
 
-                Sample::new(value, Alpha::Opaque)
+                let alpha = if *repeat_mode == BitmapRepeatMode::Fade {
+                    let distance_to_center =
+                        ((transformed_position / image_size.as_vec2()) - Vec2::new(0.5, 0.5)) * 2.0;
+                    let dist_manhattan = distance_to_center.x.abs().max(distance_to_center.y.abs());
+
+                    let alpha = if *fade_amount > f32::EPSILON {
+                        let fade = ((dist_manhattan.clamp(0.0, 1.0) - 1.0 + fade_amount)
+                            / fade_amount)
+                            .clamp(0.0, 1.0);
+                        1.0 - fade
+                    } else {
+                        if dist_manhattan > 1.0 {
+                            0.0
+                        } else {
+                            1.0
+                        }
+                    };
+                    Alpha::Transparent(alpha)
+                } else {
+                    Alpha::Opaque
+                };
+
+                Sample::new(value, alpha)
             }
             Self::Constant(value) => Sample::new(*value, Alpha::Opaque),
         }
@@ -229,11 +258,10 @@ impl BitmapRepeatMode {
 
     pub fn apply(&self, position: Vec2, size: UVec2) -> Vec2 {
         match self {
-            Self::Extend => Vec2::new(
+            Self::Extend | Self::Fade => Vec2::new(
                 position.x.max(0.0).min((size.x - 1) as f32),
                 position.y.max(0.0).min((size.y - 1) as f32),
             ),
-            Self::Fade => unimplemented!(),
             Self::Repeat => Vec2::new(
                 Self::normalize(position.x, size.x as f32),
                 Self::normalize(position.y, size.y as f32),

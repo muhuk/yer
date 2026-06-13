@@ -143,6 +143,7 @@ pub(super) enum HeightMapUi {
         //
         // #[reflect(ignore)]
         // bitmap: layer::Image,
+        fade_amount: f32,
         transform: Transform2D,
         repeat_mode: layer::BitmapRepeatMode,
         timer: Timer,
@@ -157,10 +158,12 @@ impl From<&layer::HeightMap> for HeightMapUi {
     fn from(value: &layer::HeightMap) -> Self {
         match value {
             layer::HeightMap::Bitmap {
+                fade_amount,
                 transform,
                 repeat_mode,
                 ..
             } => Self::Bitmap {
+                fade_amount: *fade_amount,
                 transform: transform.clone(),
                 repeat_mode: *repeat_mode,
                 timer: Timer::new(LATENCY, TimerMode::Once),
@@ -366,11 +369,13 @@ fn update_height_map_ui_system(
     for (layer, height_map, mut height_map_ui) in layers.iter_mut() {
         match height_map_ui.as_mut() {
             HeightMapUi::Bitmap {
+                fade_amount,
                 transform,
                 repeat_mode,
                 timer,
             } => match height_map {
                 layer::HeightMap::Bitmap {
+                    fade_amount: original_fade_amount,
                     transform: original_transform,
                     repeat_mode: original_repeat_mode,
                     ..
@@ -387,10 +392,22 @@ fn update_height_map_ui_system(
                                 ),
                             ));
                         }
+
+                        if timer.just_finished()
+                            && !fade_amount.approx_eq(*original_fade_amount, None)
+                        {
+                            debug!("pushing command");
+                            commands.queue(undo::PushAction::from(
+                                layer::HeightMapBitmapUpdateFadeAmountAction::new(
+                                    layer.id(),
+                                    *original_fade_amount,
+                                    *fade_amount,
+                                ),
+                            ));
+                        }
                     }
 
                     if repeat_mode != original_repeat_mode {
-                        debug!("!!!!");
                         commands.queue(undo::PushAction::from(
                             layer::HeightMapBitmapUpdateRepeatMode::new(
                                 layer.id(),
@@ -637,16 +654,19 @@ fn reset_height_map_ui_system(
         match height_map {
             layer::HeightMap::Bitmap {
                 // bitmap: original_bitmap,
+                fade_amount: original_fade_amount,
                 transform: original_transform,
                 repeat_mode: original_repeat_mode,
                 ..
             } => {
                 if let HeightMapUi::Bitmap {
+                    fade_amount,
                     transform,
                     repeat_mode,
                     timer,
                 } = height_map_ui.as_mut()
                 {
+                    *fade_amount = *original_fade_amount;
                     *transform = original_transform.clone();
                     *repeat_mode = *original_repeat_mode;
                     timer.pause();
@@ -890,6 +910,7 @@ fn draw_ui_for_bitmap_layer(
 ) {
     match height_map_ui {
         HeightMapUi::Bitmap {
+            fade_amount,
             transform,
             repeat_mode,
             timer,
@@ -926,6 +947,18 @@ fn draw_ui_for_bitmap_layer(
                         }
                     })
             });
+            if *repeat_mode == BitmapRepeatMode::Fade {
+                ui.horizontal(|ui| {
+                    ui.label("Fade amount");
+                    if let Some(new_fade_amount) =
+                        draw_ui_editable_f32(Some(ZERO_TO_ONE), None, ui, *fade_amount)
+                    {
+                        *fade_amount = new_fade_amount;
+                        timer.unpause();
+                        timer.reset();
+                    }
+                });
+            }
         }
         HeightMapUi::Constant { .. } => unreachable!(),
     }

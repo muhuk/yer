@@ -141,6 +141,49 @@ impl Action for DeleteLayerAction {
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
+pub struct HeightMapBitmapUpdateFadeAmountAction {
+    layer_id: LayerId,
+    old_fade_amount: f32,
+    new_fade_amount: f32,
+}
+
+impl HeightMapBitmapUpdateFadeAmountAction {
+    pub fn new(layer_id: LayerId, old_fade_amount: f32, new_fade_amount: f32) -> Self {
+        Self {
+            layer_id,
+            old_fade_amount,
+            new_fade_amount,
+        }
+    }
+}
+
+impl Action for HeightMapBitmapUpdateFadeAmountAction {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<(&Layer, &mut HeightMap)>()
+            .iter_mut(world)
+            .find(|(layer, _)| layer.id() == self.layer_id)
+            .map(|(_, mut height_map)| match height_map.as_mut() {
+                HeightMap::Bitmap { fade_amount, .. } => {
+                    *fade_amount = self.new_fade_amount.clone();
+                }
+                HeightMap::Constant(..) => unreachable!(),
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_fade_amount: self.new_fade_amount,
+            new_fade_amount: self.old_fade_amount,
+        };
+        reverse_action.apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
 pub struct HeightMapBitmapUpdateRepeatMode {
     layer_id: LayerId,
     old_repeat_mode: BitmapRepeatMode,
