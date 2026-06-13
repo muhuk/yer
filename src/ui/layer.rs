@@ -23,7 +23,7 @@ use bevy_egui::egui;
 
 use crate::bitmap::BitmapServer;
 use crate::id::{LayerId, MaskId};
-use crate::layer::{self, HeightMap};
+use crate::layer::{self, BitmapRepeatMode, HeightMap};
 use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
 use crate::undo;
@@ -369,31 +369,39 @@ fn update_height_map_ui_system(
                 transform,
                 repeat_mode,
                 timer,
-            } => {
-                if !timer.is_finished() {
-                    timer.tick(time.delta());
-                    match height_map {
-                        layer::HeightMap::Bitmap {
-                            transform: original_transform,
-                            repeat_mode: original_repeat_mode,
-                            ..
-                        } => {
-                            if timer.just_finished() && transform != original_transform {
-                                commands.queue(undo::PushAction::from(
-                                    layer::HeightMapBitmapUpdateTransformAction::new(
-                                        layer.id(),
-                                        original_transform.clone(),
-                                        transform.clone(),
-                                    ),
-                                ));
-                            }
+            } => match height_map {
+                layer::HeightMap::Bitmap {
+                    transform: original_transform,
+                    repeat_mode: original_repeat_mode,
+                    ..
+                } => {
+                    if !timer.is_finished() {
+                        timer.tick(time.delta());
 
-                            // TODO: Handle repeat_mode changes.
+                        if timer.just_finished() && transform != original_transform {
+                            commands.queue(undo::PushAction::from(
+                                layer::HeightMapBitmapUpdateTransformAction::new(
+                                    layer.id(),
+                                    original_transform.clone(),
+                                    transform.clone(),
+                                ),
+                            ));
                         }
-                        layer::HeightMap::Constant(_) => unreachable!(),
+                    }
+
+                    if repeat_mode != original_repeat_mode {
+                        debug!("!!!!");
+                        commands.queue(undo::PushAction::from(
+                            layer::HeightMapBitmapUpdateRepeatMode::new(
+                                layer.id(),
+                                *original_repeat_mode,
+                                *repeat_mode,
+                            ),
+                        ));
                     }
                 }
-            }
+                layer::HeightMap::Constant(_) => unreachable!(),
+            },
             HeightMapUi::Constant { height, timer } => {
                 if !timer.is_finished() {
                     timer.tick(time.delta());
@@ -906,6 +914,17 @@ fn draw_ui_for_bitmap_layer(
             }
             ui.horizontal(|ui| {
                 ui.label(format!("Size: {:.2}×{:.2}", size.x, size.y));
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Repeat mode");
+                egui::ComboBox::from_id_salt("repeat_mode")
+                    .selected_text(repeat_mode.to_string())
+                    .show_ui(ui, |ui| {
+                        for value in BitmapRepeatMode::VALUES {
+                            ui.selectable_value(repeat_mode, value, value.to_string());
+                        }
+                    })
             });
         }
         HeightMapUi::Constant { .. } => unreachable!(),

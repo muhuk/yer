@@ -22,6 +22,7 @@ use crate::undo::{Action, ReflectAction};
 
 use super::components::{HeightMap, Layer, LayerBundle, LayerOrder, LAYER_SPACING};
 use super::mask::{MaskBundle, MaskOrder, MASK_SPACING};
+use super::BitmapRepeatMode;
 
 #[derive(Debug, Reflect)]
 #[reflect(Action)]
@@ -135,6 +136,53 @@ impl Action for DeleteLayerAction {
             parent_id: self.parent_id,
         }
         .apply(world);
+    }
+}
+
+#[derive(Debug, Reflect)]
+#[reflect(Action)]
+pub struct HeightMapBitmapUpdateRepeatMode {
+    layer_id: LayerId,
+    old_repeat_mode: BitmapRepeatMode,
+    new_repeat_mode: BitmapRepeatMode,
+}
+
+impl HeightMapBitmapUpdateRepeatMode {
+    pub fn new(
+        layer_id: LayerId,
+        old_repeat_mode: BitmapRepeatMode,
+        new_repeat_mode: BitmapRepeatMode,
+    ) -> Self {
+        Self {
+            layer_id,
+            old_repeat_mode,
+            new_repeat_mode,
+        }
+    }
+}
+
+impl Action for HeightMapBitmapUpdateRepeatMode {
+    fn apply(&self, world: &mut World) {
+        world
+            .query::<(&Layer, &mut HeightMap)>()
+            .iter_mut(world)
+            .find(|(layer, _)| layer.id() == self.layer_id)
+            .map(|(_, mut height_map)| match height_map.as_mut() {
+                HeightMap::Bitmap { repeat_mode, .. } => {
+                    *repeat_mode = self.new_repeat_mode;
+                }
+                HeightMap::Constant(..) => unreachable!(),
+            })
+            .expect(&format!("Layer with id {} not found.", self.layer_id));
+    }
+
+    fn revert(&self, world: &mut World) {
+        let reverse_action = Self {
+            layer_id: self.layer_id,
+            old_repeat_mode: self.new_repeat_mode,
+            new_repeat_mode: self.old_repeat_mode,
+        };
+        reverse_action.apply(world);
     }
 }
 

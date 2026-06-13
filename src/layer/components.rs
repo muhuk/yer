@@ -225,6 +225,8 @@ pub enum BitmapRepeatMode {
 }
 
 impl BitmapRepeatMode {
+    pub const VALUES: [Self; 3] = [Self::Extend, Self::Fade, Self::Repeat];
+
     pub fn apply(&self, position: Vec2, size: UVec2) -> Vec2 {
         match self {
             Self::Extend => Vec2::new(
@@ -251,17 +253,18 @@ impl BitmapRepeatMode {
     }
 }
 
+impl Display for BitmapRepeatMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 fn layer_order_on_remove_hook(mut world: DeferredWorld, HookContext { .. }: HookContext) {
     world.commands().spawn(NeedsLayerOrderNormalization);
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
-    use image::ImageReader;
-    use rmp_serde;
-
     use crate::math::ApproxEq;
 
     use super::*;
