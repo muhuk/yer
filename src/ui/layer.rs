@@ -907,6 +907,7 @@ fn draw_ui_for_bitmap_layer(
     bitmap_server: &BitmapServer,
     height_map: &HeightMap,
     height_map_ui: &mut HeightMapUi,
+    layer_id: LayerId,
 ) {
     match height_map_ui {
         HeightMapUi::Bitmap {
@@ -939,7 +940,7 @@ fn draw_ui_for_bitmap_layer(
 
             ui.horizontal(|ui| {
                 ui.label("Repeat mode");
-                egui::ComboBox::from_id_salt("repeat_mode")
+                egui::ComboBox::from_id_salt(("repeat_mode", layer_id))
                     .selected_text(repeat_mode.to_string())
                     .show_ui(ui, |ui| {
                         for value in BitmapRepeatMode::VALUES {
@@ -1107,6 +1108,7 @@ fn draw_ui_for_layer(
                                 &bitmap_server,
                                 layer_query_item.height_map,
                                 layer_query_item.height_map_ui.as_mut(),
+                                layer_query_item.layer.id(),
                             );
                             ui.separator();
                             draw_ui_for_layer_common_bottom(
