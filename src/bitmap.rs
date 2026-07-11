@@ -50,18 +50,19 @@ pub struct BitmapServer {
 impl BitmapServer {
     pub fn get(&self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapGetError> {
         {
-            if self.is_embedded(handle)? {
-                unimplemented!();
-            } else {
-                Ok(self
-                    .data
-                    .linked_image_data
-                    .read()
-                    .unwrap()
-                    .get(handle)
-                    // Hashmap should have this key.
-                    .unwrap()
-                    .clone())
+            match self.get_load_mode(handle)? {
+                LoadMode::Embedded => unimplemented!(),
+                LoadMode::Linked => {
+                    Ok(self
+                        .data
+                        .linked_image_data
+                        .read()
+                        .unwrap()
+                        .get(handle)
+                        // Hashmap should have this key.
+                        .unwrap()
+                        .clone())
+                }
             }
         }
     }
@@ -167,22 +168,17 @@ impl BitmapServer {
         world.insert_resource(self);
     }
 
-    fn is_embedded(&self, handle: &BitmapHandle) -> Result<bool, BitmapGetError> {
-        if let Some(is_embedded) = self
-            .data
+    fn get_load_mode(&self, handle: &BitmapHandle) -> Result<LoadMode, BitmapGetError> {
+        self.data
             .images
             .read()?
             .iter()
             .find(|&data| data.handle() == *handle)
             .map(|data| match data {
-                BitmapData::Embedded { .. } => true,
-                BitmapData::Linked { .. } => false,
+                BitmapData::Embedded { .. } => LoadMode::Embedded,
+                BitmapData::Linked { .. } => LoadMode::Linked,
             })
-        {
-            Ok(is_embedded)
-        } else {
-            Err(BitmapGetError::InvalidHandle(handle.clone()))
-        }
+            .ok_or(BitmapGetError::InvalidHandle(handle.clone()))
     }
 }
 
