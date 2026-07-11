@@ -45,6 +45,7 @@ impl Plugin for BitmapPlugin {
 #[derive(Clone, Debug, Deserialize, Reflect, Resource, Serialize)]
 #[reflect(Clone, Resource)]
 pub struct BitmapServer {
+    #[reflect(ignore)]
     data: Arc<BitmapServerData>,
 }
 
@@ -250,23 +251,17 @@ impl BitmapData {
     }
 }
 
-#[derive(Debug, Default, Deserialize, Reflect, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 struct BitmapServerData {
-    #[reflect(ignore)]
     images: RwLock<Vec<BitmapData>>,
-    #[reflect(ignore)]
     embedded_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
     #[serde(skip)]
-    #[reflect(ignore)]
     linked_image_data: RwLock<HashMap<BitmapHandle, Arc<Image>>>,
 }
 
-#[derive(Debug, PartialEq, Reflect)]
+#[derive(Debug, PartialEq)]
 pub struct Image {
-    #[reflect(ignore)]
-    #[reflect(default = "default_image_format")]
     format: ImageFormat,
-    #[reflect(ignore)]
     image: DynamicImage,
 }
 
@@ -344,10 +339,6 @@ impl<'de> Visitor<'de> for ImageVisitor {
             image,
         })
     }
-}
-
-fn default_image_format() -> ImageFormat {
-    ImageFormat::Png
 }
 
 #[cfg(test)]
