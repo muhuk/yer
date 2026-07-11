@@ -51,29 +51,18 @@ pub struct BitmapServer {
 impl BitmapServer {
     pub fn get(&self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapGetError> {
         {
-            let images = self.data.images.read()?;
-            match images
-                .iter()
-                .find(|&data| data.handle() == *handle)
-                .map(|data| match data {
-                    BitmapData::Embedded { .. } => true,
-                    BitmapData::Linked { .. } => false,
-                }) {
-                // TODO: Consider using a weak handle for the id.
-                None => return Err(BitmapGetError::InvalidHandle(handle.clone())),
-                // Embedded
-                Some(true) => unimplemented!(),
-                // Linked
-                Some(false) => Ok(self
+            if self.is_embedded(handle)? {
+                unimplemented!();
+            } else {
+                Ok(self
                     .data
                     .linked_image_data
                     .read()
                     .unwrap()
                     .get(handle)
-                    // TODO: hashmap should have this key, but in case it does
-                    //       not, handle this case.
+                    // Hashmap should have this key.
                     .unwrap()
-                    .clone()),
+                    .clone())
             }
         }
     }
@@ -177,6 +166,24 @@ impl BitmapServer {
         }
 
         world.insert_resource(self);
+    }
+
+    fn is_embedded(&self, handle: &BitmapHandle) -> Result<bool, BitmapGetError> {
+        if let Some(is_embedded) = self
+            .data
+            .images
+            .read()?
+            .iter()
+            .find(|&data| data.handle() == *handle)
+            .map(|data| match data {
+                BitmapData::Embedded { .. } => true,
+                BitmapData::Linked { .. } => false,
+            })
+        {
+            Ok(is_embedded)
+        } else {
+            Err(BitmapGetError::InvalidHandle(handle.clone()))
+        }
     }
 }
 
