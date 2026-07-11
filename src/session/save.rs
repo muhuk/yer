@@ -23,6 +23,7 @@ use rmp_serde;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::bitmap;
 use crate::id::LayerId;
 use crate::layer;
 use crate::preview;
@@ -47,6 +48,7 @@ pub fn load(path: &Path, world: &mut World) -> Result<(), SaveError> {
         .map(|bytes| SaveContainer::from_bytes(&bytes))??;
     assert!(save_container.version == CURRENT_SAVE_VERSION);
     let save_data = SaveV1::from_bytes(&save_container.data)?;
+    save_data.bitmaps.replace_in_world(world);
     layer::LayerBundle::insert_all(world, save_data.layers);
     world.spawn_batch(save_data.preview_regions);
     layer::MaskBundle::insert_all(world, save_data.masks);
@@ -57,6 +59,7 @@ pub fn save(path: &Path, world: &mut World) -> Result<(), SaveError> {
     let container = SaveContainer {
         version: CURRENT_SAVE_VERSION,
         data: (SaveV1 {
+            bitmaps: world.resource::<bitmap::BitmapServer>().clone(),
             layers: layer::LayerBundle::extract_all(world),
             preview_regions: preview::PreviewBundle::extract_all(world),
             masks: layer::MaskBundle::extract_all(world),
@@ -89,6 +92,7 @@ impl SaveContainer {
 // TODO: Store cached preview mesh
 #[derive(Deserialize, Serialize)]
 struct SaveV1 {
+    bitmaps: bitmap::BitmapServer,
     layers: Vec<layer::LayerBundle>,
     preview_regions: Vec<preview::PreviewBundle>,
     masks: HashMap<LayerId, Vec<layer::MaskBundle>>,

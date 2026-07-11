@@ -114,6 +114,70 @@ impl BitmapServer {
 
         handle
     }
+
+    pub fn replace_in_world(self, world: &mut World) {
+        // We can reuse already loaded linked images.
+        let old_self = world.remove_resource::<Self>();
+
+        {
+            let mut linked_inage_data = self.data.linked_image_data.write().unwrap();
+            for bitmap_data in self.data.images.read().unwrap().iter() {
+                match bitmap_data {
+                    BitmapData::Embedded { .. } => (),
+                    BitmapData::Linked { handle, path } => {
+                        // FIXME: WTF is this monstrosity!!!!!!11111
+                        if let Some(image) = old_self
+                            .clone()
+                            .map(|old_self| {
+                                let maybe_old_handle = old_self
+                                    .data
+                                    .images
+                                    .read()
+                                    .unwrap()
+                                    .iter()
+                                    .filter_map(|data| {
+                                        if let BitmapData::Linked {
+                                            handle: old_handle,
+                                            path: old_path,
+                                        } = data
+                                        {
+                                            if old_path == path {
+                                                Some(old_handle.clone())
+                                            } else {
+                                                None
+                                            }
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .next();
+                                if let Some(old_handle) = maybe_old_handle {
+                                    old_self
+                                        .data
+                                        .linked_image_data
+                                        .write()
+                                        .unwrap()
+                                        .remove(&old_handle)
+                                } else {
+                                    None
+                                }
+                            })
+                            .flatten()
+                        {
+                            debug!("Reusing image data for {handle:?}.");
+                            linked_inage_data.insert(handle.clone(), image.clone());
+                        } else {
+                            debug!("Loading image data from disk for {handle:?}.");
+                            linked_inage_data
+                                .insert(handle.clone(), Arc::new(Image::load_from_disk(path)));
+                        }
+                    }
+                }
+            }
+        }
+
+        world.insert_resource(self);
+    }
 }
 
 // We need a manual implementation of FromWorld as deriving it will
