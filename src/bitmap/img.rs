@@ -14,16 +14,17 @@
 // You should have received a copy of the GNU General Public License along
 // with Yer.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::io::{BufReader, BufWriter, Cursor};
-use std::path::Path;
+use std::io::{BufReader, BufWriter, Cursor, Error as IoError};
+use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
-use image::{DynamicImage, GenericImageView, ImageFormat, ImageReader, Pixel};
+use image::{DynamicImage, GenericImageView, ImageError, ImageFormat, ImageReader, Pixel};
 use serde::{
     de::{self, Deserializer, Visitor},
     ser::{self, Serializer},
     Deserialize, Serialize,
 };
+use thiserror::Error;
 
 #[derive(Debug, PartialEq)]
 pub struct Image {
@@ -44,13 +45,18 @@ impl Image {
         UVec2::from(self.image.dimensions())
     }
 
-    pub(super) fn load_from_disk(file_path: impl AsRef<Path>) -> Self {
+    pub(super) fn load_from_disk(file_path: impl AsRef<Path>) -> Result<Self, ImageLoadError> {
         let (format, image) = {
-            let reader = image::ImageReader::open(file_path).unwrap();
-            (reader.format().unwrap(), reader.decode().unwrap())
+            let reader = image::ImageReader::open(&file_path)?;
+            (
+                reader.format().ok_or_else(|| {
+                    ImageLoadError::CannotDetermineFileFormat(file_path.as_ref().to_path_buf())
+                })?,
+                reader.decode()?,
+            )
         };
 
-        Self { format, image }
+        Ok(Self { format, image })
     }
 }
 
@@ -74,6 +80,28 @@ impl Serialize for Image {
             .write_to(writer, self.format)
             .map_err(ser::Error::custom)?;
         serializer.serialize_bytes(&data[..])
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum ImageLoadError {
+    #[error("Cannot determine file format of '{0}'")]
+    CannotDetermineFileFormat(PathBuf),
+    #[error("Image decoding error: {0}")]
+    ImageError(ImageError),
+    #[error("I/O error: {0}")]
+    IoError(IoError),
+}
+
+impl From<ImageError> for ImageLoadError {
+    fn from(err: ImageError) -> Self {
+        Self::ImageError(err)
+    }
+}
+
+impl From<IoError> for ImageLoadError {
+    fn from(err: IoError) -> Self {
+        Self::IoError(err)
     }
 }
 
@@ -114,6 +142,8 @@ mod tests {
     use super::*;
 
     const SMILEY_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
+    const NON_EXISTENT_FILE_PATH: &str = "test_assets/non_existent_file.png";
+    const NOT_AN_IMAGE_FILE_PATH: &str = "test_assets/not_an_image.jpeg";
 
     #[test]
     fn bitmap_serialization_roundtrip() {
@@ -135,5 +165,31 @@ mod tests {
         let deserialized: Image = rmp_serde::from_slice(serialized.as_slice()).unwrap();
 
         assert_eq!(deserialized, image);
+    }
+
+    #[test]
+    fn try_opening_a_file_that_is_not_an_image() {
+        let file_path: PathBuf = {
+            let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            file_path.push(NOT_AN_IMAGE_FILE_PATH);
+            file_path
+        };
+
+        let result = Image::load_from_disk(file_path);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(ImageLoadError::ImageError(_))));
+    }
+
+    #[test]
+    fn try_opening_a_non_existent_file() {
+        let file_path: PathBuf = {
+            let mut file_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            file_path.push(NON_EXISTENT_FILE_PATH);
+            file_path
+        };
+
+        let result = Image::load_from_disk(file_path);
+        assert!(result.is_err());
+        assert!(matches!(result, Err(ImageLoadError::IoError(_))));
     }
 }

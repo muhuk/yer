@@ -26,7 +26,7 @@ use crate::id::BitmapId;
 
 mod img;
 
-pub use self::img::Image;
+pub use self::img::{Image, ImageLoadError};
 
 // PLUGIN
 
@@ -48,7 +48,7 @@ pub struct BitmapServer {
 }
 
 impl BitmapServer {
-    pub fn get(&self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapGetError> {
+    pub fn get(&self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapError> {
         {
             match self.get_load_mode(handle)? {
                 LoadMode::Embedded => unimplemented!(),
@@ -56,8 +56,7 @@ impl BitmapServer {
                     Ok(self
                         .data
                         .linked_image_data
-                        .read()
-                        .unwrap()
+                        .read()?
                         .get(handle)
                         // Hashmap should have this key.
                         .unwrap()
@@ -67,13 +66,17 @@ impl BitmapServer {
         }
     }
 
-    pub fn load(&self, path: impl AsRef<Path>, load_mode: LoadMode) -> BitmapHandle {
+    pub fn load(
+        &self,
+        path: impl AsRef<Path>,
+        load_mode: LoadMode,
+    ) -> Result<BitmapHandle, BitmapError> {
         if !matches!(load_mode, LoadMode::Linked) {
             unimplemented!("embedded mode is not implemented yet");
         }
 
         let handle = {
-            let mut images = self.data.images.write().unwrap();
+            let mut images = self.data.images.write()?;
             match images.iter().find(|bitmap| {
                 if let BitmapData::Linked { path: p, .. } = bitmap {
                     p == path.as_ref()
@@ -97,11 +100,11 @@ impl BitmapServer {
         };
 
         {
-            let mut linked_inage_data = self.data.linked_image_data.write().unwrap();
-            linked_inage_data.insert(handle.clone(), Arc::new(Image::load_from_disk(path)));
+            let mut linked_inage_data = self.data.linked_image_data.write()?;
+            linked_inage_data.insert(handle.clone(), Arc::new(Image::load_from_disk(path)?));
         }
 
-        handle
+        Ok(handle)
     }
 
     pub fn replace_in_world(self, world: &mut World) {
@@ -156,9 +159,15 @@ impl BitmapServer {
                             debug!("Reusing image data for {handle:?}.");
                             linked_inage_data.insert(handle.clone(), image.clone());
                         } else {
-                            debug!("Loading image data from disk for {handle:?}.");
-                            linked_inage_data
-                                .insert(handle.clone(), Arc::new(Image::load_from_disk(path)));
+                            match Image::load_from_disk(path) {
+                                Ok(image) => {
+                                    debug!("Loaded image data from disk for {handle:?}.");
+                                    linked_inage_data.insert(handle.clone(), Arc::new(image));
+                                }
+                                Err(err) => {
+                                    error!("Failed to load image at '{0:?}': {1}", path, err);
+                                }
+                            }
                         }
                     }
                 }
@@ -168,7 +177,7 @@ impl BitmapServer {
         world.insert_resource(self);
     }
 
-    fn get_load_mode(&self, handle: &BitmapHandle) -> Result<LoadMode, BitmapGetError> {
+    fn get_load_mode(&self, handle: &BitmapHandle) -> Result<LoadMode, BitmapError> {
         self.data
             .images
             .read()?
@@ -178,7 +187,7 @@ impl BitmapServer {
                 BitmapData::Embedded { .. } => LoadMode::Embedded,
                 BitmapData::Linked { .. } => LoadMode::Linked,
             })
-            .ok_or(BitmapGetError::InvalidHandle(handle.clone()))
+            .ok_or(BitmapError::InvalidHandle(handle.clone()))
     }
 }
 
@@ -199,16 +208,24 @@ impl FromWorld for BitmapServer {
 // LIB
 
 #[derive(Debug, Error)]
-pub enum BitmapGetError {
-    #[error("cannot access BitmapServerData.images")]
-    CannotAccessImages,
-    #[error("invalid handle: {0:?}")]
+pub enum BitmapError {
+    #[error("Image load error: {0}")]
+    ImageLoadError(ImageLoadError),
+    #[error("Invalid handle: {0:?}")]
     InvalidHandle(BitmapHandle),
+    #[error("Cannot access lock.")]
+    LockPoisonError,
 }
 
-impl<T> From<PoisonError<T>> for BitmapGetError {
-    fn from(_value: PoisonError<T>) -> Self {
-        Self::CannotAccessImages
+impl From<ImageLoadError> for BitmapError {
+    fn from(err: ImageLoadError) -> Self {
+        Self::ImageLoadError(err)
+    }
+}
+
+impl<T> From<PoisonError<T>> for BitmapError {
+    fn from(_err: PoisonError<T>) -> Self {
+        Self::LockPoisonError
     }
 }
 
@@ -271,9 +288,10 @@ mod tests {
         app.add_plugins(BitmapPlugin);
 
         let bitmap_server = app.world().resource::<BitmapServer>();
-        let handle: BitmapHandle = bitmap_server.load(&file_path, LoadMode::Linked);
+        let result = bitmap_server.load(&file_path, LoadMode::Linked);
+        assert!(result.is_ok());
         // Two in the store, one we are holding onto.
-        assert_eq!(Arc::strong_count(&handle.id), 3);
+        assert_eq!(Arc::strong_count(&result.unwrap().id), 3);
     }
 
     #[test]
@@ -288,8 +306,9 @@ mod tests {
         app.add_plugins(BitmapPlugin);
 
         let bitmap_server = app.world().resource::<BitmapServer>();
-        let handle: BitmapHandle = bitmap_server.load(&file_path, LoadMode::Linked);
-        let maybe_image: Result<Arc<Image>, BitmapGetError> = bitmap_server.get(&handle);
+        let result = bitmap_server.load(&file_path, LoadMode::Linked);
+        assert!(result.is_ok());
+        let maybe_image: Result<Arc<Image>, BitmapError> = bitmap_server.get(&result.unwrap());
         assert!(maybe_image.is_ok())
     }
 }

@@ -308,7 +308,11 @@ fn finalize_add_bitmap_layer_observer(
                 .sort::<&crate::layer::LayerOrder>()
                 .last()
                 .map(|l| l.layer.id());
-            let handle = bitmap_server.load(path, crate::bitmap::LoadMode::Linked);
+            // FIXME: We should do some error handling in UI level here.
+            //        Just using ? operator and returning a Result won't do.
+            let handle = bitmap_server
+                .load(path, crate::bitmap::LoadMode::Linked)
+                .unwrap();
             debug!("Loading image: {handle:?}.");
             commands.queue(crate::undo::PushAction::from(
                 crate::layer::CreateLayerAction::new(
