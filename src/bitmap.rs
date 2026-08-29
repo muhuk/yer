@@ -113,37 +113,37 @@ impl BitmapServer {
         // We can reuse already loaded linked images.
         let old_self = world.remove_resource::<Self>();
 
-        {
-            let mut linked_image_data = self.data.linked_image_data.write().unwrap();
-            for bitmap_data in self.data.images.read().unwrap().iter() {
-                match bitmap_data {
-                    // Embedded images' data are already loaded.
-                    BitmapData::Embedded { .. } => (),
-                    BitmapData::Linked { handle, path } => {
-                        // FIXME: WTF is this monstrosity!!!!!!11111
-                        let maybe_old_image = old_self
-                            .clone()
-                            .map(|mut old_self| {
-                                if let Ok(old_handle) = old_self.find_handle_from_path(path) {
-                                    Some(old_self.remove(&old_handle).unwrap())
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten();
+        for bitmap_data in self.data.images.read().unwrap().iter() {
+            match bitmap_data {
+                // Embedded images' data are already loaded.
+                BitmapData::Embedded { .. } => (),
+                BitmapData::Linked { handle, path } => {
+                    // Try to yank the image data from the old instance.
+                    let maybe_old_image = old_self
+                        .clone()
+                        .map(|mut old_self| {
+                            old_self
+                                .find_handle_from_path(path)
+                                .map(|old_handle| old_self.remove(&old_handle))
+                                .flatten()
+                                .ok()
+                        })
+                        .flatten();
 
-                        if let Some(image) = maybe_old_image {
-                            debug!("Reusing image data for {handle:?}.");
-                            linked_image_data.insert(handle.clone(), image.clone());
-                        } else {
-                            match Image::load_from_disk(path) {
-                                Ok(image) => {
-                                    debug!("Loaded image data from disk for {handle:?}.");
-                                    linked_image_data.insert(handle.clone(), Arc::new(image));
-                                }
-                                Err(err) => {
-                                    error!("Failed to load image at '{0:?}': {1}", path, err);
-                                }
+                    if let Some(image) = maybe_old_image {
+                        debug!("Reusing image data for {handle:?}.");
+                        let mut linked_image_data = self.data.linked_image_data.write().unwrap();
+                        linked_image_data.insert(handle.clone(), image.clone());
+                    } else {
+                        match Image::load_from_disk(path) {
+                            Ok(image) => {
+                                debug!("Loaded image data from disk for {handle:?}.");
+                                let mut linked_image_data =
+                                    self.data.linked_image_data.write().unwrap();
+                                linked_image_data.insert(handle.clone(), Arc::new(image));
+                            }
+                            Err(err) => {
+                                error!("Failed to load image at '{0:?}': {1}", path, err);
                             }
                         }
                     }
