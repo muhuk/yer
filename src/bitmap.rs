@@ -66,6 +66,7 @@ impl BitmapServer {
         }
     }
 
+    // TODO: Test if loading the same path would create two entries.
     pub fn load(
         &self,
         path: impl AsRef<Path>,
@@ -107,62 +108,38 @@ impl BitmapServer {
         Ok(handle)
     }
 
+    /// Replace BitmapServer in the world with this one.
     pub fn replace_in_world(self, world: &mut World) {
         // We can reuse already loaded linked images.
         let old_self = world.remove_resource::<Self>();
 
         {
-            let mut linked_inage_data = self.data.linked_image_data.write().unwrap();
+            let mut linked_image_data = self.data.linked_image_data.write().unwrap();
             for bitmap_data in self.data.images.read().unwrap().iter() {
                 match bitmap_data {
+                    // Embedded images' data are already loaded.
                     BitmapData::Embedded { .. } => (),
                     BitmapData::Linked { handle, path } => {
                         // FIXME: WTF is this monstrosity!!!!!!11111
-                        if let Some(image) = old_self
+                        let maybe_old_image = old_self
                             .clone()
-                            .map(|old_self| {
-                                let maybe_old_handle = old_self
-                                    .data
-                                    .images
-                                    .read()
-                                    .unwrap()
-                                    .iter()
-                                    .filter_map(|data| {
-                                        if let BitmapData::Linked {
-                                            handle: old_handle,
-                                            path: old_path,
-                                        } = data
-                                        {
-                                            if old_path == path {
-                                                Some(old_handle.clone())
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .next();
-                                if let Some(old_handle) = maybe_old_handle {
-                                    old_self
-                                        .data
-                                        .linked_image_data
-                                        .write()
-                                        .unwrap()
-                                        .remove(&old_handle)
+                            .map(|mut old_self| {
+                                if let Ok(old_handle) = old_self.find_handle_from_path(path) {
+                                    Some(old_self.remove(&old_handle).unwrap())
                                 } else {
                                     None
                                 }
                             })
-                            .flatten()
-                        {
+                            .flatten();
+
+                        if let Some(image) = maybe_old_image {
                             debug!("Reusing image data for {handle:?}.");
-                            linked_inage_data.insert(handle.clone(), image.clone());
+                            linked_image_data.insert(handle.clone(), image.clone());
                         } else {
                             match Image::load_from_disk(path) {
                                 Ok(image) => {
                                     debug!("Loaded image data from disk for {handle:?}.");
-                                    linked_inage_data.insert(handle.clone(), Arc::new(image));
+                                    linked_image_data.insert(handle.clone(), Arc::new(image));
                                 }
                                 Err(err) => {
                                     error!("Failed to load image at '{0:?}': {1}", path, err);
@@ -177,6 +154,32 @@ impl BitmapServer {
         world.insert_resource(self);
     }
 
+    fn find_handle_from_path(&self, path: impl AsRef<Path>) -> Result<BitmapHandle, BitmapError> {
+        self.data
+            .images
+            .read()?
+            .iter()
+            .find_map(|data| match data {
+                BitmapData::Embedded {
+                    original_path: _, ..
+                } => {
+                    // We need to think carefully about what original_path means.
+                    //
+                    // When a file is saved on one system and opened on another system
+                    // the exact same path may point to different images.
+                    unimplemented!()
+                }
+                BitmapData::Linked { handle, path: p } => {
+                    if p == path.as_ref() {
+                        Some(handle.clone())
+                    } else {
+                        None
+                    }
+                }
+            })
+            .ok_or(BitmapError::InvalidPath(path.as_ref().to_path_buf()))
+    }
+
     fn get_load_mode(&self, handle: &BitmapHandle) -> Result<LoadMode, BitmapError> {
         self.data
             .images
@@ -188,6 +191,20 @@ impl BitmapServer {
                 BitmapData::Linked { .. } => LoadMode::Linked,
             })
             .ok_or(BitmapError::InvalidHandle(handle.clone()))
+    }
+
+    fn remove(&mut self, handle: &BitmapHandle) -> Result<Arc<Image>, BitmapError> {
+        let image = match self.get_load_mode(handle)? {
+            LoadMode::Embedded => unimplemented!(),
+            LoadMode::Linked => self.data.linked_image_data.write()?.remove(handle).unwrap(),
+        };
+
+        self.data
+            .images
+            .write()?
+            .retain_mut(|data| data.handle() != *handle);
+
+        Ok(image)
     }
 }
 
@@ -213,6 +230,8 @@ pub enum BitmapError {
     ImageLoadError(ImageLoadError),
     #[error("Invalid handle: {0:?}")]
     InvalidHandle(BitmapHandle),
+    #[error("Invalid path: {0:?}")]
+    InvalidPath(PathBuf),
     #[error("Cannot access lock.")]
     LockPoisonError,
 }
