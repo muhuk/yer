@@ -154,14 +154,13 @@ impl Default for Sample {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Reflect, Serialize)]
 pub struct Transform2D {
-    pub scale: f32,
+    pub scale: Vec2,
     pub translation: Vec2,
     pub rotation: f32,
 }
 
 impl Transform2D {
     pub fn apply(&self, position: Vec2) -> Vec2 {
-        //self.translate(self.rotate(position))
         self.rotate(self.translate(self.scale(position)))
     }
 
@@ -184,7 +183,7 @@ impl Transform2D {
 impl Default for Transform2D {
     fn default() -> Self {
         Self {
-            scale: 1.0,
+            scale: Vec2::ONE,
             translation: Vec2::ZERO,
             rotation: 0.0,
         }
@@ -204,7 +203,7 @@ mod tests {
     #[test]
     fn apply_transform_2d() {
         let transform = Transform2D {
-            scale: 2.0,
+            scale: Vec2::new(2.0, 0.5),
             translation: Vec2::new(2.0, 5.0),
             rotation: 90.0, // degrees
         };
@@ -213,7 +212,10 @@ mod tests {
             .approx_eq(Vec2::new(-5.0, 1.5), None));
         assert!(transform
             .apply(Vec2::NEG_Y)
-            .approx_eq(Vec2::new(-5.5, 2.0), None));
+            .approx_eq(Vec2::new(-7.0, 2.0), None));
+        assert!(transform
+            .apply(Vec2::new(3.0, 4.0))
+            .approx_eq(Vec2::new(3.0, 0.5), None));
     }
 
     #[test]

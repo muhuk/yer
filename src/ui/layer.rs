@@ -1430,10 +1430,22 @@ fn draw_ui_for_transform_2d(ui: &mut egui::Ui, transform: &Transform2D) -> Optio
         })
         .inner;
 
+    // TODO: Implement locking the ratio.
+    //
+    //       When the ratio is locked, adjusting one of the inputs
+    //       should change the other axis too.
     let new_scale = ui
         .horizontal(|ui| {
             ui.label("Scale:");
-            draw_ui_editable_f32(Some(SCALE_LIMITS), None, ui, transform.scale)
+            let scale_x = draw_ui_editable_f32(Some(SCALE_LIMITS), None, ui, transform.scale.x);
+            let scale_y = draw_ui_editable_f32(Some(SCALE_LIMITS), None, ui, transform.scale.y);
+
+            match (scale_x, scale_y) {
+                (Some(scale_x), Some(scale_y)) => Some(Vec2::new(scale_x, scale_y)),
+                (Some(scale_x), None) => Some(Vec2::new(scale_x, transform.scale.y)),
+                (None, Some(scale_y)) => Some(Vec2::new(transform.scale.x, scale_y)),
+                (None, None) => None,
+            }
         })
         .inner;
 
