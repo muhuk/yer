@@ -293,7 +293,7 @@ struct BitmapServerData {
 mod tests {
     use super::*;
 
-    const SMILEY_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
+    const SMILEY_FILE_PATH: &str = "test_assets/smiley_rgb.png";
 
     #[test]
     fn bitmap_server_load_returns_handle() {

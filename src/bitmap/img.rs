@@ -33,12 +33,38 @@ pub struct Image {
 }
 
 impl Image {
-    // FIXME: What if the image is not 8-bit?
-    const NORMALIZE_HEIGHT: f32 = 1.0 / 256.0;
+    const NORMALIZE_BYTE: f32 = 1.0 / 256.0;
 
     pub fn get_pixel_luma(&self, position: UVec2) -> f32 {
-        f32::from(self.image.get_pixel(position.x, position.y).to_luma().0[0])
-            * Self::NORMALIZE_HEIGHT
+        let bytes_per_channel: u8 = {
+            let c = self.image.color();
+            c.bytes_per_pixel() / c.channel_count()
+        };
+
+        match bytes_per_channel {
+            1 => {
+                f32::from(self.image.get_pixel(position.x, position.y).to_luma().0[0])
+                    * Self::NORMALIZE_BYTE
+            }
+            2 => {
+                // TODO: Take advantage of 16-bit channels.
+                //
+                //       Since we can no longer just use `to_luma` we may need to
+                //       know more about the image.
+                //
+                //       We cannot just call `as_luma16` and call it a day.
+                //
+                //       This should be done together with the channel use UI
+                //       ('use red channel of this image' etc.)
+                warn_once!("16-bit image is being downsampled as 8-bit.");
+                f32::from(self.image.get_pixel(position.x, position.y).to_luma().0[0])
+                    * Self::NORMALIZE_BYTE
+            }
+            _ => {
+                error!("Only images with 8-bit and 16-bit channels are supported.");
+                0.0
+            }
+        }
     }
 
     pub fn size(&self) -> UVec2 {
@@ -141,7 +167,7 @@ mod tests {
 
     use super::*;
 
-    const SMILEY_FILE_PATH: &str = "test_assets/smiley_heightmap.png";
+    const SMILEY_FILE_PATH: &str = "test_assets/smiley_rgb.png";
     const NON_EXISTENT_FILE_PATH: &str = "test_assets/non_existent_file.png";
     const NOT_AN_IMAGE_FILE_PATH: &str = "test_assets/not_an_image.jpeg";
 
