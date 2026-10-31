@@ -65,6 +65,12 @@ pub struct ThemeColors {
     pub secondary_alt_color: Color,
 }
 
+impl ThemeColors {
+    pub fn modal_overlay_color(&self) -> Color {
+        self.bg_color.with_alpha(0.85)
+    }
+}
+
 // LIB
 
 #[derive(Copy, Clone, Debug)]

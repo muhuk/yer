@@ -81,7 +81,7 @@ impl FromWorld for LoadFileDialog {
             let colors = theme_colors
                 .get(&theme.colors)
                 .expect("Cannot read theme colors.");
-            colors.bg_color.with_alpha(0.85).to_color32()
+            colors.modal_overlay_color().to_color32()
         };
 
         let mut file_dialog = egui_file_dialog::FileDialog::new()
@@ -114,6 +114,12 @@ impl LoadImageDialog {
         }
     }
 
+    /// Shows the `LoadImageDialog` to user.
+    ///
+    /// Use this to show the dialog instead of [LoadImageDialog::show].
+    /// `show` is named as such to align with egui API.
+    ///
+    /// This also change `UiState` to [UiState::ShowingLoadImageDialog].
     pub(super) fn spawn(world: &mut World) -> Entity {
         let dialog = LoadImageDialog::from_world(world);
         let entity = world
@@ -138,7 +144,7 @@ impl FromWorld for LoadImageDialog {
             let colors = theme_colors
                 .get(&theme.colors)
                 .expect("Cannot read theme colors.");
-            colors.bg_color.with_alpha(0.85).to_color32()
+            colors.modal_overlay_color().to_color32()
         };
 
         let mut file_dialog = egui_file_dialog::FileDialog::new()

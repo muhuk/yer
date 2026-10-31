@@ -21,7 +21,7 @@ use crate::constants;
 use crate::preferences::{Preferences, UpdatePreferences};
 use crate::theme::ThemeColors;
 
-use super::egui_ext::ToColor32;
+use super::egui_ext::{draw_modal_overlay, ToColor32};
 
 // COMPONENTS
 
@@ -33,25 +33,7 @@ pub struct PreferencesDialog {
 
 impl PreferencesDialog {
     pub fn show(&mut self, ctx: &mut egui::Context, theme_colors: &ThemeColors) -> DialogState {
-        // Basically copied from egui-file-dialog.
-        // See file_dialog::FileDialog::ui_update_modal_background.
-        let modal_overlay_response = egui::Area::new("Modal Overlay".into())
-            .interactable(true)
-            .fixed_pos(egui::Pos2::ZERO)
-            .show(ctx, |ui| {
-                let content_rect = ctx.input(egui::InputState::content_rect);
-
-                ui.allocate_response(content_rect.size(), egui::Sense::click());
-
-                // TODO: Get the color from theme
-                ui.painter().rect_filled(
-                    content_rect,
-                    egui::CornerRadius::ZERO,
-                    theme_colors.bg_color.with_alpha(0.85).to_color32(),
-                );
-            })
-            .response;
-        ctx.move_to_top(modal_overlay_response.layer_id);
+        draw_modal_overlay(ctx, theme_colors.modal_overlay_color().to_color32());
 
         egui::Window::new("Preferences")
             .show(ctx, |ui| {

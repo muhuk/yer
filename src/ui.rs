@@ -30,6 +30,7 @@ use crate::theme;
 use crate::undo;
 
 mod egui_ext;
+mod error_dialog;
 mod file_dialog;
 mod layer;
 mod preferences_dialog;
@@ -126,6 +127,7 @@ fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
 fn draw_ui_dialogs_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
+    mut error_dialogs: Query<&mut error_dialog::ErrorDialog>,
     mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
     mut load_image_dialogs: Query<(Entity, &mut file_dialog::LoadImageDialog)>,
     mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
@@ -135,10 +137,24 @@ fn draw_ui_dialogs_system(
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
+    // TODO: Remove ui_state.is_interactive() call, make the Interactive case unit instead.
+    // TODO: Handle the case when some_dialog.single_mut does not return Ok.
     if let Ok(ctx) = contexts.ctx_mut() {
         if !ui_state.is_interactive() {
             match ui_state.as_ref().get() {
                 UiState::Interactive => unreachable!(),
+                UiState::ShowingErrorDialog => {
+                    if let Ok(mut dialog) = error_dialogs.single_mut() {
+                        if let Some(colors) = theme_colors.get(&theme.colors) {
+                            match dialog.show(ctx, colors) {
+                                error_dialog::DialogState::Closed => {
+                                    ui_state_next.set(UiState::Interactive);
+                                }
+                                error_dialog::DialogState::Open => (),
+                            }
+                        }
+                    }
+                }
                 UiState::ShowingLoadFileDialog => {
                     if let Ok(mut dialog) = load_file_dialogs.single_mut() {
                         match dialog.show(ctx) {

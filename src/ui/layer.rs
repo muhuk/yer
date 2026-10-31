@@ -21,7 +21,7 @@ use bevy::ecs::{query::QueryData, system::SystemParam};
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::bitmap::BitmapServer;
+use crate::bitmap::{BitmapError, BitmapServer};
 use crate::id::{LayerId, MaskId};
 use crate::layer::{self, BitmapRepeatMode, HeightMap};
 use crate::math::{ApproxEq, Transform2D};
@@ -29,6 +29,7 @@ use crate::theme;
 use crate::undo;
 
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
+use super::error_dialog::ErrorDialog;
 use super::file_dialog::{DialogClosed, DialogResult, LoadImageDialog};
 use super::state::UiState;
 
@@ -308,18 +309,30 @@ fn finalize_add_bitmap_layer_observer(
                 .sort::<&crate::layer::LayerOrder>()
                 .last()
                 .map(|l| l.layer.id());
-            // FIXME: We should do some error handling in UI level here.
-            //        Just using ? operator and returning a Result won't do.
-            let handle = bitmap_server
-                .load(path, crate::bitmap::LoadMode::Linked)
-                .unwrap();
-            debug!("Loading image: {handle:?}.");
-            commands.queue(crate::undo::PushAction::from(
-                crate::layer::CreateLayerAction::new(
-                    crate::layer::LayerBundle::new_bitmap(handle),
-                    top_layer_id,
-                ),
-            ));
+            match bitmap_server.load(path, crate::bitmap::LoadMode::Linked) {
+                Ok(handle) => {
+                    commands.queue(crate::undo::PushAction::from(
+                        crate::layer::CreateLayerAction::new(
+                            crate::layer::LayerBundle::new_bitmap(handle),
+                            top_layer_id,
+                        ),
+                    ));
+                }
+                Err(e) => {
+                    // FIXME: It would be better if `spawn` worked with a Command instead of a World.
+                    let message = match &e {
+                        BitmapError::ImageLoadError(ie) => {
+                            format!("Failed to load {path:?} as an image.\n\n{ie}")
+                        }
+                        _ => format!("Failed to load {path:?}."),
+                    };
+                    commands.queue(|world: &mut World| {
+                        ErrorDialog::spawn(world, message);
+                    });
+
+                    error!("BitmapError: {}", e);
+                }
+            }
         }
         _ => (),
     }

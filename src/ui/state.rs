@@ -32,6 +32,7 @@ impl Plugin for UiStatePlugin {
 pub enum UiState {
     #[default]
     Interactive,
+    ShowingErrorDialog,
     ShowingLoadFileDialog,
     ShowingLoadImageDialog,
     ShowingPreferencesDialog,

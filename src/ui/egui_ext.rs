@@ -192,6 +192,25 @@ impl ToColor32 for Color {
     }
 }
 
+pub fn draw_modal_overlay(ctx: &mut egui::Context, color: Color32) {
+    // Basically copied from egui-file-dialog.
+    // See file_dialog::FileDialog::ui_update_modal_background.
+    let modal_overlay_response = egui::Area::new("Modal Overlay".into())
+        .interactable(true)
+        .fixed_pos(egui::Pos2::ZERO)
+        .show(ctx, |ui| {
+            let content_rect = ctx.input(egui::InputState::content_rect);
+
+            ui.allocate_response(content_rect.size(), egui::Sense::click());
+
+            // TODO: Get the color from theme
+            ui.painter()
+                .rect_filled(content_rect, egui::CornerRadius::ZERO, color);
+        })
+        .response;
+    ctx.move_to_top(modal_overlay_response.layer_id);
+}
+
 pub fn draw_ui_editable_f32(
     range: Option<RangeInclusive<f32>>,
     speed: Option<f32>,
