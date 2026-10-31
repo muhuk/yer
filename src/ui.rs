@@ -137,84 +137,84 @@ fn draw_ui_dialogs_system(
     ui_state: Res<State<UiState>>,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
-    // TODO: Remove ui_state.is_interactive() call, make the Interactive case unit instead.
     // TODO: Handle the case when some_dialog.single_mut does not return Ok.
     if let Ok(ctx) = contexts.ctx_mut() {
-        if !ui_state.is_interactive() {
-            match ui_state.as_ref().get() {
-                UiState::Interactive => unreachable!(),
-                UiState::ShowingErrorDialog => {
-                    if let Ok(mut dialog) = error_dialogs.single_mut() {
-                        if let Some(colors) = theme_colors.get(&theme.colors) {
-                            match dialog.show(ctx, colors) {
-                                error_dialog::DialogState::Closed => {
-                                    ui_state_next.set(UiState::Interactive);
-                                }
-                                error_dialog::DialogState::Open => (),
+        match ui_state.as_ref().get() {
+            UiState::Interactive => {
+                // None of the dialogs is being displayed.
+                // Nothing to do here.
+            }
+            UiState::ShowingErrorDialog => {
+                if let Ok(mut dialog) = error_dialogs.single_mut() {
+                    if let Some(colors) = theme_colors.get(&theme.colors) {
+                        match dialog.show(ctx, colors) {
+                            error_dialog::DialogState::Closed => {
+                                ui_state_next.set(UiState::Interactive);
                             }
+                            error_dialog::DialogState::Open => (),
                         }
                     }
                 }
-                UiState::ShowingLoadFileDialog => {
-                    if let Ok(mut dialog) = load_file_dialogs.single_mut() {
-                        match dialog.show(ctx) {
-                            None => (),
-                            Some(file_dialog::DialogResult::PickedFile(path)) => {
-                                ui_state_next.set(UiState::Interactive);
-                                commands.queue(session::LoadSession(path));
-                            }
-                            Some(file_dialog::DialogResult::Cancelled) => {
-                                // Currently there is no cleanup necessary.  If there is
-                                // need for cleanup in the future it should ideally be
-                                // handled by a OnExit(state) system.
-                                ui_state_next.set(UiState::Interactive);
-                            }
+            }
+            UiState::ShowingLoadFileDialog => {
+                if let Ok(mut dialog) = load_file_dialogs.single_mut() {
+                    match dialog.show(ctx) {
+                        None => (),
+                        Some(file_dialog::DialogResult::PickedFile(path)) => {
+                            ui_state_next.set(UiState::Interactive);
+                            commands.queue(session::LoadSession(path));
+                        }
+                        Some(file_dialog::DialogResult::Cancelled) => {
+                            // Currently there is no cleanup necessary.  If there is
+                            // need for cleanup in the future it should ideally be
+                            // handled by a OnExit(state) system.
+                            ui_state_next.set(UiState::Interactive);
                         }
                     }
                 }
-                UiState::ShowingLoadImageDialog => {
-                    if let Ok((entity, mut dialog)) = load_image_dialogs.single_mut() {
-                        match dialog.show(ctx) {
-                            None => (),
-                            Some(result) => {
-                                commands.trigger(file_dialog::DialogClosed { entity, result });
-                                ui_state_next.set(UiState::Interactive);
-                            }
+            }
+            UiState::ShowingLoadImageDialog => {
+                if let Ok((entity, mut dialog)) = load_image_dialogs.single_mut() {
+                    match dialog.show(ctx) {
+                        None => (),
+                        Some(result) => {
+                            commands.trigger(file_dialog::DialogClosed { entity, result });
+                            ui_state_next.set(UiState::Interactive);
                         }
                     }
                 }
-                UiState::ShowingPreferencesDialog => {
-                    if let Ok(mut dialog) = preferences_dialogs.single_mut() {
-                        if let Some(colors) = theme_colors.get(&theme.colors) {
-                            match dialog.show(ctx, colors) {
-                                preferences_dialog::DialogState::Open => (),
-                                preferences_dialog::DialogState::Confirmed => {
-                                    commands.queue(dialog.to_command());
-                                    ui_state_next.set(UiState::Interactive);
-                                }
-                                preferences_dialog::DialogState::Cancelled => {
-                                    ui_state_next.set(UiState::Interactive);
-                                }
+            }
+            UiState::ShowingPreferencesDialog => {
+                if let Ok(mut dialog) = preferences_dialogs.single_mut() {
+                    if let Some(colors) = theme_colors.get(&theme.colors) {
+                        match dialog.show(ctx, colors) {
+                            preferences_dialog::DialogState::Open => (),
+                            preferences_dialog::DialogState::Confirmed => {
+                                commands.queue(dialog.to_command());
+                                ui_state_next.set(UiState::Interactive);
                             }
-                        } else {
-                            error!("Cannot read theme colors.");
+                            preferences_dialog::DialogState::Cancelled => {
+                                ui_state_next.set(UiState::Interactive);
+                            }
                         }
+                    } else {
+                        error!("Cannot read theme colors.");
                     }
                 }
-                UiState::ShowingSaveFileDialog => {
-                    if let Ok(mut dialog) = save_file_dialogs.single_mut() {
-                        match dialog.show(ctx) {
-                            None => (),
-                            Some(file_dialog::DialogResult::PickedFile(path)) => {
-                                ui_state_next.set(UiState::Interactive);
-                                commands.queue(session::SaveSession(Some(path)));
-                            }
-                            Some(file_dialog::DialogResult::Cancelled) => {
-                                // Currently there is no cleanup necessary.  If there is
-                                // need for cleanup in the future it should ideally be
-                                // handled by a OnExit(state) system.
-                                ui_state_next.set(UiState::Interactive);
-                            }
+            }
+            UiState::ShowingSaveFileDialog => {
+                if let Ok(mut dialog) = save_file_dialogs.single_mut() {
+                    match dialog.show(ctx) {
+                        None => (),
+                        Some(file_dialog::DialogResult::PickedFile(path)) => {
+                            ui_state_next.set(UiState::Interactive);
+                            commands.queue(session::SaveSession(Some(path)));
+                        }
+                        Some(file_dialog::DialogResult::Cancelled) => {
+                            // Currently there is no cleanup necessary.  If there is
+                            // need for cleanup in the future it should ideally be
+                            // handled by a OnExit(state) system.
+                            ui_state_next.set(UiState::Interactive);
                         }
                     }
                 }

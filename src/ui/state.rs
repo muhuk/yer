@@ -38,9 +38,3 @@ pub enum UiState {
     ShowingPreferencesDialog,
     ShowingSaveFileDialog,
 }
-
-impl UiState {
-    pub fn is_interactive(&self) -> bool {
-        matches!(self, UiState::Interactive)
-    }
-}
