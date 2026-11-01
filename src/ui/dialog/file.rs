@@ -22,9 +22,8 @@ use bevy_egui::egui::{Color32, Context};
 use egui_file_dialog;
 
 use crate::theme::{Theme, ThemeColors};
-
-use super::egui_ext::ToColor32;
-use super::state::UiState;
+use crate::ui::egui_ext::ToColor32;
+use crate::ui::state::UiState;
 
 static DEFAULT_FILE_NAME: &str = "untitled.yer";
 static FILE_FILTER_IMAGE_FILES_NAME: &str = "Image Files";
@@ -46,27 +45,27 @@ impl Plugin for UiFileDialogPlugin {
 // EVENTS
 
 #[derive(Debug, EntityEvent)]
-pub struct DialogClosed {
+pub struct FileDialogClosed {
     pub entity: Entity,
-    pub result: DialogResult,
+    pub result: FileDialogResult,
 }
 
 // COMPONENTS
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
-pub(super) struct LoadFileDialog {
+pub struct LoadFileDialog {
     #[reflect(ignore)]
     file_dialog: egui_file_dialog::FileDialog,
 }
 
 impl LoadFileDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
+    pub fn show(&mut self, ctx: &Context) -> Option<FileDialogResult> {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => None,
-            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
+            egui_file_dialog::DialogState::Cancelled => Some(FileDialogResult::Cancelled),
             egui_file_dialog::DialogState::Picked(path) => {
-                Some(DialogResult::PickedFile(path.into()))
+                Some(FileDialogResult::PickedFile(path.into()))
             }
             _ => unreachable!(),
         }
@@ -97,18 +96,18 @@ impl FromWorld for LoadFileDialog {
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
-pub(super) struct LoadImageDialog {
+pub struct LoadImageDialog {
     #[reflect(ignore)]
     file_dialog: egui_file_dialog::FileDialog,
 }
 
 impl LoadImageDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
+    pub fn show(&mut self, ctx: &Context) -> Option<FileDialogResult> {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => None,
-            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
+            egui_file_dialog::DialogState::Cancelled => Some(FileDialogResult::Cancelled),
             egui_file_dialog::DialogState::Picked(path) => {
-                Some(DialogResult::PickedFile(path.into()))
+                Some(FileDialogResult::PickedFile(path.into()))
             }
             _ => unreachable!(),
         }
@@ -139,18 +138,18 @@ impl FromWorld for LoadImageDialog {
 
 #[derive(Component, Reflect)]
 #[reflect(Component)]
-pub(super) struct SaveFileDialog {
+pub struct SaveFileDialog {
     #[reflect(ignore)]
     file_dialog: egui_file_dialog::FileDialog,
 }
 
 impl SaveFileDialog {
-    pub(super) fn show(&mut self, ctx: &Context) -> Option<DialogResult> {
+    pub fn show(&mut self, ctx: &Context) -> Option<FileDialogResult> {
         match self.file_dialog.update(ctx).state() {
             egui_file_dialog::DialogState::Open => None,
-            egui_file_dialog::DialogState::Cancelled => Some(DialogResult::Cancelled),
+            egui_file_dialog::DialogState::Cancelled => Some(FileDialogResult::Cancelled),
             egui_file_dialog::DialogState::Picked(path) => {
-                Some(DialogResult::PickedFile(sanitize_path(path.into())))
+                Some(FileDialogResult::PickedFile(sanitize_path(path.into())))
             }
             _ => unreachable!(),
         }
@@ -182,7 +181,7 @@ impl FromWorld for SaveFileDialog {
 
 // COMMANDS
 
-pub(super) struct DisplayLoadFileDialog;
+pub struct DisplayLoadFileDialog;
 
 impl Command for DisplayLoadFileDialog {
     fn apply(self, world: &mut World) -> () {
@@ -199,7 +198,7 @@ impl Command for DisplayLoadFileDialog {
 }
 
 #[derive(Default)]
-pub(super) struct DisplayLoadImageDialog {
+pub struct DisplayLoadImageDialog {
     and_then: Option<Box<dyn FnOnce(EntityWorldMut<'_>) + Send + 'static>>,
 }
 
@@ -243,7 +242,7 @@ impl Command<Result> for DisplayLoadImageDialog {
     }
 }
 
-pub(super) struct DisplaySaveFileDialog;
+pub struct DisplaySaveFileDialog;
 
 impl Command for DisplaySaveFileDialog {
     fn apply(self, world: &mut World) -> () {
@@ -262,7 +261,7 @@ impl Command for DisplaySaveFileDialog {
 // LIB
 
 #[derive(Debug)]
-pub enum DialogResult {
+pub enum FileDialogResult {
     Cancelled,
     PickedFile(PathBuf),
 }

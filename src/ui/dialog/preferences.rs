@@ -20,9 +20,8 @@ use bevy_egui::egui;
 use crate::constants;
 use crate::preferences::{Preferences, UpdatePreferences};
 use crate::theme::{Theme, ThemeColors};
-
-use super::egui_ext::{draw_modal_overlay, ToColor32};
-use super::state::UiState;
+use crate::ui::egui_ext::{draw_modal_overlay, ToColor32};
+use crate::ui::state::UiState;
 
 // COMPONENTS
 
@@ -34,7 +33,7 @@ pub struct PreferencesDialog {
 }
 
 impl PreferencesDialog {
-    pub fn show(&mut self, ctx: &mut egui::Context) -> DialogState {
+    pub fn show(&mut self, ctx: &mut egui::Context) -> PreferencesDialogState {
         draw_modal_overlay(ctx, self.overlay_color.to_color32());
 
         egui::Window::new("Preferences")
@@ -48,12 +47,12 @@ impl PreferencesDialog {
                     );
                 });
 
-                let mut response = DialogState::Open;
+                let mut response = PreferencesDialogState::Open;
                 if ui.button("Save and Close").clicked() {
-                    response = DialogState::Confirmed;
+                    response = PreferencesDialogState::Confirmed;
                 }
                 if ui.button("Cancel").clicked() {
-                    response = DialogState::Cancelled;
+                    response = PreferencesDialogState::Cancelled;
                 }
                 response
             })
@@ -62,7 +61,7 @@ impl PreferencesDialog {
                 r.inner
             })
             .flatten()
-            .unwrap_or(DialogState::Cancelled)
+            .unwrap_or(PreferencesDialogState::Cancelled)
     }
 
     pub fn to_command(&self) -> UpdatePreferences {
@@ -87,7 +86,7 @@ impl FromWorld for PreferencesDialog {
 
 // COMMANDS
 
-pub(super) struct DisplayPreferencesDialog;
+pub struct DisplayPreferencesDialog;
 
 impl Command for DisplayPreferencesDialog {
     fn apply(self, world: &mut World) -> () {
@@ -105,7 +104,7 @@ impl Command for DisplayPreferencesDialog {
 
 // LIB
 
-pub enum DialogState {
+pub enum PreferencesDialogState {
     Open,
     Confirmed,
     Cancelled,

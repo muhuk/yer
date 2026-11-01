@@ -29,11 +29,9 @@ use crate::session;
 use crate::theme;
 use crate::undo;
 
+mod dialog;
 mod egui_ext;
-mod error_dialog;
-mod file_dialog;
 mod layer;
-mod preferences_dialog;
 mod preview;
 mod state;
 mod toolbar;
@@ -49,8 +47,8 @@ impl Plugin for UiPlugin {
         app.register_type::<UiState>()
             .add_plugins((
                 EguiPlugin::default(),
+                dialog::UiDialogPlugin,
                 egui_ext::UiBevyExtPlugin,
-                file_dialog::UiFileDialogPlugin,
                 layer::LayerUiPlugin,
                 state::UiStatePlugin,
             ))
@@ -127,11 +125,11 @@ fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
 fn draw_ui_dialogs_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
-    mut error_dialog_query: Query<&mut error_dialog::ErrorDialog>,
-    mut load_file_dialog_query: Query<&mut file_dialog::LoadFileDialog>,
-    mut load_image_dialog_query: Query<(Entity, &mut file_dialog::LoadImageDialog)>,
-    mut preferences_dialog_query: Query<&mut preferences_dialog::PreferencesDialog>,
-    mut save_file_dialog_query: Query<&mut file_dialog::SaveFileDialog>,
+    mut error_dialog_query: Query<&mut dialog::ErrorDialog>,
+    mut load_file_dialog_query: Query<&mut dialog::LoadFileDialog>,
+    mut load_image_dialog_query: Query<(Entity, &mut dialog::LoadImageDialog)>,
+    mut preferences_dialog_query: Query<&mut dialog::PreferencesDialog>,
+    mut save_file_dialog_query: Query<&mut dialog::SaveFileDialog>,
     ui_state: Res<State<UiState>>,
     mut next_ui_state: ResMut<NextState<UiState>>,
 ) -> Result {
@@ -145,21 +143,21 @@ fn draw_ui_dialogs_system(
             UiState::ShowingErrorDialog => {
                 let mut dialog = error_dialog_query.single_mut()?;
                 match dialog.show(ctx) {
-                    error_dialog::DialogState::Closed => {
+                    dialog::ErrorDialogState::Closed => {
                         next_ui_state.set(UiState::Interactive);
                     }
-                    error_dialog::DialogState::Open => (),
+                    dialog::ErrorDialogState::Open => (),
                 }
             }
             UiState::ShowingLoadFileDialog => {
                 if let Ok(mut dialog) = load_file_dialog_query.single_mut() {
                     match dialog.show(ctx) {
                         None => (),
-                        Some(file_dialog::DialogResult::PickedFile(path)) => {
+                        Some(dialog::FileDialogResult::PickedFile(path)) => {
                             next_ui_state.set(UiState::Interactive);
                             commands.queue(session::LoadSession(path));
                         }
-                        Some(file_dialog::DialogResult::Cancelled) => {
+                        Some(dialog::FileDialogResult::Cancelled) => {
                             // Currently there is no cleanup necessary.  If there is
                             // need for cleanup in the future it should ideally be
                             // handled by a OnExit(state) system.
@@ -173,7 +171,7 @@ fn draw_ui_dialogs_system(
                     match dialog.show(ctx) {
                         None => (),
                         Some(result) => {
-                            commands.trigger(file_dialog::DialogClosed { entity, result });
+                            commands.trigger(dialog::FileDialogClosed { entity, result });
                             next_ui_state.set(UiState::Interactive);
                         }
                     }
@@ -182,12 +180,12 @@ fn draw_ui_dialogs_system(
             UiState::ShowingPreferencesDialog => {
                 if let Ok(mut dialog) = preferences_dialog_query.single_mut() {
                     match dialog.show(ctx) {
-                        preferences_dialog::DialogState::Open => (),
-                        preferences_dialog::DialogState::Confirmed => {
+                        dialog::PreferencesDialogState::Open => (),
+                        dialog::PreferencesDialogState::Confirmed => {
                             commands.queue(dialog.to_command());
                             next_ui_state.set(UiState::Interactive);
                         }
-                        preferences_dialog::DialogState::Cancelled => {
+                        dialog::PreferencesDialogState::Cancelled => {
                             next_ui_state.set(UiState::Interactive);
                         }
                     }
@@ -197,11 +195,11 @@ fn draw_ui_dialogs_system(
                 if let Ok(mut dialog) = save_file_dialog_query.single_mut() {
                     match dialog.show(ctx) {
                         None => (),
-                        Some(file_dialog::DialogResult::PickedFile(path)) => {
+                        Some(dialog::FileDialogResult::PickedFile(path)) => {
                             next_ui_state.set(UiState::Interactive);
                             commands.queue(session::SaveSession(Some(path)));
                         }
-                        Some(file_dialog::DialogResult::Cancelled) => {
+                        Some(dialog::FileDialogResult::Cancelled) => {
                             // Currently there is no cleanup necessary.  If there is
                             // need for cleanup in the future it should ideally be
                             // handled by a OnExit(state) system.
@@ -337,7 +335,7 @@ fn draw_ui_menu(
                 ui.close();
             }
             if ui.button("Open...").clicked() {
-                commands.queue(file_dialog::DisplayLoadFileDialog);
+                commands.queue(dialog::DisplayLoadFileDialog);
                 ui.close();
             }
             {
@@ -355,7 +353,7 @@ fn draw_ui_menu(
                     ui.close();
                 }
                 if show_save_file_dialog {
-                    commands.queue(file_dialog::DisplaySaveFileDialog);
+                    commands.queue(dialog::DisplaySaveFileDialog);
                 }
             }
             ui.separator();
@@ -384,7 +382,7 @@ fn draw_ui_menu(
             }
             ui.separator();
             if ui.button("Edit Preferences").clicked() {
-                commands.queue(preferences_dialog::DisplayPreferencesDialog);
+                commands.queue(dialog::DisplayPreferencesDialog);
 
                 ui.close();
             }

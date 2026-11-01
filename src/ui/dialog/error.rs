@@ -18,9 +18,8 @@ use bevy::prelude::*;
 use bevy_egui::egui;
 
 use crate::theme::{Theme, ThemeColors};
-
-use super::egui_ext::{draw_modal_overlay, ToColor32};
-use super::state::UiState;
+use crate::ui::egui_ext::{draw_modal_overlay, ToColor32};
+use crate::ui::state::UiState;
 
 // COMPONENTS
 
@@ -32,7 +31,7 @@ pub struct ErrorDialog {
 }
 
 impl ErrorDialog {
-    pub(super) fn show(&mut self, ctx: &mut egui::Context) -> DialogState {
+    pub fn show(&mut self, ctx: &mut egui::Context) -> ErrorDialogState {
         draw_modal_overlay(ctx, self.overlay_color.to_color32());
 
         egui::Window::new("Error")
@@ -40,9 +39,9 @@ impl ErrorDialog {
                 ui.label(self.message.as_str());
 
                 if ui.button("Close").clicked() {
-                    DialogState::Closed
+                    ErrorDialogState::Closed
                 } else {
-                    DialogState::Open
+                    ErrorDialogState::Open
                 }
             })
             .map(|r| {
@@ -56,7 +55,7 @@ impl ErrorDialog {
 
 // COMMANDS
 
-pub(super) struct DisplayErrorDialog {
+pub struct DisplayErrorDialog {
     message: String,
 }
 
@@ -94,7 +93,7 @@ impl Command<Result> for DisplayErrorDialog {
 
 // LIB
 
-pub enum DialogState {
+pub enum ErrorDialogState {
     Open,
     Closed,
 }

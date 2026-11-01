@@ -28,9 +28,10 @@ use crate::math::{ApproxEq, Transform2D};
 use crate::theme;
 use crate::undo;
 
+use super::dialog::{
+    DisplayErrorDialog, DisplayLoadImageDialog, FileDialogClosed, FileDialogResult,
+};
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
-use super::error_dialog::DisplayErrorDialog;
-use super::file_dialog::{DialogClosed, DialogResult, DisplayLoadImageDialog};
 use super::state::UiState;
 
 const LATENCY: Duration = Duration::from_millis(100);
@@ -293,14 +294,14 @@ impl Command for SelectLayer {
 // OBSERVERS
 
 fn finalize_add_bitmap_layer_observer(
-    closed: On<DialogClosed>,
+    closed: On<FileDialogClosed>,
     mut commands: Commands,
     bitmap_server: Res<BitmapServer>,
     layers_query: Layers,
     mut ui_state_next: ResMut<NextState<UiState>>,
 ) {
     match &closed.result {
-        DialogResult::PickedFile(path) => {
+        FileDialogResult::PickedFile(path) => {
             ui_state_next.set(UiState::Interactive);
 
             let top_layer_id: Option<crate::id::LayerId> = layers_query
