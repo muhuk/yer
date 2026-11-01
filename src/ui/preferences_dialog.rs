@@ -19,9 +19,10 @@ use bevy_egui::egui;
 
 use crate::constants;
 use crate::preferences::{Preferences, UpdatePreferences};
-use crate::theme::ThemeColors;
+use crate::theme::{Theme, ThemeColors};
 
 use super::egui_ext::{draw_modal_overlay, ToColor32};
+use super::state::UiState;
 
 // COMPONENTS
 
@@ -29,11 +30,12 @@ use super::egui_ext::{draw_modal_overlay, ToColor32};
 #[reflect(Component)]
 pub struct PreferencesDialog {
     preferences: Preferences,
+    overlay_color: Color,
 }
 
 impl PreferencesDialog {
-    pub fn show(&mut self, ctx: &mut egui::Context, theme_colors: &ThemeColors) -> DialogState {
-        draw_modal_overlay(ctx, theme_colors.modal_overlay_color().to_color32());
+    pub fn show(&mut self, ctx: &mut egui::Context) -> DialogState {
+        draw_modal_overlay(ctx, self.overlay_color.to_color32());
 
         egui::Window::new("Preferences")
             .show(ctx, |ui| {
@@ -70,9 +72,34 @@ impl PreferencesDialog {
 
 impl FromWorld for PreferencesDialog {
     fn from_world(world: &mut World) -> Self {
+        let overlay_color = world
+            .resource::<Assets<ThemeColors>>()
+            .get(&world.resource::<Theme>().colors)
+            .expect("Cannot read theme colors.")
+            .modal_overlay_color();
+
         Self {
             preferences: world.resource::<Preferences>().clone(),
+            overlay_color,
         }
+    }
+}
+
+// COMMANDS
+
+pub(super) struct DisplayPreferencesDialog;
+
+impl Command for DisplayPreferencesDialog {
+    fn apply(self, world: &mut World) -> () {
+        let dialog = PreferencesDialog::from_world(world);
+        world.spawn((
+            Name::new("Preferences Dialog"),
+            dialog,
+            DespawnOnExit(UiState::ShowingPreferencesDialog),
+        ));
+        world
+            .resource_mut::<NextState<UiState>>()
+            .set(UiState::ShowingPreferencesDialog);
     }
 }
 

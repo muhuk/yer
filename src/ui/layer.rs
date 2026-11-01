@@ -29,8 +29,8 @@ use crate::theme;
 use crate::undo;
 
 use super::egui_ext::{draw_ui_editable_f32, ToColor32};
-use super::error_dialog::ErrorDialog;
-use super::file_dialog::{DialogClosed, DialogResult, LoadImageDialog};
+use super::error_dialog::DisplayErrorDialog;
+use super::file_dialog::{DialogClosed, DialogResult, DisplayLoadImageDialog};
 use super::state::UiState;
 
 const LATENCY: Duration = Duration::from_millis(100);
@@ -326,10 +326,7 @@ fn finalize_add_bitmap_layer_observer(
                         }
                         _ => format!("Failed to load {path:?}."),
                     };
-                    commands.queue(|world: &mut World| {
-                        ErrorDialog::spawn(world, message);
-                    });
-
+                    commands.queue(DisplayErrorDialog::new(message));
                     error!("BitmapError: {}", e);
                 }
             }
@@ -1027,13 +1024,9 @@ pub fn draw_ui_for_layers(
 
         if ui.button("Test").clicked() {
             info!("Adding bitmap layer.");
-            commands.queue(|world: &mut World| {
-                let entity = LoadImageDialog::spawn(world);
-                world
-                    .commands()
-                    .entity(entity)
-                    .observe(finalize_add_bitmap_layer_observer);
-            });
+            commands.queue(DisplayLoadImageDialog::default().and_then(|mut entity| {
+                entity.observe(finalize_add_bitmap_layer_observer);
+            }));
         }
 
         if ui.button("New Layer").clicked() {

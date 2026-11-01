@@ -127,16 +127,14 @@ fn inspector_ui_system(world: &mut World) -> Result<(), BevyError> {
 fn draw_ui_dialogs_system(
     mut commands: Commands,
     mut contexts: EguiContexts,
-    mut error_dialogs: Query<&mut error_dialog::ErrorDialog>,
-    mut load_file_dialogs: Query<&mut file_dialog::LoadFileDialog>,
-    mut load_image_dialogs: Query<(Entity, &mut file_dialog::LoadImageDialog)>,
-    mut preferences_dialogs: Query<&mut preferences_dialog::PreferencesDialog>,
-    mut save_file_dialogs: Query<&mut file_dialog::SaveFileDialog>,
-    theme: Res<theme::Theme>,
-    theme_colors: Res<Assets<theme::ThemeColors>>,
+    mut error_dialog_query: Query<&mut error_dialog::ErrorDialog>,
+    mut load_file_dialog_query: Query<&mut file_dialog::LoadFileDialog>,
+    mut load_image_dialog_query: Query<(Entity, &mut file_dialog::LoadImageDialog)>,
+    mut preferences_dialog_query: Query<&mut preferences_dialog::PreferencesDialog>,
+    mut save_file_dialog_query: Query<&mut file_dialog::SaveFileDialog>,
     ui_state: Res<State<UiState>>,
-    mut ui_state_next: ResMut<NextState<UiState>>,
-) {
+    mut next_ui_state: ResMut<NextState<UiState>>,
+) -> Result {
     // TODO: Handle the case when some_dialog.single_mut does not return Ok.
     if let Ok(ctx) = contexts.ctx_mut() {
         match ui_state.as_ref().get() {
@@ -145,82 +143,77 @@ fn draw_ui_dialogs_system(
                 // Nothing to do here.
             }
             UiState::ShowingErrorDialog => {
-                if let Ok(mut dialog) = error_dialogs.single_mut() {
-                    if let Some(colors) = theme_colors.get(&theme.colors) {
-                        match dialog.show(ctx, colors) {
-                            error_dialog::DialogState::Closed => {
-                                ui_state_next.set(UiState::Interactive);
-                            }
-                            error_dialog::DialogState::Open => (),
-                        }
+                let mut dialog = error_dialog_query.single_mut()?;
+                match dialog.show(ctx) {
+                    error_dialog::DialogState::Closed => {
+                        next_ui_state.set(UiState::Interactive);
                     }
+                    error_dialog::DialogState::Open => (),
                 }
             }
             UiState::ShowingLoadFileDialog => {
-                if let Ok(mut dialog) = load_file_dialogs.single_mut() {
+                if let Ok(mut dialog) = load_file_dialog_query.single_mut() {
                     match dialog.show(ctx) {
                         None => (),
                         Some(file_dialog::DialogResult::PickedFile(path)) => {
-                            ui_state_next.set(UiState::Interactive);
+                            next_ui_state.set(UiState::Interactive);
                             commands.queue(session::LoadSession(path));
                         }
                         Some(file_dialog::DialogResult::Cancelled) => {
                             // Currently there is no cleanup necessary.  If there is
                             // need for cleanup in the future it should ideally be
                             // handled by a OnExit(state) system.
-                            ui_state_next.set(UiState::Interactive);
+                            next_ui_state.set(UiState::Interactive);
                         }
                     }
                 }
             }
             UiState::ShowingLoadImageDialog => {
-                if let Ok((entity, mut dialog)) = load_image_dialogs.single_mut() {
+                if let Ok((entity, mut dialog)) = load_image_dialog_query.single_mut() {
                     match dialog.show(ctx) {
                         None => (),
                         Some(result) => {
                             commands.trigger(file_dialog::DialogClosed { entity, result });
-                            ui_state_next.set(UiState::Interactive);
+                            next_ui_state.set(UiState::Interactive);
                         }
                     }
                 }
             }
             UiState::ShowingPreferencesDialog => {
-                if let Ok(mut dialog) = preferences_dialogs.single_mut() {
-                    if let Some(colors) = theme_colors.get(&theme.colors) {
-                        match dialog.show(ctx, colors) {
-                            preferences_dialog::DialogState::Open => (),
-                            preferences_dialog::DialogState::Confirmed => {
-                                commands.queue(dialog.to_command());
-                                ui_state_next.set(UiState::Interactive);
-                            }
-                            preferences_dialog::DialogState::Cancelled => {
-                                ui_state_next.set(UiState::Interactive);
-                            }
+                if let Ok(mut dialog) = preferences_dialog_query.single_mut() {
+                    match dialog.show(ctx) {
+                        preferences_dialog::DialogState::Open => (),
+                        preferences_dialog::DialogState::Confirmed => {
+                            commands.queue(dialog.to_command());
+                            next_ui_state.set(UiState::Interactive);
                         }
-                    } else {
-                        error!("Cannot read theme colors.");
+                        preferences_dialog::DialogState::Cancelled => {
+                            next_ui_state.set(UiState::Interactive);
+                        }
                     }
                 }
             }
             UiState::ShowingSaveFileDialog => {
-                if let Ok(mut dialog) = save_file_dialogs.single_mut() {
+                if let Ok(mut dialog) = save_file_dialog_query.single_mut() {
                     match dialog.show(ctx) {
                         None => (),
                         Some(file_dialog::DialogResult::PickedFile(path)) => {
-                            ui_state_next.set(UiState::Interactive);
+                            next_ui_state.set(UiState::Interactive);
                             commands.queue(session::SaveSession(Some(path)));
                         }
                         Some(file_dialog::DialogResult::Cancelled) => {
                             // Currently there is no cleanup necessary.  If there is
                             // need for cleanup in the future it should ideally be
                             // handled by a OnExit(state) system.
-                            ui_state_next.set(UiState::Interactive);
+                            next_ui_state.set(UiState::Interactive);
                         }
                     }
                 }
             }
         }
     }
+
+    Ok(())
 }
 
 fn draw_ui_panels_system(
@@ -236,7 +229,6 @@ fn draw_ui_panels_system(
     theme: Res<theme::Theme>,
     theme_colors: Res<Assets<theme::ThemeColors>>,
     undo_stack: Res<undo::UndoStack>,
-    mut next_ui_state: ResMut<NextState<UiState>>,
 ) -> Result<(), BevyError> {
     let ctx = contexts.ctx_mut()?;
 
@@ -246,7 +238,6 @@ fn draw_ui_panels_system(
             &mut app_exit_events,
             &mut commands,
             &layers_query,
-            &mut next_ui_state,
             session.as_ref(),
             undo_stack.as_ref(),
         );
@@ -336,7 +327,6 @@ fn draw_ui_menu(
     app_exit_events: &mut MessageWriter<AppExit>,
     commands: &mut Commands,
     layers_query: &layer::Layers,
-    next_ui_state: &mut ResMut<NextState<UiState>>,
     session: &session::Session,
     undo_stack: &undo::UndoStack,
 ) {
@@ -347,17 +337,7 @@ fn draw_ui_menu(
                 ui.close();
             }
             if ui.button("Open...").clicked() {
-                commands.queue(|world: &mut World| {
-                    let dialog = file_dialog::LoadFileDialog::from_world(world);
-                    world.spawn((
-                        Name::new("Load File Dialog"),
-                        dialog,
-                        DespawnOnExit(UiState::ShowingLoadFileDialog),
-                    ));
-                    world
-                        .resource_mut::<NextState<UiState>>()
-                        .set(UiState::ShowingLoadFileDialog);
-                });
+                commands.queue(file_dialog::DisplayLoadFileDialog);
                 ui.close();
             }
             {
@@ -375,12 +355,7 @@ fn draw_ui_menu(
                     ui.close();
                 }
                 if show_save_file_dialog {
-                    commands.spawn((
-                        Name::new("Save File Dialog"),
-                        file_dialog::SaveFileDialog::default(),
-                        DespawnOnExit(UiState::ShowingSaveFileDialog),
-                    ));
-                    next_ui_state.set(UiState::ShowingSaveFileDialog);
+                    commands.queue(file_dialog::DisplaySaveFileDialog);
                 }
             }
             ui.separator();
@@ -409,17 +384,7 @@ fn draw_ui_menu(
             }
             ui.separator();
             if ui.button("Edit Preferences").clicked() {
-                commands.queue(|world: &mut World| {
-                    let dialog = preferences_dialog::PreferencesDialog::from_world(world);
-                    world.spawn((
-                        Name::new("Preferences Dialog"),
-                        dialog,
-                        DespawnOnExit(UiState::ShowingPreferencesDialog),
-                    ));
-                    world
-                        .resource_mut::<NextState<UiState>>()
-                        .set(UiState::ShowingPreferencesDialog);
-                });
+                commands.queue(preferences_dialog::DisplayPreferencesDialog);
 
                 ui.close();
             }

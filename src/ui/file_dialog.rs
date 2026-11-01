@@ -113,27 +113,6 @@ impl LoadImageDialog {
             _ => unreachable!(),
         }
     }
-
-    /// Shows the `LoadImageDialog` to user.
-    ///
-    /// Use this to show the dialog instead of [LoadImageDialog::show].
-    /// `show` is named as such to align with egui API.
-    ///
-    /// This also change `UiState` to [UiState::ShowingLoadImageDialog].
-    pub(super) fn spawn(world: &mut World) -> Entity {
-        let dialog = LoadImageDialog::from_world(world);
-        let entity = world
-            .spawn((
-                Name::new("Load Image Dialog"),
-                dialog,
-                DespawnOnExit(UiState::ShowingLoadImageDialog),
-            ))
-            .id();
-        world
-            .resource_mut::<NextState<UiState>>()
-            .set(UiState::ShowingLoadImageDialog);
-        entity
-    }
 }
 
 impl FromWorld for LoadImageDialog {
@@ -178,16 +157,105 @@ impl SaveFileDialog {
     }
 }
 
-impl Default for SaveFileDialog {
-    fn default() -> Self {
+impl FromWorld for SaveFileDialog {
+    fn from_world(world: &mut World) -> Self {
+        let modal_overlay_color: Color32 = {
+            let theme = world.resource::<Theme>();
+            let theme_colors = world.resource::<Assets<ThemeColors>>();
+            let colors = theme_colors
+                .get(&theme.colors)
+                .expect("Cannot read theme colors.");
+            colors.modal_overlay_color().to_color32()
+        };
+
         let mut file_dialog = egui_file_dialog::FileDialog::new()
             .add_save_extension(FILE_FILTER_PROJECT_FILES_NAME, SUFFIX)
             .default_save_extension(FILE_FILTER_PROJECT_FILES_NAME)
             .default_file_name(DEFAULT_FILE_NAME)
+            .modal_overlay_color(modal_overlay_color)
             .as_modal(true);
         file_dialog.save_file();
 
         Self { file_dialog }
+    }
+}
+
+// COMMANDS
+
+pub(super) struct DisplayLoadFileDialog;
+
+impl Command for DisplayLoadFileDialog {
+    fn apply(self, world: &mut World) -> () {
+        let dialog = LoadFileDialog::from_world(world);
+        world.spawn((
+            Name::new("Load File Dialog"),
+            dialog,
+            DespawnOnExit(UiState::ShowingLoadFileDialog),
+        ));
+        world
+            .resource_mut::<NextState<UiState>>()
+            .set(UiState::ShowingLoadFileDialog);
+    }
+}
+
+#[derive(Default)]
+pub(super) struct DisplayLoadImageDialog {
+    and_then: Option<Box<dyn FnOnce(EntityWorldMut<'_>) + Send + 'static>>,
+}
+
+impl DisplayLoadImageDialog {
+    pub fn and_then<F: FnOnce(EntityWorldMut<'_>) + Send + 'static>(self, f: F) -> Self {
+        debug_assert!(
+            self.and_then.is_none(),
+            "and_then is called more than once."
+        );
+
+        Self {
+            and_then: Some(Box::new(f)),
+        }
+    }
+}
+
+impl Command<Result> for DisplayLoadImageDialog {
+    fn apply(self, world: &mut World) -> Result {
+        let dialog = LoadImageDialog::from_world(world);
+        let entity = world
+            .spawn((
+                Name::new("Load Image Dialog"),
+                dialog,
+                DespawnOnExit(UiState::ShowingLoadImageDialog),
+            ))
+            .id();
+        world
+            .resource_mut::<NextState<UiState>>()
+            .set(UiState::ShowingLoadImageDialog);
+
+        if let Some(and_then) = self.and_then {
+            world
+                .commands()
+                .entity(entity)
+                .queue(|entity: EntityWorldMut<'_>| {
+                    and_then(entity);
+                });
+        }
+
+        Ok(())
+    }
+}
+
+pub(super) struct DisplaySaveFileDialog;
+
+impl Command for DisplaySaveFileDialog {
+    fn apply(self, world: &mut World) -> () {
+        let dialog = SaveFileDialog::from_world(world);
+        world.spawn((
+            Name::new("Save File Dialog"),
+            dialog,
+            DespawnOnExit(UiState::ShowingSaveFileDialog),
+        ));
+        world
+            .resource_mut::<NextState<UiState>>()
+            .set(UiState::ShowingSaveFileDialog);
     }
 }
 

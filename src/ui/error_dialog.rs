@@ -17,7 +17,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui;
 
-use crate::theme::ThemeColors;
+use crate::theme::{Theme, ThemeColors};
 
 use super::egui_ext::{draw_modal_overlay, ToColor32};
 use super::state::UiState;
@@ -28,15 +28,12 @@ use super::state::UiState;
 #[reflect(Component)]
 pub struct ErrorDialog {
     message: String,
+    overlay_color: Color,
 }
 
 impl ErrorDialog {
-    pub(super) fn show(
-        &mut self,
-        ctx: &mut egui::Context,
-        theme_colors: &ThemeColors,
-    ) -> DialogState {
-        draw_modal_overlay(ctx, theme_colors.modal_overlay_color().to_color32());
+    pub(super) fn show(&mut self, ctx: &mut egui::Context) -> DialogState {
+        draw_modal_overlay(ctx, self.overlay_color.to_color32());
 
         egui::Window::new("Error")
             .show(ctx, |ui| {
@@ -55,26 +52,43 @@ impl ErrorDialog {
             .flatten()
             .unwrap()
     }
+}
 
-    /// Shows the `ErrorDialog` to user.
-    ///
-    /// Use this to show the dialog instead of [ErrorDialog::show].
-    /// `show` is named as such to align with egui API.
-    ///
-    /// This also change `UiState` to [UiState::ShowingErrorDialog].
-    pub(super) fn spawn(world: &mut World, message: String) -> Entity {
-        let dialog = Self { message };
-        let entity = world
-            .spawn((
-                Name::new("Error Dialog"),
-                dialog,
-                DespawnOnExit(UiState::ShowingErrorDialog),
-            ))
-            .id();
+// COMMANDS
+
+pub(super) struct DisplayErrorDialog {
+    message: String,
+}
+
+impl DisplayErrorDialog {
+    pub fn new(message: String) -> Self {
+        Self { message }
+    }
+}
+
+impl Command<Result> for DisplayErrorDialog {
+    fn apply(self, world: &mut World) -> Result {
+        let overlay_color = world
+            .resource::<Assets<ThemeColors>>()
+            .get(&world.resource::<Theme>().colors)
+            .ok_or("Cannot read theme colors.")?
+            .modal_overlay_color();
+
+        let dialog = ErrorDialog {
+            message: self.message,
+            overlay_color,
+        };
+
+        world.spawn((
+            Name::new("Error Dialog"),
+            dialog,
+            DespawnOnExit(UiState::ShowingErrorDialog),
+        ));
         world
             .resource_mut::<NextState<UiState>>()
             .set(UiState::ShowingErrorDialog);
-        entity
+
+        Ok(())
     }
 }
 
